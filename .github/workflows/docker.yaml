@@ -3,7 +3,7 @@ name: Docker
 on:
   push:
     branches:
-      - develop
+      - main
   release:
     types:
       - published
@@ -22,7 +22,7 @@ jobs:
         id: docker_meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/pterodactyl/wings
+          images: ghcr.io/pelican-dev/wings
           flavor: |
             latest=false
           tags: |
