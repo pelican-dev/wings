@@ -26,16 +26,16 @@ import (
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 
-	"github.com/pterodactyl/wings/config"
-	"github.com/pterodactyl/wings/environment"
-	"github.com/pterodactyl/wings/internal/cron"
-	"github.com/pterodactyl/wings/internal/database"
-	"github.com/pterodactyl/wings/loggers/cli"
-	"github.com/pterodactyl/wings/remote"
-	"github.com/pterodactyl/wings/router"
-	"github.com/pterodactyl/wings/server"
-	"github.com/pterodactyl/wings/sftp"
-	"github.com/pterodactyl/wings/system"
+	"github.com/pelican-dev/wings/config"
+	"github.com/pelican-dev/wings/environment"
+	"github.com/pelican-dev/wings/internal/cron"
+	"github.com/pelican-dev/wings/internal/database"
+	"github.com/pelican-dev/wings/loggers/cli"
+	"github.com/pelican-dev/wings/remote"
+	"github.com/pelican-dev/wings/router"
+	"github.com/pelican-dev/wings/server"
+	"github.com/pelican-dev/wings/sftp"
+	"github.com/pelican-dev/wings/system"
 )
 
 var (
@@ -45,7 +45,7 @@ var (
 
 var rootCommand = &cobra.Command{
 	Use:   "wings",
-	Short: "Runs the API server allowing programmatic control of game servers for Pterodactyl Panel.",
+	Short: "Runs the API server allowing programmatic control of game servers for Pelican Panel.",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		initConfig()
 		initLogging()
@@ -107,11 +107,11 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 	}
 	log.WithField("timezone", config.Get().System.Timezone).Info("configured wings with system timezone")
 	if err := config.ConfigureDirectories(); err != nil {
-		log.WithField("error", err).Fatal("failed to configure system directories for pterodactyl")
+		log.WithField("error", err).Fatal("failed to configure system directories for pelican")
 		return
 	}
-	if err := config.EnsurePterodactylUser(); err != nil {
-		log.WithField("error", err).Fatal("failed to create pterodactyl system user")
+	if err := config.EnsurePelicanUser(); err != nil {
+		log.WithField("error", err).Fatal("failed to create pelican system user")
 	}
 	log.WithFields(log.Fields{
 		"username": config.Get().System.Username,
@@ -201,8 +201,8 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 			// machine is rebooted. It is much better for us to just have a single failed
 			// server instance than an entire offline node.
 			//
-			// @see https://github.com/pterodactyl/panel/issues/2475
-			// @see https://github.com/pterodactyl/panel/issues/3358
+			// @see https://github.com/pelican-dev/panel/issues/2475
+			// @see https://github.com/pelican-dev/panel/issues/3358
 			ctx, cancel := context.WithTimeout(cmd.Context(), time.Second*30)
 			defer cancel()
 
@@ -422,7 +422,7 @@ func initLogging() {
 func printLogo() {
 	fmt.Printf(colorstring.Color(`
                      ____
-__ [blue][bold]Pterodactyl[reset] _____/___/_______ _______ ______
+__ [blue][bold]Pelican[reset] _____/___/_______ _______ ______
 \_____\    \/\/    /   /       /  __   /   ___/
    \___\          /   /   /   /  /_/  /___   /
         \___/\___/___/___/___/___    /______/
@@ -430,9 +430,9 @@ __ [blue][bold]Pterodactyl[reset] _____/___/_______ _______ ______
 
 Copyright © 2018 - %d Dane Everitt & Contributors
 
-Website:  https://pterodactyl.io
- Source:  https://github.com/pterodactyl/wings
-License:  https://github.com/pterodactyl/wings/blob/develop/LICENSE
+Website:  https://pelican.io
+ Source:  https://github.com/pelican-dev/wings
+License:  https://github.com/pelican-dev/wings/blob/develop/LICENSE
 
 This software is made available under the terms of the MIT license.
 The above copyright notice and this permission notice shall be included
@@ -447,7 +447,7 @@ Wings was not able to locate your configuration file, and therefore is not
 able to complete its boot process. Please ensure you have copied your instance
 configuration file into the default location below.
 
-Default Location: /etc/pterodactyl/config.yml
+Default Location: /etc/pelican/config.yml
 
 [yellow]This is not a bug with this software. Please do not make a bug report
 for this issue, it will be closed.[reset]

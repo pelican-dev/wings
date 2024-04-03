@@ -72,7 +72,7 @@ func (fs *UnixFS) walkDir(b []byte, parentfd int, name, relative string, d DirEn
 		// relative to the root of the filesystem instead of from where the walk
 		// was initiated from.
 		//
-		// ref; https://github.com/pterodactyl/panel/issues/5030
+		// ref; https://github.com/pelican-dev/panel/issues/5030
 		if err := fs.walkDir(b, dirfd, d1.Name(), path.Join(relative, d1.Name()), d1, walkDirFn); err != nil {
 			if err == SkipDir {
 				break

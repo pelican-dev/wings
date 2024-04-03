@@ -23,7 +23,7 @@ func createTestClient(h http.HandlerFunc) (*client, *httptest.Server) {
 
 func TestRequest(t *testing.T) {
 	c, _ := createTestClient(func(rw http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "application/vnd.pterodactyl.v1+json", r.Header.Get("Accept"))
+		assert.Equal(t, "application/vnd.pelican.v1+json", r.Header.Get("Accept"))
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 		assert.Equal(t, "Bearer testid.testtoken", r.Header.Get("Authorization"))
 		assert.Equal(t, "/test", r.URL.Path)

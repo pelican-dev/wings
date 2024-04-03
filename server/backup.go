@@ -10,9 +10,9 @@ import (
 	"github.com/apex/log"
 	"github.com/docker/docker/client"
 
-	"github.com/pterodactyl/wings/environment"
-	"github.com/pterodactyl/wings/remote"
-	"github.com/pterodactyl/wings/server/backup"
+	"github.com/pelican-dev/wings/environment"
+	"github.com/pelican-dev/wings/remote"
+	"github.com/pelican-dev/wings/server/backup"
 )
 
 // Notifies the panel of a backup's state and returns an error if one is encountered

@@ -18,13 +18,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/pterodactyl/wings/config"
-	"github.com/pterodactyl/wings/internal/models"
-	"github.com/pterodactyl/wings/router/downloader"
-	"github.com/pterodactyl/wings/router/middleware"
-	"github.com/pterodactyl/wings/router/tokens"
-	"github.com/pterodactyl/wings/server"
-	"github.com/pterodactyl/wings/server/filesystem"
+	"github.com/pelican-dev/wings/config"
+	"github.com/pelican-dev/wings/internal/models"
+	"github.com/pelican-dev/wings/router/downloader"
+	"github.com/pelican-dev/wings/router/middleware"
+	"github.com/pelican-dev/wings/router/tokens"
+	"github.com/pelican-dev/wings/server"
+	"github.com/pelican-dev/wings/server/filesystem"
 )
 
 // getServerFileContents returns the contents of a file on the server.
@@ -39,7 +39,7 @@ func getServerFileContents(c *gin.Context) {
 	defer f.Close()
 	// Don't allow a named pipe to be opened.
 	//
-	// @see https://github.com/pterodactyl/panel/issues/4059
+	// @see https://github.com/pelican-dev/panel/issues/4059
 	if st.Mode()&os.ModeNamedPipe != 0 {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 			"error": "Cannot open files of this type.",
@@ -63,7 +63,7 @@ func getServerFileContents(c *gin.Context) {
 	//
 	// "http: wrote more than the declared Content-Length"
 	//
-	// @see https://github.com/pterodactyl/panel/issues/3131
+	// @see https://github.com/pelican-dev/panel/issues/3131
 	r := io.LimitReader(f, st.Size())
 	if _, err = bufio.NewReader(r).WriteTo(c.Writer); err != nil {
 		// Pretty sure this will unleash chaos on the response, but its a risk we can
