@@ -29,6 +29,16 @@ func (s *Server) Mounts() []environment.Mount {
 		},
 	}
 
+	if config.Get().System.User.Passwd {
+		passwdMount := environment.Mount{
+			Default:  true,
+			Target:   "/etc/passwd",
+			Source:   config.Get().System.User.PasswdFile,
+			ReadOnly: true,
+		}
+
+		m = append(m, passwdMount)
+	}
 	// Also include any of this server's custom mounts when returning them.
 	return append(m, s.customMounts()...)
 }
