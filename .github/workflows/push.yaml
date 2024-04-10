@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04]
-        go: ["1.21.8", "1.22.1"]
+        go: ["1.21.9", "1.22.2"]
         goos: [linux]
         goarch: [amd64, arm64]
 
