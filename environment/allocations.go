@@ -6,7 +6,7 @@ import (
 
 	"github.com/docker/go-connections/nat"
 
-	"github.com/pterodactyl/wings/config"
+	"github.com/pelican-dev/wings/config"
 )
 
 // Defines the allocations available for a given server. When using the Docker environment
@@ -62,14 +62,14 @@ func (a *Allocations) Bindings() nat.PortMap {
 }
 
 // Returns the bindings for the server in a way that is supported correctly by Docker. This replaces
-// any reference to 127.0.0.1 with the IP of the pterodactyl0 network interface which will allow the
+// any reference to 127.0.0.1 with the IP of the pelican0 network interface which will allow the
 // server to operate on a local address while still being accessible by other containers.
 func (a *Allocations) DockerBindings() nat.PortMap {
 	iface := config.Get().Docker.Network.Interface
 
 	out := a.Bindings()
 	// Loop over all the bindings for this container, and convert any that reference 127.0.0.1
-	// to use the pterodactyl0 network interface IP, as that is the true local for what people are
+	// to use the pelican0 network interface IP, as that is the true local for what people are
 	// trying to do when creating servers.
 	for p, binds := range out {
 		for i, alloc := range binds {

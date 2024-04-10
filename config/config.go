@@ -24,10 +24,10 @@ import (
 	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v2"
 
-	"github.com/pterodactyl/wings/system"
+	"github.com/pelican-dev/wings/system"
 )
 
-const DefaultLocation = "/etc/pterodactyl/config.yml"
+const DefaultLocation = "/etc/pelican/config.yml"
 
 // DefaultTLSConfig sets sane defaults to use when configuring the internal
 // webserver to listen for public connections.
@@ -122,27 +122,27 @@ type RemoteQueryConfiguration struct {
 
 // SystemConfiguration defines basic system configuration settings.
 type SystemConfiguration struct {
-	// The root directory where all of the pterodactyl data is stored at.
-	RootDirectory string `default:"/var/lib/pterodactyl" yaml:"root_directory"`
+	// The root directory where all of the pelican data is stored at.
+	RootDirectory string `default:"/var/lib/pelican" yaml:"root_directory"`
 
 	// Directory where logs for server installations and other wings events are logged.
-	LogDirectory string `default:"/var/log/pterodactyl" yaml:"log_directory"`
+	LogDirectory string `default:"/var/log/pelican" yaml:"log_directory"`
 
 	// Directory where the server data is stored at.
-	Data string `default:"/var/lib/pterodactyl/volumes" yaml:"data"`
+	Data string `default:"/var/lib/pelican/volumes" yaml:"data"`
 
 	// Directory where server archives for transferring will be stored.
-	ArchiveDirectory string `default:"/var/lib/pterodactyl/archives" yaml:"archive_directory"`
+	ArchiveDirectory string `default:"/var/lib/pelican/archives" yaml:"archive_directory"`
 
 	// Directory where local backups will be stored on the machine.
-	BackupDirectory string `default:"/var/lib/pterodactyl/backups" yaml:"backup_directory"`
+	BackupDirectory string `default:"/var/lib/pelican/backups" yaml:"backup_directory"`
 
-	// TmpDirectory specifies where temporary files for Pterodactyl installation processes
+	// TmpDirectory specifies where temporary files for pelican installation processes
 	// should be created. This supports environments running docker-in-docker.
-	TmpDirectory string `default:"/tmp/pterodactyl" yaml:"tmp_directory"`
+	TmpDirectory string `default:"/tmp/pelican" yaml:"tmp_directory"`
 
 	// The user that should own all of the server files, and be used for containers.
-	Username string `default:"pterodactyl" yaml:"username"`
+	Username string `default:"pelican" yaml:"username"`
 
 	// The timezone for this Wings instance. This is detected by Wings automatically if possible,
 	// and falls back to UTC if not able to be detected. If you need to set this manually, that
@@ -283,7 +283,7 @@ type Configuration struct {
 	// if the debug flag is passed through the command line arguments.
 	Debug bool
 
-	AppName string `default:"Pterodactyl" json:"app_name" yaml:"app_name"`
+	AppName string `default:"pelican" json:"app_name" yaml:"app_name"`
 
 	// A unique identifier for this node in the Panel.
 	Uuid string
@@ -425,14 +425,14 @@ func WriteToDisk(c *Configuration) error {
 	return nil
 }
 
-// EnsurePterodactylUser ensures that the Pterodactyl core user exists on the
+// EnsurePelicanUser ensures that the Pelican core user exists on the
 // system. This user will be the owner of all data in the root data directory
 // and is used as the user within containers. If files are not owned by this
 // user there will be issues with permissions on Docker mount points.
 //
 // This function IS NOT thread safe and should only be called in the main thread
 // when the application is booting.
-func EnsurePterodactylUser() error {
+func EnsurePelicanUser() error {
 	sysName, err := getSystemName()
 	if err != nil {
 		return err
@@ -440,7 +440,7 @@ func EnsurePterodactylUser() error {
 
 	// Our way of detecting if wings is running inside of Docker.
 	if sysName == "distroless" {
-		_config.System.Username = system.FirstNotEmpty(os.Getenv("WINGS_USERNAME"), "pterodactyl")
+		_config.System.Username = system.FirstNotEmpty(os.Getenv("WINGS_USERNAME"), "pelican")
 		_config.System.User.Uid = system.MustInt(system.FirstNotEmpty(os.Getenv("WINGS_UID"), "988"))
 		_config.System.User.Gid = system.MustInt(system.FirstNotEmpty(os.Getenv("WINGS_GID"), "988"))
 		return nil
@@ -458,7 +458,7 @@ func EnsurePterodactylUser() error {
 		return nil
 	}
 
-	log.WithField("username", _config.System.Username).Info("checking for pterodactyl system user")
+	log.WithField("username", _config.System.Username).Info("checking for pelican system user")
 	u, err := user.Lookup(_config.System.Username)
 	// If an error is returned but it isn't the unknown user error just abort
 	// the process entirely. If we did find a user, return it immediately.

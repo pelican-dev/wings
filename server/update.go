@@ -3,9 +3,9 @@ package server
 import (
 	"time"
 
-	"github.com/pterodactyl/wings/environment/docker"
+	"github.com/pelican-dev/wings/environment/docker"
 
-	"github.com/pterodactyl/wings/environment"
+	"github.com/pelican-dev/wings/environment"
 )
 
 // SyncWithEnvironment updates the environment for the server to match any of
@@ -40,8 +40,6 @@ func (s *Server) SyncWithEnvironment() {
 
 	// If build limits are changed, environment variables also change. Plus, any modifications to
 	// the startup command also need to be properly propagated to this environment.
-	//
-	// @see https://github.com/pterodactyl/panel/issues/2255
 	s.Environment.Config().SetEnvironmentVariables(s.GetEnvironmentVariables())
 
 	if !s.IsSuspended() {

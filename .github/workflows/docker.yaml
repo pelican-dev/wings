@@ -13,7 +13,7 @@ jobs:
     name: Build and Push
     runs-on: ubuntu-22.04
     # Always run against a tag, even if the commit into the tag has [docker skip] within the commit message.
-    if: "!contains(github.ref, 'develop') || (!contains(github.event.head_commit.message, 'skip docker') && !contains(github.event.head_commit.message, 'docker skip'))"
+    if: "!contains(github.ref, 'main') || (!contains(github.event.head_commit.message, 'skip docker') && !contains(github.event.head_commit.message, 'docker skip'))"
     steps:
       - name: Code checkout
         uses: actions/checkout@v4
@@ -62,9 +62,9 @@ jobs:
           labels: ${{ steps.docker_meta.outputs.labels }}
           tags: ${{ steps.docker_meta.outputs.tags }}
 
-      - name: Build and Push (develop)
+      - name: Build and Push (main)
         uses: docker/build-push-action@v5
-        if: "github.event_name == 'push' && contains(github.ref, 'develop')"
+        if: "github.event_name == 'push' && contains(github.ref, 'main')"
         with:
           context: .
           file: ./Dockerfile

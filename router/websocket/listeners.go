@@ -8,10 +8,10 @@ import (
 	"emperror.dev/errors"
 	"github.com/goccy/go-json"
 
-	"github.com/pterodactyl/wings/events"
-	"github.com/pterodactyl/wings/system"
+	"github.com/pelican-dev/wings/events"
+	"github.com/pelican-dev/wings/system"
 
-	"github.com/pterodactyl/wings/server"
+	"github.com/pelican-dev/wings/server"
 )
 
 // RegisterListenerEvents will setup the server event listeners and expiration
@@ -22,8 +22,6 @@ import (
 // you'll get a flood of error spam in the output that doesn't make sense because
 // Docker events being output to the socket will fail when it hasn't been
 // properly initialized yet.
-//
-// @see https://github.com/pterodactyl/panel/issues/3295
 func (h *Handler) registerListenerEvents(ctx context.Context) {
 	h.Logger().Debug("registering event listeners for connection")
 

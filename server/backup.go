@@ -10,9 +10,9 @@ import (
 	"github.com/apex/log"
 	"github.com/docker/docker/client"
 
-	"github.com/pterodactyl/wings/environment"
-	"github.com/pterodactyl/wings/remote"
-	"github.com/pterodactyl/wings/server/backup"
+	"github.com/pelican-dev/wings/environment"
+	"github.com/pelican-dev/wings/remote"
+	"github.com/pelican-dev/wings/server/backup"
 )
 
 // Notifies the panel of a backup's state and returns an error if one is encountered
@@ -33,9 +33,9 @@ func (s *Server) notifyPanelOfBackup(uuid string, ad *backup.ArchiveDetails, suc
 	return nil
 }
 
-// Get all of the ignored files for a server based on its .pteroignore file in the root.
+// Get all of the ignored files for a server based on its .pelicanignore file in the root.
 func (s *Server) getServerwideIgnoredFiles() (string, error) {
-	f, st, err := s.Filesystem().File(".pteroignore")
+	f, st, err := s.Filesystem().File(".pelicanignore")
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", nil
