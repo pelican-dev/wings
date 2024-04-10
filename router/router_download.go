@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/pterodactyl/wings/router/middleware"
 	"github.com/pterodactyl/wings/router/tokens"
@@ -19,12 +20,14 @@ func getDownloadBackup(c *gin.Context) {
 	client := middleware.ExtractApiClient(c)
 	manager := middleware.ExtractManager(c)
 
+	// Get the payload from the token.
 	token := tokens.BackupPayload{}
 	if err := tokens.ParseToken([]byte(c.Query("token")), &token); err != nil {
 		middleware.CaptureAndAbort(c, err)
 		return
 	}
 
+	// Get the server using the UUID from the token.
 	if _, ok := manager.Get(token.ServerUuid); !ok || !token.IsUniqueRequest() {
 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 			"error": "The requested resource was not found on this server.",
@@ -32,6 +35,14 @@ func getDownloadBackup(c *gin.Context) {
 		return
 	}
 
+	// Validate that the BackupUuid field is actually a UUID and not some random characters or a
+	// file path.
+	if _, err := uuid.Parse(token.BackupUuid); err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	// Locate the backup on the local disk.
 	b, st, err := backup.LocateLocal(client, token.BackupUuid)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
