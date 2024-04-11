@@ -148,18 +148,18 @@ func (s *Server) Context() context.Context {
 // We can use this to set the container command with all variables replaced.
 func parseInvocation(invocation string, envvars map[string]interface{}, memory int64, port int, ip string) (parsed string) {
 	// replace "{{" and "}}" with "${" and "}" respectively
-	invocation = strings.Replace(invocation, "{{", "${", -1)
-	invocation = strings.Replace(invocation, "}}", "}", -1)
+	invocation = strings.ReplaceAll(invocation, "{{", "${")
+	invocation = strings.ReplaceAll(invocation, "}}", "}")
 
 	// replaces ${varname} with varval
 	for varname, varval := range envvars {
-		invocation = strings.Replace(invocation, fmt.Sprintf("${%s}", varname), fmt.Sprint(varval), -1)
+		invocation = strings.ReplaceAll(invocation, fmt.Sprintf("${%s}", varname), fmt.Sprint(varval))
 	}
 
 	// replace the defaults with their configured values.
-	invocation = strings.Replace(invocation, "${SERVER_PORT}", strconv.Itoa(port), -1)
-	invocation = strings.Replace(invocation, "${SERVER_MEMORY}", strconv.Itoa(int(memory)), -1)
-	invocation = strings.Replace(invocation, "${SERVER_IP}", ip, -1)
+	invocation = strings.ReplaceAll(invocation, "${SERVER_PORT}", strconv.Itoa(port))
+	invocation = strings.ReplaceAll(invocation, "${SERVER_MEMORY}", strconv.Itoa(int(memory)))
+	invocation = strings.ReplaceAll(invocation, "${SERVER_IP}", ip)
 
 	return invocation
 }
