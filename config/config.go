@@ -174,7 +174,7 @@ type SystemConfiguration struct {
 		// Passwd controls weather a passwd file is mounted in the container
 		// at /etc/passwd to resolve missing user issues
 		Passwd     bool   `json:"mount_passwd" yaml:"mount_passwd" default:"true"`
-		PasswdFile string `json:"passwd_file" yaml:"passwd_file" default:"/etc/pterodactyl/passwd"`
+		PasswdFile string `json:"passwd_file" yaml:"passwd_file" default:"/etc/pelican/passwd"`
 	} `yaml:"user"`
 
 	// The amount of time in seconds that can elapse before a server's disk space calculation is
