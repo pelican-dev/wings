@@ -98,7 +98,7 @@ func GetSystemInformation() (*Information, error) {
 	}
 	for _, addr := range iface_addrs {
 		ipNet, valid := addr.(*net.IPNet)
-		if valid && ipNet.IP.IsPrivate() {
+		if valid && !ipNet.IP.IsLoopback() {
 			ip_addrs = append(ip_addrs, ipNet.IP.String())
 		}
 	}
