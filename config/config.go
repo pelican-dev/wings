@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"github.com/gbrlsnchs/jwt/v3"
 	"os"
 	"os/exec"
 	"os/user"
@@ -20,7 +21,6 @@ import (
 	"github.com/acobaugh/osrelease"
 	"github.com/apex/log"
 	"github.com/creasty/defaults"
-	"github.com/gbrlsnchs/jwt/v3"
 	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v2"
 
@@ -89,7 +89,7 @@ type ApiConfiguration struct {
 	// Determines if functionality for allowing remote download of files into server directories
 	// is enabled on this instance. If set to "true" remote downloads will not be possible for
 	// servers.
-	DisableRemoteDownload bool `json:"disable_remote_download" yaml:"disable_remote_download"`
+	DisableRemoteDownload bool `json:"-" yaml:"disable_remote_download"`
 
 	// The maximum size for files uploaded through the Panel in MB.
 	UploadLimit int64 `default:"100" json:"upload_limit" yaml:"upload_limit"`
@@ -123,23 +123,23 @@ type RemoteQueryConfiguration struct {
 // SystemConfiguration defines basic system configuration settings.
 type SystemConfiguration struct {
 	// The root directory where all of the pelican data is stored at.
-	RootDirectory string `default:"/var/lib/pelican" yaml:"root_directory"`
+	RootDirectory string `default:"/var/lib/pelican" json:"-" yaml:"root_directory"`
 
 	// Directory where logs for server installations and other wings events are logged.
-	LogDirectory string `default:"/var/log/pelican" yaml:"log_directory"`
+	LogDirectory string `default:"/var/log/pelican" json:"-" yaml:"log_directory"`
 
 	// Directory where the server data is stored at.
-	Data string `default:"/var/lib/pelican/volumes" yaml:"data"`
+	Data string `default:"/var/lib/pelican/volumes" json:"-" yaml:"data"`
 
 	// Directory where server archives for transferring will be stored.
-	ArchiveDirectory string `default:"/var/lib/pelican/archives" yaml:"archive_directory"`
+	ArchiveDirectory string `default:"/var/lib/pelican/archives" json:"-" yaml:"archive_directory"`
 
 	// Directory where local backups will be stored on the machine.
-	BackupDirectory string `default:"/var/lib/pelican/backups" yaml:"backup_directory"`
+	BackupDirectory string `default:"/var/lib/pelican/backups" json:"-" yaml:"backup_directory"`
 
 	// TmpDirectory specifies where temporary files for pelican installation processes
 	// should be created. This supports environments running docker-in-docker.
-	TmpDirectory string `default:"/tmp/pelican" yaml:"tmp_directory"`
+	TmpDirectory string `default:"/tmp/pelican" json:"-" yaml:"tmp_directory"`
 
 	// The user that should own all of the server files, and be used for containers.
 	Username string `default:"pelican" yaml:"username"`
@@ -311,7 +311,7 @@ type Configuration struct {
 
 	// The location where the panel is running that this daemon should connect to
 	// to collect data and send events.
-	PanelLocation string                   `json:"remote" yaml:"remote"`
+	PanelLocation string                   `json:"-" yaml:"remote"`
 	RemoteQuery   RemoteQueryConfiguration `json:"remote_query" yaml:"remote_query"`
 
 	// AllowedMounts is a list of allowed host-system mount points.
@@ -694,8 +694,10 @@ func getSystemName() (string, error) {
 	return release["ID"], nil
 }
 
-var openat2 atomic.Bool
-var openat2Set atomic.Bool
+var (
+	openat2    atomic.Bool
+	openat2Set atomic.Bool
+)
 
 func UseOpenat2() bool {
 	if openat2Set.Load() {
