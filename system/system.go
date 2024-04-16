@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"net"
 	"runtime"
 
 	"github.com/acobaugh/osrelease"
@@ -47,12 +48,13 @@ type DockerRunc struct {
 }
 
 type System struct {
-	Architecture  string `json:"architecture"`
-	CPUThreads    int    `json:"cpu_threads"`
-	MemoryBytes   int64  `json:"memory_bytes"`
-	KernelVersion string `json:"kernel_version"`
-	OS            string `json:"os"`
-	OSType        string `json:"os_type"`
+	Architecture  string   `json:"architecture"`
+	CPUThreads    int      `json:"cpu_threads"`
+	MemoryBytes   int64    `json:"memory_bytes"`
+	KernelVersion string   `json:"kernel_version"`
+	OS            string   `json:"os"`
+	OSType        string   `json:"os_type"`
+	IpAddresses   []string `json:"ip_addresses"`
 }
 
 func GetSystemInformation() (*Information, error) {
@@ -89,6 +91,18 @@ func GetSystemInformation() (*Information, error) {
 		break
 	}
 
+	var ip_addrs []string
+	iface_addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil, err
+	}
+	for _, addr := range iface_addrs {
+		ipNet, valid := addr.(*net.IPNet)
+		if valid && ipNet.IP.IsPrivate() {
+			ip_addrs = append(ip_addrs, ipNet.IP.String())
+		}
+	}
+
 	return &Information{
 		Version: Version,
 		Docker: DockerInformation{
@@ -118,6 +132,7 @@ func GetSystemInformation() (*Information, error) {
 			KernelVersion: k.String(),
 			OS:            os,
 			OSType:        runtime.GOOS,
+			IpAddresses:   ip_addrs,
 		},
 	}, nil
 }
