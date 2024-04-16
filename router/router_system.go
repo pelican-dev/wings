@@ -30,30 +30,38 @@ func getSystemInformation(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, struct {
-		Architecture  string   `json:"architecture"`
-		CPUCount      int      `json:"cpu_count"`
-		KernelVersion string   `json:"kernel_version"`
-		OS            string   `json:"os"`
-		Version       string   `json:"version"`
-		IpAddresses   []string `json:"ip_addresses"`
+		Architecture  string `json:"architecture"`
+		CPUCount      int    `json:"cpu_count"`
+		KernelVersion string `json:"kernel_version"`
+		OS            string `json:"os"`
+		Version       string `json:"version"`
 	}{
 		Architecture:  i.System.Architecture,
 		CPUCount:      i.System.CPUThreads,
 		KernelVersion: i.System.KernelVersion,
 		OS:            i.System.OSType,
 		Version:       i.Version,
-		IpAddresses:   i.System.IpAddresses,
 	})
 }
 
-// Returns resource utilization info for the system wings is running on.
-func getSystemUtilization(c *gin.Context) {
-	i, err := system.GetSystemUtilization()
+// Returns list of host machine IP addresses
+func getSystemIps(c *gin.Context) {
+	i, err := system.GetSystemIps()
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, i)
+}
+
+// Returns resource utilization info for the system wings is running on.
+func getSystemUtilization(c *gin.Context) {
+	u, err := system.GetSystemUtilization()
+	if err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, u)
 }
 
 // Returns all the servers that are registered and configured correctly on

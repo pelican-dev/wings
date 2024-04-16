@@ -52,13 +52,16 @@ type DockerRunc struct {
 }
 
 type System struct {
-	Architecture  string   `json:"architecture"`
-	CPUThreads    int      `json:"cpu_threads"`
-	MemoryBytes   int64    `json:"memory_bytes"`
-	KernelVersion string   `json:"kernel_version"`
-	OS            string   `json:"os"`
-	OSType        string   `json:"os_type"`
-	IpAddresses   []string `json:"ip_addresses"`
+	Architecture  string `json:"architecture"`
+	CPUThreads    int    `json:"cpu_threads"`
+	MemoryBytes   int64  `json:"memory_bytes"`
+	KernelVersion string `json:"kernel_version"`
+	OS            string `json:"os"`
+	OSType        string `json:"os_type"`
+}
+
+type IpAddresses struct {
+	IpAddresses []string `json:"ip_addresses"`
 }
 
 type Utilization struct {
@@ -108,18 +111,6 @@ func GetSystemInformation() (*Information, error) {
 		break
 	}
 
-	var ip_addrs []string
-	iface_addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return nil, err
-	}
-	for _, addr := range iface_addrs {
-		ipNet, valid := addr.(*net.IPNet)
-		if valid && !ipNet.IP.IsLoopback() {
-			ip_addrs = append(ip_addrs, ipNet.IP.String())
-		}
-	}
-
 	return &Information{
 		Version: Version,
 		Docker: DockerInformation{
@@ -149,9 +140,23 @@ func GetSystemInformation() (*Information, error) {
 			KernelVersion: k.String(),
 			OS:            os,
 			OSType:        runtime.GOOS,
-			IpAddresses:   ip_addrs,
 		},
 	}, nil
+}
+
+func GetSystemIps() (*IpAddresses, error) {
+	var ip_addrs []string
+	iface_addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil, err
+	}
+	for _, addr := range iface_addrs {
+		ipNet, valid := addr.(*net.IPNet)
+		if valid && !ipNet.IP.IsLoopback() {
+			ip_addrs = append(ip_addrs, ipNet.IP.String())
+		}
+	}
+	return &IpAddresses{IpAddresses: ip_addrs}, nil
 }
 
 func GetSystemUtilization() (*Utilization, error) {
