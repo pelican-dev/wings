@@ -46,6 +46,16 @@ func getSystemInformation(c *gin.Context) {
 	})
 }
 
+// Returns resource utilization info for the system wings is running on.
+func getSystemUtilization(c *gin.Context) {
+	i, err := system.GetSystemUtilization()
+	if err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, i)
+}
+
 // Returns all the servers that are registered and configured correctly on
 // this wings instance.
 func getAllServers(c *gin.Context) {
