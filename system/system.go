@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"net"
 	"runtime"
 
 	"github.com/acobaugh/osrelease"
@@ -9,6 +10,10 @@ import (
 	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/parsers/kernel"
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/disk"
+	"github.com/shirou/gopsutil/v3/load"
+	"github.com/shirou/gopsutil/v3/mem"
 )
 
 type Information struct {
@@ -53,6 +58,23 @@ type System struct {
 	KernelVersion string `json:"kernel_version"`
 	OS            string `json:"os"`
 	OSType        string `json:"os_type"`
+}
+
+type IpAddresses struct {
+	IpAddresses []string `json:"ip_addresses"`
+}
+
+type Utilization struct {
+	MemoryTotal uint64  `json:"memory_total"`
+	MemoryUsed  uint64  `json:"memory_used"`
+	SwapTotal   uint64  `json:"swap_total"`
+	SwapUsed    uint64  `json:"swap_used"`
+	LoadAvg1    float64 `json:"load_average1"`
+	LoadAvg5    float64 `json:"load_average5"`
+	LoadAvg15   float64 `json:"load_average15"`
+	CpuPercent  float64 `json:"cpu_percent"`
+	DiskTotal   uint64  `json:"disk_total"`
+	DiskUsed    uint64  `json:"disk_used"`
 }
 
 func GetSystemInformation() (*Information, error) {
@@ -119,6 +141,57 @@ func GetSystemInformation() (*Information, error) {
 			OS:            os,
 			OSType:        runtime.GOOS,
 		},
+	}, nil
+}
+
+func GetSystemIps() (*IpAddresses, error) {
+	var ip_addrs []string
+	iface_addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil, err
+	}
+	for _, addr := range iface_addrs {
+		ipNet, valid := addr.(*net.IPNet)
+		if valid && !ipNet.IP.IsLoopback() {
+			ip_addrs = append(ip_addrs, ipNet.IP.String())
+		}
+	}
+	return &IpAddresses{IpAddresses: ip_addrs}, nil
+}
+
+func GetSystemUtilization() (*Utilization, error) {
+	c, err := cpu.Percent(0, false)
+	if err != nil {
+		return nil, err
+	}
+	m, err := mem.VirtualMemory()
+	if err != nil {
+		return nil, err
+	}
+	s, err := mem.SwapMemory()
+	if err != nil {
+		return nil, err
+	}
+	l, err := load.Avg()
+	if err != nil {
+		return nil, err
+	}
+	d, err := disk.Usage("/")
+	if err != nil {
+		return nil, err
+	}
+
+	return &Utilization{
+		MemoryTotal: m.Total,
+		MemoryUsed:  m.Used,
+		SwapTotal:   s.Total,
+		SwapUsed:    s.Used,
+		CpuPercent:  c[0],
+		LoadAvg1:    l.Load1,
+		LoadAvg5:    l.Load5,
+		LoadAvg15:   l.Load15,
+		DiskTotal:   d.Total,
+		DiskUsed:    d.Used,
 	}, nil
 }
 

@@ -44,6 +44,26 @@ func getSystemInformation(c *gin.Context) {
 	})
 }
 
+// Returns list of host machine IP addresses
+func getSystemIps(c *gin.Context) {
+	i, err := system.GetSystemIps()
+	if err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, i)
+}
+
+// Returns resource utilization info for the system wings is running on.
+func getSystemUtilization(c *gin.Context) {
+	u, err := system.GetSystemUtilization()
+	if err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, u)
+}
+
 // Returns all the servers that are registered and configured correctly on
 // this wings instance.
 func getAllServers(c *gin.Context) {
