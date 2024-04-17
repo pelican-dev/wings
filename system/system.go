@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"github.com/docker/go-units"
 	"net"
 	"runtime"
 
@@ -75,6 +76,14 @@ type Utilization struct {
 	CpuPercent  float64 `json:"cpu_percent"`
 	DiskTotal   uint64  `json:"disk_total"`
 	DiskUsed    uint64  `json:"disk_used"`
+}
+
+type DockerDiskUsage struct {
+	ContainersSize string `json:"containers_size"`
+	ImagesTotal    int    `json:"images_total"`
+	ImagesActive   int64  `json:"images_active"`
+	ImagesSize     string `json:"images_size"`
+	BuildCacheSize int64  `json:"build_cache_size"`
 }
 
 func GetSystemInformation() (*Information, error) {
@@ -192,6 +201,47 @@ func GetSystemUtilization() (*Utilization, error) {
 		LoadAvg15:   l.Load15,
 		DiskTotal:   d.Total,
 		DiskUsed:    d.Used,
+	}, nil
+}
+
+func GetDockerDiskUsage(ctx context.Context) (*DockerDiskUsage, error) {
+	// TODO: find a way to re-use the client from the docker environment.
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return &DockerDiskUsage{}, err
+	}
+	defer c.Close()
+
+	d, err := c.DiskUsage(ctx, types.DiskUsageOptions{})
+	if err != nil {
+		return &DockerDiskUsage{}, err
+	}
+
+	var bcs int64
+	for _, bc := range d.BuildCache {
+		if !bc.Shared {
+			bcs += bc.Size
+		}
+	}
+
+	var a int64
+	for _, i := range d.Images {
+		if i.Containers > 0 {
+			a++
+		}
+	}
+
+	var cs int64
+	for _, b := range d.Containers {
+		cs += b.SizeRootFs
+	}
+
+	return &DockerDiskUsage{
+		ImagesTotal:    len(d.Images),
+		ImagesActive:   a,
+		ImagesSize:     units.HumanSize(float64(d.LayersSize)),
+		ContainersSize: units.HumanSize(float64(cs)),
+		BuildCacheSize: bcs,
 	}, nil
 }
 
