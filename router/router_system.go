@@ -64,6 +64,16 @@ func getSystemUtilization(c *gin.Context) {
 	c.JSON(http.StatusOK, u)
 }
 
+// Returns docker disk utilization
+func getDockerDiskUsage(c *gin.Context) {
+	d, err := system.GetDockerDiskUsage(c)
+	if err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, d)
+}
+
 // Returns all the servers that are registered and configured correctly on
 // this wings instance.
 func getAllServers(c *gin.Context) {
