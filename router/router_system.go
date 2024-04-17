@@ -74,6 +74,16 @@ func getDockerDiskUsage(c *gin.Context) {
 	c.JSON(http.StatusOK, d)
 }
 
+// Prunes the docker image cache
+func pruneDockerImages(c *gin.Context) {
+	p, err := system.PruneDockerImages(c)
+	if err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, p)
+}
+
 // Returns all the servers that are registered and configured correctly on
 // this wings instance.
 func getAllServers(c *gin.Context) {

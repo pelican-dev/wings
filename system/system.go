@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/go-units"
 	"net"
 	"runtime"
@@ -243,6 +244,21 @@ func GetDockerDiskUsage(ctx context.Context) (*DockerDiskUsage, error) {
 		ContainersSize: units.HumanSize(float64(cs)),
 		BuildCacheSize: bcs,
 	}, nil
+}
+
+func PruneDockerImages(ctx context.Context) (types.ImagesPruneReport, error) {
+	// TODO: find a way to re-use the client from the docker environment.
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return types.ImagesPruneReport{}, err
+	}
+	defer c.Close()
+
+	prune, err := c.ImagesPrune(ctx, filters.Args{})
+	if err != nil {
+		return types.ImagesPruneReport{}, err
+	}
+	return prune, nil
 }
 
 func GetDockerInfo(ctx context.Context) (types.Version, system.Info, error) {
