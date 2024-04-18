@@ -105,13 +105,3 @@ func createDockerNetwork(ctx context.Context, cli *client.Client) error {
 	}
 	return nil
 }
-
-// Gets usage statistics for the Docker Daemon such as disk usage
-func GetDockerUsage(ctx context.Context) (types.DiskUsage, error) {
-	cli, err := Docker()
-	if err != nil {
-		return types.DiskUsage{}, err
-	}
-	disk, err := cli.DiskUsage(ctx, types.DiskUsageOptions{})
-	return disk, err
-}
