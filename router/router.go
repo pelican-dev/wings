@@ -59,7 +59,7 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 	protected.POST("/api/update", postUpdateConfiguration)
 	protected.GET("/api/system", getSystemInformation)
 	protected.GET("/api/system/docker/disk", getDockerDiskUsage)
-	protected.PUT("/api/system/docker/image/prune", pruneDockerImages)
+	protected.DELETE("/api/system/docker/image/prune", pruneDockerImages)
 	protected.GET("/api/system/ips", getSystemIps)
 	protected.GET("/api/system/utilization", getSystemUtilization)
 	protected.GET("/api/servers", getAllServers)

@@ -3,7 +3,6 @@ package system
 import (
 	"context"
 	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/go-units"
 	"net"
 	"runtime"
 
@@ -80,11 +79,11 @@ type Utilization struct {
 }
 
 type DockerDiskUsage struct {
-	ContainersSize string `json:"containers_size"`
-	ImagesTotal    int    `json:"images_total"`
-	ImagesActive   int64  `json:"images_active"`
-	ImagesSize     string `json:"images_size"`
-	BuildCacheSize int64  `json:"build_cache_size"`
+	ContainersSize int64 `json:"containers_size"`
+	ImagesTotal    int   `json:"images_total"`
+	ImagesActive   int64 `json:"images_active"`
+	ImagesSize     int64 `json:"images_size"`
+	BuildCacheSize int64 `json:"build_cache_size"`
 }
 
 func GetSystemInformation() (*Information, error) {
@@ -240,8 +239,8 @@ func GetDockerDiskUsage(ctx context.Context) (*DockerDiskUsage, error) {
 	return &DockerDiskUsage{
 		ImagesTotal:    len(d.Images),
 		ImagesActive:   a,
-		ImagesSize:     units.HumanSize(float64(d.LayersSize)),
-		ContainersSize: units.HumanSize(float64(cs)),
+		ImagesSize:     int64(d.LayersSize),
+		ContainersSize: int64(cs),
 		BuildCacheSize: bcs,
 	}, nil
 }
