@@ -4,7 +4,6 @@ import (
 	"emperror.dev/errors"
 	"github.com/apex/log"
 	"github.com/gin-gonic/gin"
-
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/remote"
 	"github.com/pelican-dev/wings/router/middleware"
@@ -53,13 +52,14 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 	// This request does not need the AuthorizationMiddleware as the panel should never call it
 	// and requests are authenticated through a JWT the panel issues to the other daemon.
 	router.POST("/api/transfers", postTransfers)
-	
+
 	// All the routes beyond this mount will use an authorization middleware
 	// and will not be accessible without the correct Authorization header provided.
 	protected := router.Use(middleware.RequireAuthorization())
 	protected.POST("/api/update", postUpdateConfiguration)
-
 	protected.GET("/api/system", getSystemInformation)
+	protected.GET("/api/system/docker/disk", getDockerDiskUsage)
+	protected.DELETE("/api/system/docker/image/prune", pruneDockerImages)
 	protected.GET("/api/system/ips", getSystemIps)
 	protected.GET("/api/system/utilization", getSystemUtilization)
 	protected.GET("/api/servers", getAllServers)
