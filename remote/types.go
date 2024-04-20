@@ -176,7 +176,6 @@ type InstallStatusRequest struct {
 }
 
 type ServerStateChange struct {
-	PrevState  string `json:"previous_state"`
-	NewState   string `json:"new_state"`
-	ServerUuid string `json:"server_uuid"`
+	PrevState string `json:"previous_state"`
+	NewState  string `json:"new_state"`
 }
