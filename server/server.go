@@ -323,6 +323,10 @@ func (s *Server) OnStateChange() {
 		s.Events().Publish(StatusEvent, st)
 	}
 
+	// Push status update to Panel
+	s.Log().Debug("pushing server status change to panel")
+	s.client.PushServerStateChange(s.Context(), remote.ServerStateChange{prevState, st, s.ID()})
+
 	// Reset the resource usage to 0 when the process fully stops so that all the UI
 	// views in the Panel correctly display 0.
 	if st == environment.ProcessOfflineState {
