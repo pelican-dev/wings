@@ -213,8 +213,8 @@ func (c *client) getServersPaged(ctx context.Context, page, limit int) ([]RawSer
 }
 
 // PushServerStateChange updates the Panel with state change notifications
-func (c *client) PushServerStateChange(ctx context.Context, sc ServerStateChange) error {
-	resp, err := c.Post(ctx, fmt.Sprintf("/api/remote/servers/%s/container/status", sc.ServerUuid), d{"data": sc})
+func (c *client) PushServerStateChange(ctx context.Context, sid string, sc ServerStateChange) error {
+	resp, err := c.Post(ctx, fmt.Sprintf("/api/remote/servers/%s/container/status", sid), d{"data": sc})
 	if err != nil {
 		return errors.WithStackIf(err)
 	}
