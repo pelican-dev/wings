@@ -33,6 +33,7 @@ type Client interface {
 	SetTransferStatus(ctx context.Context, uuid string, successful bool) error
 	ValidateSftpCredentials(ctx context.Context, request SftpAuthRequest) (SftpAuthResponse, error)
 	SendActivityLogs(ctx context.Context, activity []models.Activity) error
+	PushServerStateChange(ctx context.Context, stateChange ServerStateChange) error
 }
 
 type client struct {
