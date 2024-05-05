@@ -42,6 +42,8 @@ type BackupInterface interface {
 	// Identifier returns the UUID of this backup as tracked by the panel
 	// instance.
 	Identifier() string
+	// ServerId returns the UUID of the server the backup is associated with
+	ServerId() string
 	// WithLogContext attaches additional context to the log output for this
 	// backup.
 	WithLogContext(map[string]interface{})
@@ -73,6 +75,9 @@ type Backup struct {
 	// the panel instance.
 	Uuid string `json:"uuid"`
 
+	// The UUID of the server the backup is associated with.
+	ServerUuid string `json:"server_uuid"`
+
 	// An array of files to ignore when generating this backup. This should be
 	// compatible with a standard .gitignore structure.
 	Ignore string `json:"ignore"`
@@ -90,9 +95,11 @@ func (b *Backup) Identifier() string {
 	return b.Uuid
 }
 
+func (b *Backup) ServerId() string { return b.ServerUuid }
+
 // Path returns the path for this specific backup.
 func (b *Backup) Path() string {
-	return path.Join(config.Get().System.BackupDirectory, b.Identifier()+".tar.gz")
+	return path.Join(config.Get().System.BackupDirectory, b.ServerId(), b.Identifier()+".tar.gz")
 }
 
 // Size returns the size of the generated backup.
