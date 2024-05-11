@@ -87,6 +87,9 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 		server.POST("/transfer", postServerTransfer)
 		server.DELETE("/transfer", deleteServerTransfer)
 
+		// Deletes all backups for a server
+		server.DELETE("deleteAllBackups", deleteAllServerBackups)
+
 		files := server.Group("/files")
 		{
 			files.GET("/contents", getServerFileContents)

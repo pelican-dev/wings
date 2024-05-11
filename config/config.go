@@ -254,6 +254,9 @@ type Backups struct {
 	//
 	// Defaults to "best_speed" (level 1)
 	CompressionLevel string `default:"best_speed" yaml:"compression_level"`
+
+	// RemoveBackupsOnServerDelete deletes backups associated with a server when the server is deleted
+	RemoveBackupsOnServerDelete bool `default:"true" yaml:"remove_backups_on_server_delete"`
 }
 
 type Transfers struct {
