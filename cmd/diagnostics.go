@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os/exec"
@@ -29,7 +31,7 @@ import (
 )
 
 const (
-	DefaultHastebinUrl = "https://peli.cc"
+	DefaultHastebinUrl = "https://paste.pelistuff.com"
 	DefaultLogLines    = 200
 )
 
@@ -223,15 +225,22 @@ func getDockerInfo() (types.Version, types.Info, error) {
 }
 
 func uploadToHastebin(hbUrl, content string) (string, error) {
-	r := strings.NewReader(content)
 	u, err := url.Parse(hbUrl)
 	if err != nil {
 		return "", err
 	}
-	u.Path = path.Join(u.Path, "documents")
-	res, err := http.Post(u.String(), "plain/text", r)
+
+	formData := new(bytes.Buffer)
+	formWriter := multipart.NewWriter(formData)
+	formWriter.WriteField("c", content)
+	formWriter.WriteField("e", "14d")
+	formWriter.Close()
+
+	res, err := http.Post(u.String(), formWriter.FormDataContentType(), formData)
 	if err != nil || res.StatusCode != 200 {
-		fmt.Println("Failed to upload report to ", u.String(), err)
+		fmt.Println("Failed to upload report to ", u.String(), err, res.StatusCode)
+		myb, _ := io.ReadAll(res.Body)
+		fmt.Println(string(myb))
 		return "", err
 	}
 	pres := make(map[string]interface{})
@@ -241,10 +250,8 @@ func uploadToHastebin(hbUrl, content string) (string, error) {
 		return "", err
 	}
 	json.Unmarshal(body, &pres)
-	if key, ok := pres["key"].(string); ok {
-		u, _ := url.Parse(hbUrl)
-		u.Path = path.Join(u.Path, key)
-		return u.String(), nil
+	if pasteUrl, ok := pres["url"].(string); ok {
+		return pasteUrl, nil
 	}
 	return "", errors.New("failed to find key in response")
 }
