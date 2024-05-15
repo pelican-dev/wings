@@ -9,8 +9,8 @@ dependencies, and allowing users to authenticate with the same credentials they 
 
 ## Documentation
 
-* [Panel Documentation](https://docs.pelican.dev/panel/1.0/getting_started.html)
-* [Wings Documentation](https://docs.pelican.dev/wings/1.0/installing.html)
+* [Panel Documentation](https://pelican.dev/docs/panel/getting-started)
+* [Wings Documentation](https://pelican.dev/docs/wings/install)
 * Or, get additional help [via Discord](https://discord.gg/pelican-panel)
 
 ## Reporting Issues
