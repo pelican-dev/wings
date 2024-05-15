@@ -432,7 +432,7 @@ Copyright © 2018 - %d Dane Everitt & Contributors
 
 Website:  https://pelican.dev
  Source:  https://github.com/pelican-dev/wings
-License:  https://github.com/pelican-dev/wings/blob/develop/LICENSE
+License:  https://github.com/pelican-dev/wings/blob/main/LICENSE
 
 This software is made available under the terms of the MIT license.
 The above copyright notice and this permission notice shall be included
