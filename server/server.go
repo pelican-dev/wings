@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"regexp"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
@@ -152,9 +153,27 @@ func parseInvocation(invocation string, envvars map[string]interface{}, memory i
 	invocation = strings.ReplaceAll(invocation, "{{", "${")
 	invocation = strings.ReplaceAll(invocation, "}}", "}")
 
+	// Regex to check if the variable is in a protected segment
+	re := regexp.MustCompile(`{{[a-zA-Z0-9_-]+}}|\${[a-zA-Z0-9_-]+}|\[\[[^]]*?]]`)
+
 	// replaces ${varname} with varval
 	for varname, varval := range envvars {
-		invocation = strings.ReplaceAll(invocation, fmt.Sprintf("${%s}", varname), fmt.Sprint(varval))
+		placeholder := fmt.Sprintf("${%s}", varname)
+		matches := re.FindAllString(invocation, -1)
+
+		// Check if placeholder is within any matched segment
+		skip := false
+		for _, match := range matches {
+			if strings.Contains(match, placeholder) {
+				skip = true
+				break
+			}
+		}
+
+		// Only replace if not within a protected segment
+		if !skip {
+			invocation = strings.ReplaceAll(invocation, placeholder, fmt.Sprint(varval))
+		}
 	}
 
 	// replace the defaults with their configured values.
