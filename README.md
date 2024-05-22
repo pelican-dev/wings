@@ -15,5 +15,4 @@ dependencies, and allowing users to authenticate with the same credentials they 
 
 ## Reporting Issues
 
-Please use the [pelican-dev/panel](https://github.com/pelican-dev/panel) repository to report any issues or make
-feature requests for Wings.
+Feel free to report any wings specific issues or feature requests in [GitHub Issues](https://github.com/pelican-dev/wings/issues/new).
