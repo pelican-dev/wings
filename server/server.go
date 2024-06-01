@@ -211,7 +211,6 @@ func parseInvocation(invocation string, envvars map[string]interface{}, memory i
 // server instance.
 func (s *Server) GetEnvironmentVariables() []string {
 	out := []string{
-		// TODO: allow this to be overridden by the user.
 		fmt.Sprintf("TZ=%s", DetermineServerTimezone(s.Config().EnvVars, config.Get().System.Timezone)),
 		fmt.Sprintf("STARTUP=%s", parseInvocation(s.Config().Invocation, s.Config().EnvVars, s.MemoryLimit(), s.Config().Allocations.DefaultMapping.Port, s.Config().Allocations.DefaultMapping.Ip)),
 		fmt.Sprintf("SERVER_MEMORY=%d", s.MemoryLimit()),
