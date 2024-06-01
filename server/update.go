@@ -28,6 +28,7 @@ func (s *Server) SyncWithEnvironment() {
 		Mounts:      s.Mounts(),
 		Allocations: cfg.Allocations,
 		Limits:      cfg.Build,
+		Labels:      cfg.Labels,
 	})
 
 	// For Docker specific environments we also want to update the configured image
