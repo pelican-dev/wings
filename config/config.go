@@ -91,7 +91,7 @@ type ApiConfiguration struct {
 	// servers.
 	DisableRemoteDownload bool `json:"-" yaml:"disable_remote_download"`
 
-	// The maximum size for files uploaded through the Panel in MB.
+	// The maximum size for files uploaded through the Panel in MiB.
 	UploadLimit int64 `default:"100" json:"upload_limit" yaml:"upload_limit"`
 
 	// A list of IP address of proxies that may send a X-Forwarded-For header to set the true clients IP
