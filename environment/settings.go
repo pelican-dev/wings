@@ -56,7 +56,7 @@ type Limits struct {
 	// Sets which CPU threads can be used by the docker instance.
 	Threads string `json:"threads"`
 
-	OOMDisabled bool `json:"oom_disabled"`
+	OOMKiller bool `json:"oom_killer"`
 }
 
 // ConvertedCpuLimit converts the CPU limit for a server build into a number
@@ -108,7 +108,7 @@ func (l Limits) AsContainerResources() container.Resources {
 		MemoryReservation: l.MemoryLimit * 1_000_000,
 		MemorySwap:        l.ConvertedSwap(),
 		BlkioWeight:       l.IoWeight,
-		OomKillDisable:    &l.OOMDisabled,
+		OomKillDisable:    !&l.OOMKiller,
 		PidsLimit:         &pids,
 	}
 
