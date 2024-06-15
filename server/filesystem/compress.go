@@ -156,6 +156,7 @@ func (fs *Filesystem) DecompressFile(ctx context.Context, dir string, file strin
 	}
 
 	return fs.extractStream(ctx, extractStreamOptions{
+		FileName:  file,
 		Directory: dir,
 		Format:    format,
 		Reader:    input,
@@ -190,11 +191,74 @@ type extractStreamOptions struct {
 }
 
 func (fs *Filesystem) extractStream(ctx context.Context, opts extractStreamOptions) error {
-	// Decompress and extract archive
+
+	// See if it's a compressed archive, such as TAR or a ZIP
 	ex, ok := opts.Format.(archiver.Extractor)
 	if !ok {
+
+		// If not, check if it's a single-file compression, such as
+		// .log.gz, .sql.gz, and so on
+		de, ok := opts.Format.(archiver.Decompressor)
+		if !ok {
+			return nil
+		}
+
+		// Strip the compression suffix
+		p := filepath.Join(opts.Directory, strings.TrimSuffix(opts.FileName, opts.Format.Name()))
+
+		// Make sure it's not ignored
+		if err := fs.IsIgnored(p); err != nil {
+			return nil
+		}
+
+		reader, err := de.OpenReader(opts.Reader)
+		if err != nil {
+			return err
+		}
+		defer reader.Close()
+
+		// Open the file for creation/writing
+		f, err := fs.unixFS.OpenFile(p, ufs.O_WRONLY|ufs.O_CREATE, 0o644)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		// Read in 4 KB chunks
+		buf := make([]byte, 4096)
+		for {
+			n, err := reader.Read(buf)
+			if n > 0 {
+
+				// Check quota before writing the chunk
+				if quotaErr := fs.HasSpaceFor(int64(n)); quotaErr != nil {
+					return quotaErr
+				}
+
+				// Write the chunk
+				if _, writeErr := f.Write(buf[:n]); writeErr != nil {
+					return writeErr
+				}
+
+				// Add to quota
+				fs.addDisk(int64(n))
+			}
+
+			if err != nil {
+				// EOF are expected
+				if err == io.EOF {
+					break
+				}
+
+				// Return any other
+				return err
+			}
+		}
+
 		return nil
 	}
+
+	// Decompress and extract archive
 	return ex.Extract(ctx, opts.Reader, nil, func(ctx context.Context, f archiver.File) error {
 		if f.IsDir() {
 			return nil
