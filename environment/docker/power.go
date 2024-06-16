@@ -290,9 +290,6 @@ func (e *Environment) Terminate(ctx context.Context, signal os.Signal) error {
 		return nil
 	}
 
-	// We set it to stopping then offline to prevent crash detection from being triggered.
-	e.SetState(environment.ProcessStoppingState)
-
 	// Convert a signal back to a string so ContainerStop understands it.
 	// Also give a timeout signal
 
@@ -321,13 +318,13 @@ func (e *Environment) Terminate(ctx context.Context, signal os.Signal) error {
 	case syscall.SIGTERM:
 		sig = "SIGTERM"
 		noWaitTimeout = 10
-	case os.Kill:
-		sig = "SIGKILL"
-		noWaitTimeout = 0
 	default:
 		sig = "SIGKILL"
 		noWaitTimeout = 0
 	}
+
+	// We set it to stopping then offline to prevent crash detection from being triggered.
+	e.SetState(environment.ProcessStoppingState)
 
 	// use StopContainer and not killcontainer as if the timeout is 0 it will auto be killed
 	if err := e.client.ContainerStop(ctx, e.Id, container.StopOptions{Timeout: &noWaitTimeout, Signal: sig}); err != nil && !client.IsErrNotFound(err) {
