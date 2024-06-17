@@ -99,6 +99,11 @@ func (l Limits) ProcessLimit() int64 {
 	return config.Get().Docker.ContainerPidLimit
 }
 
+// Helper function to create a pointer to a boolean value
+func boolPtr(b bool) *bool {
+	return &b
+}
+
 // AsContainerResources returns the available resources for a container in a format
 // that Docker understands.
 func (l Limits) AsContainerResources() container.Resources {
@@ -108,7 +113,7 @@ func (l Limits) AsContainerResources() container.Resources {
 		MemoryReservation: l.MemoryLimit * 1_000_000,
 		MemorySwap:        l.ConvertedSwap(),
 		BlkioWeight:       l.IoWeight,
-		OomKillDisable:    !&l.OOMKiller,
+		OomKillDisable:    boolPtr(!l.OOMKiller),
 		PidsLimit:         &pids,
 	}
 
