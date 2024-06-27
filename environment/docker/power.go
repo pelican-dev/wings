@@ -157,7 +157,7 @@ func (e *Environment) Stop(ctx context.Context) error {
 			signal = syscall.SIGABRT
 		case "SIGINT":
 			signal = syscall.SIGINT
-		case "SIGTERM":
+		case "SIGTERM", "C":
 			signal = syscall.SIGTERM
 		}
 		return e.Terminate(ctx, signal)
