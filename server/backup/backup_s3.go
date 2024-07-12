@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -58,6 +59,12 @@ func (s *S3Backup) Generate(ctx context.Context, fsys *filesystem.Filesystem, ig
 	}
 
 	s.log().WithField("path", s.Path()).Info("creating backup for server")
+	if _, err := os.Stat(filepath.Dir(s.Path())); os.IsNotExist(err) {
+		err := os.Mkdir(filepath.Dir(s.Path()), 0o700)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if err := a.Create(ctx, s.Path()); err != nil {
 		return nil, err
 	}
