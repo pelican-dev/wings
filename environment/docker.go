@@ -72,9 +72,10 @@ func ConfigureDocker(ctx context.Context) error {
 // Creates a new network on the machine if one does not exist already.
 func createDockerNetwork(ctx context.Context, cli *client.Client) error {
 	nw := config.Get().Docker.Network
-	_, err := cli.NetworkCreate(ctx, nw.Name, types.NetworkCreate{
+	enableIPv6 := true // define a bool variable
+	_, err := cli.NetworkCreate(ctx, nw.Name, network.CreateOptions{
 		Driver:     nw.Driver,
-		EnableIPv6: true,
+		EnableIPv6: &enableIPv6,
 		Internal:   nw.IsInternal,
 		IPAM: &network.IPAM{
 			Config: []network.IPAMConfig{{
