@@ -31,11 +31,9 @@ import (
 func (fs *Filesystem) CompressFiles(dir string, paths []string) (ufs.FileInfo, error) {
 	var validPaths []string
 	for _, file := range paths {
-		if err := fs.IsIgnored(path.Join(dir, file)); err != nil {
-			// file is in file denylist so skip it and continue to check the next files
-			continue
+		if err := fs.IsIgnored(path.Join(dir, file)); err == nil {
+			validPaths = append(validPaths, file)
 		}
-		validPaths = append(validPaths, file)
 	}
 
 	// If there are no valid paths, return an error
