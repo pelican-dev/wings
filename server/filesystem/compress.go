@@ -29,7 +29,19 @@ import (
 // and the compressed file will be placed at that location named
 // `archive-{date}.tar.gz`.
 func (fs *Filesystem) CompressFiles(dir string, paths []string) (ufs.FileInfo, error) {
-	a := &Archive{Filesystem: fs, BaseDirectory: dir, Files: paths}
+	var validPaths []string
+	for _, file := range paths {
+		if err := fs.IsIgnored(path.Join(dir, file)); err == nil {
+			validPaths = append(validPaths, file)
+		}
+	}
+
+	// If there are no valid paths, return an error
+	if len(validPaths) == 0 {
+		return nil, fmt.Errorf("no valid files to compress")
+	}
+
+	a := &Archive{Filesystem: fs, BaseDirectory: dir, Files: validPaths}
 	d := path.Join(
 		dir,
 		fmt.Sprintf("archive-%s.tar.gz", strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", "")),
