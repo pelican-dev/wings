@@ -20,7 +20,7 @@ func replaceParserConfigPathVariables(filename string, envvars map[string]interf
 
 	// Replace "{{" with "${" and "}}" with "}"
 	filename = strings.ReplaceAll(filename, "{{", "${")
-	filename = strings.ReplaceAll(modifiedFilename, "}}", "}")
+	filename = strings.ReplaceAll(filename, "}}", "}")
 
 	// replaces ${varname} with varval
 	for varname, varval := range envvars {
@@ -42,7 +42,7 @@ func (s *Server) UpdateConfigurationFiles() {
 		f := cf
 
 		pool.Submit(func() {
-			filename := replaceParserConfigPathVariables(f.filename, s.Config().EnvVars)
+			filename := replaceParserConfigPathVariables(f.FileName, s.Config().EnvVars)
 			file, err := s.Filesystem().UnixFS().Touch(filename, ufs.O_RDWR|ufs.O_CREATE, 0o644)
 			if err != nil {
 				s.Log().WithField("file_name", f.FileName).WithField("error", err).Error("failed to open file for configuration")
