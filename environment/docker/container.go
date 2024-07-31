@@ -16,6 +16,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
+	dockerImages "github.com/docker/docker/api/types/image" // Alias the correct images package
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
@@ -49,7 +50,7 @@ func (e *Environment) Attach(ctx context.Context) error {
 		return nil
 	}
 
-	opts := types.ContainerAttachOptions{
+	opts := container.AttachOptions{
 		Stdin:  true,
 		Stdout: true,
 		Stderr: true,
@@ -195,6 +196,7 @@ func (e *Environment) Create() error {
 
 	networkMode := container.NetworkMode(cfg.Docker.Network.Mode)
 	if a.ForceOutgoingIP {
+		enableIPv6 := false // define a bool variable
 		e.log().Debug("environment/docker: forcing outgoing IP address")
 		networkName := "ip-" + strings.ReplaceAll(strings.ReplaceAll(a.DefaultMapping.Ip, ".", "-"), ":", "-")
 		networkMode = container.NetworkMode(networkName)
@@ -206,7 +208,7 @@ func (e *Environment) Create() error {
 
 			if _, err := e.client.NetworkCreate(ctx, networkName, types.NetworkCreate{
 				Driver:     "bridge",
-				EnableIPv6: false,
+				EnableIPv6: &enableIPv6,
 				Internal:   false,
 				Attachable: false,
 				Ingress:    false,
@@ -270,7 +272,7 @@ func (e *Environment) Destroy() error {
 	// We set it to stopping than offline to prevent crash detection from being triggered.
 	e.SetState(environment.ProcessStoppingState)
 
-	err := e.client.ContainerRemove(context.Background(), e.Id, types.ContainerRemoveOptions{
+	err := e.client.ContainerRemove(context.Background(), e.Id, container.RemoveOptions{
 		RemoveVolumes: true,
 		RemoveLinks:   false,
 		Force:         true,
@@ -316,7 +318,7 @@ func (e *Environment) SendCommand(c string) error {
 // is running or not, it will simply try to read the last X bytes of the file
 // and return them.
 func (e *Environment) Readlog(lines int) ([]string, error) {
-	r, err := e.client.ContainerLogs(context.Background(), e.Id, types.ContainerLogsOptions{
+	r, err := e.client.ContainerLogs(context.Background(), e.Id, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Tail:       strconv.Itoa(lines),
@@ -371,7 +373,7 @@ func (e *Environment) ensureImageExists(image string) error {
 	}
 
 	// Get the ImagePullOptions.
-	imagePullOptions := types.ImagePullOptions{All: false}
+	imagePullOptions := dockerImages.PullOptions{All: false}
 	if registryAuth != nil {
 		b64, err := registryAuth.Base64()
 		if err != nil {
@@ -384,7 +386,7 @@ func (e *Environment) ensureImageExists(image string) error {
 
 	out, err := e.client.ImagePull(ctx, image, imagePullOptions)
 	if err != nil {
-		images, ierr := e.client.ImageList(ctx, types.ImageListOptions{})
+		images, ierr := e.client.ImageList(ctx, dockerImages.ListOptions{})
 		if ierr != nil {
 			// Well damn, something has gone really wrong here, just go ahead and abort there
 			// isn't much anything we can do to try and self-recover from this.

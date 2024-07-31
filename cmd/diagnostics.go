@@ -23,6 +23,7 @@ import (
 	"github.com/docker/docker/pkg/parsers/operatingsystem"
 	"github.com/goccy/go-json"
 	"github.com/spf13/cobra"
+	dockerSystem "github.com/docker/docker/api/types/system" // Alias the correct system package
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
@@ -208,18 +209,18 @@ func diagnosticsCmdRun(*cobra.Command, []string) {
 	}
 }
 
-func getDockerInfo() (types.Version, types.Info, error) {
+func getDockerInfo() (types.Version, dockerSystem.Info, error) {
 	client, err := environment.Docker()
 	if err != nil {
-		return types.Version{}, types.Info{}, err
+		return types.Version{}, dockerSystem.Info{}, err
 	}
 	dockerVersion, err := client.ServerVersion(context.Background())
 	if err != nil {
-		return types.Version{}, types.Info{}, err
+		return types.Version{}, dockerSystem.Info{}, err
 	}
 	dockerInfo, err := client.Info(context.Background())
 	if err != nil {
-		return types.Version{}, types.Info{}, err
+		return types.Version{}, dockerSystem.Info{}, err
 	}
 	return dockerVersion, dockerInfo, nil
 }
