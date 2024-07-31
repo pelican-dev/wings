@@ -34,7 +34,7 @@ type Mount struct {
 // Limits is the build settings for a given server that impact docker container
 // creation and resource limits for a server instance.
 type Limits struct {
-	// The total amount of memory in megabytes that this server is allowed to
+	// The total amount of memory in mebibytes that this server is allowed to
 	// use on the host system.
 	MemoryLimit int64 `json:"memory_limit"`
 
@@ -50,13 +50,13 @@ type Limits struct {
 	// should be a value between 1 and THREAD_COUNT * 100.
 	CpuLimit int64 `json:"cpu_limit"`
 
-	// The amount of disk space in megabytes that a server is allowed to use.
+	// The amount of disk space in mebibytes that a server is allowed to use.
 	DiskSpace int64 `json:"disk_space"`
 
 	// Sets which CPU threads can be used by the docker instance.
 	Threads string `json:"threads"`
 
-	OOMDisabled bool `json:"oom_disabled"`
+	OOMKiller bool `json:"oom_killer"`
 }
 
 // ConvertedCpuLimit converts the CPU limit for a server build into a number
@@ -79,7 +79,7 @@ func (l Limits) MemoryOverheadMultiplier() float64 {
 }
 
 func (l Limits) BoundedMemoryLimit() int64 {
-	return int64(math.Round(float64(l.MemoryLimit) * l.MemoryOverheadMultiplier() * 1_000_000))
+	return int64(math.Round(float64(l.MemoryLimit) * l.MemoryOverheadMultiplier() * 1024 * 1024))
 }
 
 // ConvertedSwap returns the amount of swap available as a total in bytes. This
@@ -90,7 +90,7 @@ func (l Limits) ConvertedSwap() int64 {
 		return -1
 	}
 
-	return (l.Swap * 1_000_000) + l.BoundedMemoryLimit()
+	return (l.Swap * 1024 * 1024) + l.BoundedMemoryLimit()
 }
 
 // ProcessLimit returns the process limit for a container. This is currently
@@ -99,16 +99,21 @@ func (l Limits) ProcessLimit() int64 {
 	return config.Get().Docker.ContainerPidLimit
 }
 
+// Helper function to create a pointer to a boolean value
+func boolPtr(b bool) *bool {
+	return &b
+}
+
 // AsContainerResources returns the available resources for a container in a format
 // that Docker understands.
 func (l Limits) AsContainerResources() container.Resources {
 	pids := l.ProcessLimit()
 	resources := container.Resources{
 		Memory:            l.BoundedMemoryLimit(),
-		MemoryReservation: l.MemoryLimit * 1_000_000,
+		MemoryReservation: l.MemoryLimit * 1024 * 1024,
 		MemorySwap:        l.ConvertedSwap(),
 		BlkioWeight:       l.IoWeight,
-		OomKillDisable:    &l.OOMDisabled,
+		OomKillDisable:    boolPtr(!l.OOMKiller),
 		PidsLimit:         &pids,
 	}
 
