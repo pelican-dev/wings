@@ -403,7 +403,8 @@ func (ip *InstallationProcess) Execute() (string, error) {
 		AttachStdin:  true,
 		OpenStdin:    true,
 		Tty:          true,
-		Cmd:          []string{ip.Script.Entrypoint, "/mnt/install/install.sh"},
+		Entrypoint:   []string{ip.Script.Entrypoint, "/mnt/install/install.sh"},
+		Cmd:          nil,
 		Image:        ip.Script.ContainerImage,
 		Env:          ip.Server.GetEnvironmentVariables(),
 		Labels: map[string]string{
