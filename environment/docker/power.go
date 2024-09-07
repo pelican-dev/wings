@@ -158,6 +158,8 @@ func (e *Environment) Stop(ctx context.Context) error {
 			signal = "SIGINT"
 		case "SIGTERM", "C":
 			signal = "SIGTERM"
+		case "SIGKILL":
+			signal = "SIGKILL"
 		}
 		return e.Terminate(ctx, signal)
 	}
@@ -299,6 +301,8 @@ func (e *Environment) Terminate(ctx context.Context, signal string) error {
 	// - Other positive values are used as timeout (in seconds).
 	var noWaitTimeout int
 
+	// For every signal wait at max 10 seconds before SIGKILL is send (server did not stop in time)
+	// for SIGKILL just kill it without waiting
 	switch signal {
 	case "SIGKILL":
 		noWaitTimeout = 0
