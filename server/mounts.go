@@ -66,8 +66,9 @@ func (s *Server) customMounts() []environment.Mount {
 		}
 
 		// Check if the target path includes /home/container
-		if strings.Contains(target, "/home/container") {
-			logger.WithField("invalid_target_path", target).Warn("skipping custom server mount, target path includes /home/container")
+		// check can be disabled with the AllowBaseDirMount config value
+		if strings.Contains(target, "/home/container") && config.get().AllowBaseDirMount == false {
+			logger.WithField("invalid_target_path", target).Warn("Skipping custom server mount; target path includes /home/container")
 			continue
 		}
 
