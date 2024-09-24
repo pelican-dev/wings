@@ -16,7 +16,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
-	dockerImages "github.com/docker/docker/api/types/image" // Alias the correct images package
+	dockerImage "github.com/docker/docker/api/types/image" // Alias the correct images package
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
@@ -373,7 +373,7 @@ func (e *Environment) ensureImageExists(image string) error {
 	}
 
 	// Get the ImagePullOptions.
-	imagePullOptions := dockerImages.PullOptions{All: false}
+	imagePullOptions := dockerImage.PullOptions{All: false}
 	if registryAuth != nil {
 		b64, err := registryAuth.Base64()
 		if err != nil {
@@ -386,7 +386,7 @@ func (e *Environment) ensureImageExists(image string) error {
 
 	out, err := e.client.ImagePull(ctx, image, imagePullOptions)
 	if err != nil {
-		images, ierr := e.client.ImageList(ctx, dockerImages.ListOptions{})
+		images, ierr := e.client.ImageList(ctx, dockerImage.ListOptions{})
 		if ierr != nil {
 			// Well damn, something has gone really wrong here, just go ahead and abort there
 			// isn't much anything we can do to try and self-recover from this.
