@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"emperror.dev/errors"
@@ -161,7 +160,7 @@ func (s *Server) HandlePowerAction(action PowerAction, waitSeconds ...int) error
 
 		return s.Environment.Start(s.Context())
 	case PowerActionTerminate:
-		return s.Environment.Terminate(s.Context(), os.Kill)
+		return s.Environment.Terminate(s.Context(), "SIGKILL")
 	}
 
 	return errors.New("attempting to handle unknown power action")
