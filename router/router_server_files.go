@@ -89,6 +89,27 @@ func getServerListDirectory(c *gin.Context) {
 	}
 }
 
+func getFilesBySearch(c *gin.Context) {
+    s := ExtractServer(c)
+    dir := c.Query("directory")
+    pattern := c.Query("pattern")
+
+    // Check if the pattern length is at least 3 characters
+    if len(pattern) < 3 {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Pattern must be at least 3 characters long"})
+        return
+    }
+
+    // Proceed with directory listing if pattern is valid
+    stats, err := s.Filesystem().ListDirectory(dir)
+    if err != nil {
+        middleware.CaptureAndAbort(c, err)
+        return
+    }
+
+    c.JSON(http.StatusOK, stats)
+}
+
 type renameFile struct {
 	To   string `json:"to"`
 	From string `json:"from"`
