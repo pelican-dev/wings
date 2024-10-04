@@ -90,14 +90,14 @@ func getServerListDirectory(c *gin.Context) {
 	}
 }
 
-
 func getFilesBySearch(c *gin.Context) {
 	s := middleware.ExtractServer(c)
 	dir := c.Query("directory")
 	pattern := c.Query("pattern")
 
+	// Just for debugging for now
 	if pattern == "" {
-		pattern = "engine"
+		pattern = "txt"
 	}
 
 	// Convert the pattern to lowercase for case-insensitive comparison
@@ -124,18 +124,18 @@ func getFilesBySearch(c *gin.Context) {
 		fileName := fileInfo.Name()
 		fileType := fileInfo.Mimetype
 
-		// If the current item is a directory, add to matchedDirectories and skip it for file matching
-		if fileType == "inode/directory" {
-			matchedDirectories = append(matchedDirectories, fileName)
-		}
-
 		// Convert fileName to lowercase for case-insensitive comparison
 		fileNameLower := strings.ToLower(fileName)
 
+		// If the current item is a directory, add to matchedDirectories
+		if fileType == "inode/directory" {
+			matchedDirectories = append(matchedDirectories, filepath.Join(dir, fileName))
+		}
 
+		// Handle matching for files
 		if strings.ContainsAny(patternLower, "*?") {
 			if match, _ := filepath.Match(patternLower, fileNameLower); match {
-				matchedFiles = append(matchedFiles, fileName)
+				matchedFiles = append(matchedFiles, filepath.Join(dir, fileName))
 			}
 		} else {
 			// Handle extension or full name matching
@@ -143,28 +143,27 @@ func getFilesBySearch(c *gin.Context) {
 				// Extension matching logic
 				ext := filepath.Ext(fileNameLower) // Get the file extension
 				if strings.TrimPrefix(ext, ".") == strings.TrimPrefix(patternLower, ".") {
-					matchedFiles = append(matchedFiles, fileName)
+					matchedFiles = append(matchedFiles, filepath.Join(dir, fileName))
 				}
 			}
 
 			// Full name or prefix matching for cases without extension
 			if strings.HasPrefix(fileNameLower, patternLower) || fileNameLower == patternLower {
-				matchedFiles = append(matchedFiles, fileName)
+				matchedFiles = append(matchedFiles, filepath.Join(dir, fileName))
 			}
 		}
 	}
 
-	// Return matched files or empty if none found
-	if len(matchedFiles) == 0 {
-		c.JSON(http.StatusOK, gin.H{"message": "No files match the pattern"})
-		return
+	// Return matched files and directories, even if no files matched the pattern
+	if len(matchedFiles) == 0 && len(matchedDirectories) == 0 {
+		c.JSON(http.StatusOK, gin.H{"message": "No matches found."})
+	} else {
+		// For debugging purposes
+		fmt.Printf("%+q\n", matchedFiles)
+		fmt.Printf("%+q\n", matchedDirectories)
+
+		c.JSON(http.StatusOK, gin.H{"files": matchedFiles, "directories": matchedDirectories})
 	}
-
-	// For debugging purposes
-	fmt.Printf("%+q\n", matchedFiles)
-	fmt.Printf("%+q\n", matchedDirectories)
-
-	c.JSON(http.StatusOK, gin.H{"files": matchedFiles})
 }
 
 type renameFile struct {
