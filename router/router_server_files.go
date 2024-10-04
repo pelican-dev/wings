@@ -3,6 +3,7 @@ package router
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -80,7 +81,7 @@ func getServerFileContents(c *gin.Context) {
 
 // Returns the contents of a directory for a server.
 func getServerListDirectory(c *gin.Context) {
-	s := ExtractServer(c)
+	s := middleware.ExtractServer(c)
 	dir := c.Query("directory")
 	if stats, err := s.Filesystem().ListDirectory(dir); err != nil {
 		middleware.CaptureAndAbort(c, err)
@@ -89,25 +90,81 @@ func getServerListDirectory(c *gin.Context) {
 	}
 }
 
+
 func getFilesBySearch(c *gin.Context) {
-    s := ExtractServer(c)
-    dir := c.Query("directory")
-    pattern := c.Query("pattern")
+	s := middleware.ExtractServer(c)
+	dir := c.Query("directory")
+	pattern := c.Query("pattern")
 
-    // Check if the pattern length is at least 3 characters
-    if len(pattern) < 3 {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Pattern must be at least 3 characters long"})
-        return
-    }
+	if pattern == "" {
+		pattern = "engine"
+	}
 
-    // Proceed with directory listing if pattern is valid
-    stats, err := s.Filesystem().ListDirectory(dir)
-    if err != nil {
-        middleware.CaptureAndAbort(c, err)
-        return
-    }
+	// Convert the pattern to lowercase for case-insensitive comparison
+	patternLower := strings.ToLower(pattern)
 
-    c.JSON(http.StatusOK, stats)
+	// Check if the pattern length is at least 3 characters
+	if len(pattern) < 3 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Pattern must be at least 3 characters long"})
+		return
+	}
+
+	// Proceed with directory listing if pattern is valid
+	stats, err := s.Filesystem().ListDirectory(dir)
+	if err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	matchedFiles := []string{}
+	matchedDirectories := []string{}
+
+	// Filter filenames and directories based on pattern
+	for _, fileInfo := range stats {
+		fileName := fileInfo.Name()
+		fileType := fileInfo.Mimetype
+
+		// If the current item is a directory, add to matchedDirectories and skip it for file matching
+		if fileType == "inode/directory" {
+			matchedDirectories = append(matchedDirectories, fileName)
+		}
+
+		// Convert fileName to lowercase for case-insensitive comparison
+		fileNameLower := strings.ToLower(fileName)
+
+
+		if strings.ContainsAny(patternLower, "*?") {
+			if match, _ := filepath.Match(patternLower, fileNameLower); match {
+				matchedFiles = append(matchedFiles, fileName)
+			}
+		} else {
+			// Handle extension or full name matching
+			if strings.HasPrefix(patternLower, ".") || !strings.Contains(patternLower, ".") {
+				// Extension matching logic
+				ext := filepath.Ext(fileNameLower) // Get the file extension
+				if strings.TrimPrefix(ext, ".") == strings.TrimPrefix(patternLower, ".") {
+					matchedFiles = append(matchedFiles, fileName)
+				}
+			}
+
+			// Full name or prefix matching for cases without extension
+			if strings.HasPrefix(fileNameLower, patternLower) || fileNameLower == patternLower {
+				matchedFiles = append(matchedFiles, fileName)
+			}
+		}
+	}
+
+	// Return matched files or empty if none found
+	if len(matchedFiles) == 0 {
+		c.JSON(http.StatusOK, gin.H{"message": "No files match the pattern"})
+		return
+	}
+
+	// For debugging purposes
+	fmt.Printf("%+q\n", matchedFiles)
+	fmt.Printf("%+q\n", matchedDirectories)
+
+	c.JSON(http.StatusOK, gin.H{"files": matchedFiles})
 }
 
 type renameFile struct {
