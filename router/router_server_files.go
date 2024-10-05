@@ -91,7 +91,7 @@ func getServerListDirectory(c *gin.Context) {
 	}
 }
 
-// Structs needed to repond with the matched files and all its info
+// Structs needed to respond with the matched files and all their info
 type customFileInfo struct {
 	ufs.FileInfo
 	newName string
@@ -101,18 +101,21 @@ func (cfi customFileInfo) Name() string {
 	return cfi.newName // Return the custom name (i.e., with the directory prefix)
 }
 
+// Helper function to append matched entries
+func appendMatchedEntry(matchedEntries *[]filesystem.Stat, fileInfo ufs.FileInfo, fullPath string, fileType string) {
+	*matchedEntries = append(*matchedEntries, filesystem.Stat{
+		FileInfo: customFileInfo{
+			FileInfo: fileInfo,
+			newName:  fullPath,
+		},
+		Mimetype: fileType,
+	})
+}
+
 func getFilesBySearch(c *gin.Context) {
 	s := middleware.ExtractServer(c)
-	dir := c.Query("directory")
+	dir := strings.TrimSuffix(c.Query("directory"), "/")
 	pattern := c.Query("pattern")
-
-	// Default pattern for debugging
-	if pattern == "" {
-		pattern = "ini"
-	}
-
-	// Trim trailing slash from the directory if present
-	dir = strings.TrimSuffix(dir, "/")
 
 	// Convert the pattern to lowercase for case-insensitive comparison
 	patternLower := strings.ToLower(pattern)
@@ -138,55 +141,32 @@ func getFilesBySearch(c *gin.Context) {
 	for _, fileInfo := range stats {
 		fileName := fileInfo.Name()
 		fileType := fileInfo.Mimetype
-
-		// Convert fileName to lowercase for case-insensitive comparison
 		fileNameLower := strings.ToLower(fileName)
-
-		// Full path for the file or directory
 		fullPath := filepath.Join(dir, fileName)
 
-		// If it's a directory, store it and add it to matchedDirectories
+		// Store directories separately
 		if fileType == "inode/directory" {
 			matchedDirectories = append(matchedDirectories, fullPath)
 		}
 
-		// File matching logic (similar to the directory check)
+		// Wildcard or exact matching logic
 		if strings.ContainsAny(patternLower, "*?") {
-			// Wildcard matching
 			if match, _ := filepath.Match(patternLower, fileNameLower); match {
-				matchedEntries = append(matchedEntries, filesystem.Stat{
-					FileInfo: customFileInfo{
-						FileInfo: fileInfo,
-						newName:  fullPath,
-					},
-					Mimetype: fileType,
-				})
+				appendMatchedEntry(&matchedEntries, fileInfo, fullPath, fileType)
 			}
 		} else {
-			// Extension or full name matching
+			// Check for extension or prefix matches
 			if strings.HasPrefix(patternLower, ".") || !strings.Contains(patternLower, ".") {
-				// Extension matching logic
+				// Extension matching
 				ext := filepath.Ext(fileNameLower)
 				if strings.TrimPrefix(ext, ".") == strings.TrimPrefix(patternLower, ".") {
-					matchedEntries = append(matchedEntries, filesystem.Stat{
-						FileInfo: customFileInfo{
-							FileInfo: fileInfo,
-							newName:  fullPath,
-						},
-						Mimetype: fileType,
-					})
+					appendMatchedEntry(&matchedEntries, fileInfo, fullPath, fileType)
 				}
-			}
-
-			// Full name or prefix matching for cases without extension
-			if strings.HasPrefix(fileNameLower, patternLower) || fileNameLower == patternLower {
-				matchedEntries = append(matchedEntries, filesystem.Stat{
-					FileInfo: customFileInfo{
-						FileInfo: fileInfo,
-						newName:  fullPath,
-					},
-					Mimetype: fileType,
-				})
+			} else {
+				// Full name or prefix matching
+				if strings.HasPrefix(fileNameLower, patternLower) || fileNameLower == patternLower {
+					appendMatchedEntry(&matchedEntries, fileInfo, fullPath, fileType)
+				}
 			}
 		}
 	}
@@ -195,11 +175,9 @@ func getFilesBySearch(c *gin.Context) {
 	if len(matchedEntries) == 0 && len(matchedDirectories) == 0 {
 		c.JSON(http.StatusOK, gin.H{"message": "No matches found."})
 	} else {
-
 		// For debugging purposes
 		fmt.Printf("%+q\n", matchedDirectories)
-
-		// Return all matched files with there stats and the name now included the directory
+		// Return all matched files with their stats and the name now included the directory
 		c.JSON(http.StatusOK, matchedEntries)
 	}
 }
