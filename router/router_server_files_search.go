@@ -1,7 +1,6 @@
 package router
 
 import (
-	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -37,12 +36,14 @@ func appendMatchedEntry(matchedEntries *[]filesystem.Stat, fileInfo ufs.FileInfo
 }
 
 // todo make this config value work as now it cause a panic
-var blacklist = []string{"node_modules", ".wine", "appcache", "depotcache"}
+//var blacklist = config.Get().SearchRecursion.BlacklistedDirs
+
+var blacklist = []string{"node_modules", ".wine", "appcache", "depotcache", "vendor"}
 
 // Helper function to check if a directory name is in the blacklist
 func isBlacklisted(dirName string) bool {
 	for _, blacklisted := range blacklist {
-		if strings.Contains(dirName, blacklisted) {
+		if strings.Contains(dirName, strings.ToLower(blacklisted)) {
 			return true
 		}
 	}
@@ -52,7 +53,7 @@ func isBlacklisted(dirName string) bool {
 // Recursive function to search through directories
 func searchDirectory(s *server.Server, dir string, patternLower string, depth int, matchedEntries *[]filesystem.Stat, matchedDirectories *[]string, c *gin.Context) {
 	if depth > config.Get().SearchRecursion.MaxRecursionDepth {
-		return // Stop recursion if depth exceeds 8
+		return // Stop recursion if depth exceeds
 	}
 
 	stats, err := s.Filesystem().ListDirectory(dir)
@@ -72,7 +73,7 @@ func searchDirectory(s *server.Server, dir string, patternLower string, depth in
 			if isBlacklisted(fileNameLower) {
 				continue // Skip blacklisted directories
 			}
-			*matchedDirectories = append(*matchedDirectories, fullPath) // Correctly dereference to append
+			*matchedDirectories = append(*matchedDirectories, fullPath)
 
 			// Recursive search in the matched directory
 			searchDirectory(s, fullPath, patternLower, depth+1, matchedEntries, matchedDirectories, c)
@@ -128,8 +129,6 @@ func getFilesBySearch(c *gin.Context) {
 	if len(matchedEntries) == 0 && len(matchedDirectories) != 0 {
 		c.JSON(http.StatusOK, gin.H{"message": "No matches found."})
 	} else {
-		// For debugging purposes
-		fmt.Printf("%+q\n", matchedDirectories)
 		// Return all matched files with their stats and the name now included the directory
 		c.JSON(http.StatusOK, matchedEntries)
 	}

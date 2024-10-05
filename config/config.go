@@ -346,7 +346,7 @@ type Configuration struct {
 // SearchRecursion holds the configuration for directory search recursion settings.
 type SearchRecursion struct {
 	// BlacklistedDirs is a list of directory names that should be excluded from the recursion.
-	BlacklistedDirs []string `default:"[\"node_modules\", \".wine\", \"appcache\", \"depotcache\"]" yaml:"blacklisted_dirs" json:"blacklisted_dirs"`
+	BlacklistedDirs []string `default:"[\"node_modules\", \".wine\", \"appcache\", \"depotcache\", \"vendor\"]" yaml:"blacklisted_dirs" json:"blacklisted_dirs"`
 
 	// MaxRecursionDepth specifies the maximum depth for directory recursion.
 	MaxRecursionDepth int `default:"8" yaml:"max_recursion_depth" json:"max_recursion_depth"`
