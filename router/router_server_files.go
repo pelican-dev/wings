@@ -155,16 +155,18 @@ func getFilesBySearch(c *gin.Context) {
 				appendMatchedEntry(&matchedEntries, fileInfo, fullPath, fileType)
 			}
 		} else {
-			// Check for extension or prefix matches
-			if strings.HasPrefix(patternLower, ".") || !strings.Contains(patternLower, ".") {
-				// Extension matching
-				ext := filepath.Ext(fileNameLower)
-				if strings.TrimPrefix(ext, ".") == strings.TrimPrefix(patternLower, ".") {
-					appendMatchedEntry(&matchedEntries, fileInfo, fullPath, fileType)
-				}
+			// Check for prefix matches (case-insensitive)
+			if strings.Contains(fileNameLower, patternLower) {
+				appendMatchedEntry(&matchedEntries, fileInfo, fullPath, fileType)
 			} else {
-				// Full name or prefix matching
-				if strings.HasPrefix(fileNameLower, patternLower) || fileNameLower == patternLower {
+				// Extension matching logic
+				ext := filepath.Ext(fileNameLower)
+				if strings.HasPrefix(patternLower, ".") || !strings.Contains(patternLower, ".") {
+					// Match extension without dot
+					if strings.TrimPrefix(ext, ".") == strings.TrimPrefix(patternLower, ".") {
+						appendMatchedEntry(&matchedEntries, fileInfo, fullPath, fileType)
+					}
+				} else if fileNameLower == patternLower { // Full name match
 					appendMatchedEntry(&matchedEntries, fileInfo, fullPath, fileType)
 				}
 			}
