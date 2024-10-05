@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/gbrlsnchs/jwt/v3"
 	"os"
 	"os/exec"
 	"os/user"
@@ -16,6 +15,8 @@ import (
 	"sync/atomic"
 	"text/template"
 	"time"
+
+	"github.com/gbrlsnchs/jwt/v3"
 
 	"emperror.dev/errors"
 	"github.com/acobaugh/osrelease"
@@ -321,6 +322,7 @@ type Configuration struct {
 	// This is required to have the "Server Mounts" feature work properly.
 	AllowedMounts []string `json:"-" yaml:"allowed_mounts"`
 
+	SearchRecursion SearchRecursion `yaml:"Search"`
 	// BlockBaseDirMount indicates whether mounting to /home/container is blocked.
 	// If true, mounting to /home/container is blocked.
 	// If false, mounting to /home/container is allowed.
@@ -339,6 +341,15 @@ type Configuration struct {
 
 	// IgnorePanelConfigUpdates causes confiuration updates that are sent by the panel to be ignored.
 	IgnorePanelConfigUpdates bool `json:"ignore_panel_config_updates" yaml:"ignore_panel_config_updates"`
+}
+
+// SearchRecursion holds the configuration for directory search recursion settings.
+type SearchRecursion struct {
+	// BlacklistedDirs is a list of directory names that should be excluded from the recursion.
+	BlacklistedDirs []string `default:"[\"node_modules\", \".wine\", \"appcache\", \"depotcache\"]" yaml:"blacklisted_dirs" json:"blacklisted_dirs"`
+
+	// MaxRecursionDepth specifies the maximum depth for directory recursion.
+	MaxRecursionDepth int `default:"8" yaml:"max_recursion_depth" json:"max_recursion_depth"`
 }
 
 // NewAtPath creates a new struct and set the path where it should be stored.
