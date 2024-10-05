@@ -42,7 +42,7 @@ var blacklist = []string{"node_modules", ".wine", "appcache", "depotcache"}
 // Helper function to check if a directory name is in the blacklist
 func isBlacklisted(dirName string) bool {
 	for _, blacklisted := range blacklist {
-		if dirName == blacklisted {
+		if strings.Contains(dirName, blacklisted) {
 			return true
 		}
 	}
