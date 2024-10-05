@@ -21,6 +21,7 @@ import (
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/internal/models"
+	"github.com/pelican-dev/wings/internal/ufs"
 	"github.com/pelican-dev/wings/router/downloader"
 	"github.com/pelican-dev/wings/router/middleware"
 	"github.com/pelican-dev/wings/router/tokens"
@@ -90,19 +91,29 @@ func getServerListDirectory(c *gin.Context) {
 	}
 }
 
+// Structs needed to repond with the matched files and all its info
+type customFileInfo struct {
+	ufs.FileInfo
+	newName string
+}
+
+func (cfi customFileInfo) Name() string {
+	return cfi.newName // Return the custom name (i.e., with the directory prefix)
+}
+
 func getFilesBySearch(c *gin.Context) {
 	s := middleware.ExtractServer(c)
 	dir := c.Query("directory")
 	pattern := c.Query("pattern")
 
-	// Just for debugging for now
+	// Default pattern for debugging
 	if pattern == "" {
-		pattern = "txt"
+		pattern = "ini"
 	}
 
 	// Trim trailing slash from the directory if present
 	dir = strings.TrimSuffix(dir, "/")
-	
+
 	// Convert the pattern to lowercase for case-insensitive comparison
 	patternLower := strings.ToLower(pattern)
 
@@ -119,7 +130,8 @@ func getFilesBySearch(c *gin.Context) {
 		return
 	}
 
-	matchedFiles := []string{}
+	// Prepare slices to store matched stats and directories
+	matchedEntries := []filesystem.Stat{}
 	matchedDirectories := []string{}
 
 	// Filter filenames and directories based on pattern
@@ -130,42 +142,65 @@ func getFilesBySearch(c *gin.Context) {
 		// Convert fileName to lowercase for case-insensitive comparison
 		fileNameLower := strings.ToLower(fileName)
 
-		// If the current item is a directory, add to matchedDirectories
+		// Full path for the file or directory
+		fullPath := filepath.Join(dir, fileName)
+
+		// If it's a directory, store it and add it to matchedDirectories
 		if fileType == "inode/directory" {
-			matchedDirectories = append(matchedDirectories, filepath.Join(dir, fileName))
+			matchedDirectories = append(matchedDirectories, fullPath)
 		}
 
-		// Handle matching for files
+		// File matching logic (similar to the directory check)
 		if strings.ContainsAny(patternLower, "*?") {
+			// Wildcard matching
 			if match, _ := filepath.Match(patternLower, fileNameLower); match {
-				matchedFiles = append(matchedFiles, filepath.Join(dir, fileName))
+				matchedEntries = append(matchedEntries, filesystem.Stat{
+					FileInfo: customFileInfo{
+						FileInfo: fileInfo,
+						newName:  fullPath,
+					},
+					Mimetype: fileType,
+				})
 			}
 		} else {
-			// Handle extension or full name matching
+			// Extension or full name matching
 			if strings.HasPrefix(patternLower, ".") || !strings.Contains(patternLower, ".") {
 				// Extension matching logic
-				ext := filepath.Ext(fileNameLower) // Get the file extension
+				ext := filepath.Ext(fileNameLower)
 				if strings.TrimPrefix(ext, ".") == strings.TrimPrefix(patternLower, ".") {
-					matchedFiles = append(matchedFiles, filepath.Join(dir, fileName))
+					matchedEntries = append(matchedEntries, filesystem.Stat{
+						FileInfo: customFileInfo{
+							FileInfo: fileInfo,
+							newName:  fullPath,
+						},
+						Mimetype: fileType,
+					})
 				}
 			}
 
 			// Full name or prefix matching for cases without extension
 			if strings.HasPrefix(fileNameLower, patternLower) || fileNameLower == patternLower {
-				matchedFiles = append(matchedFiles, filepath.Join(dir, fileName))
+				matchedEntries = append(matchedEntries, filesystem.Stat{
+					FileInfo: customFileInfo{
+						FileInfo: fileInfo,
+						newName:  fullPath,
+					},
+					Mimetype: fileType,
+				})
 			}
 		}
 	}
 
-	// Return matched files and directories, even if no files matched the pattern
-	if len(matchedFiles) == 0 && len(matchedDirectories) == 0 {
+	// Return the matched stats (only those that matched the pattern) and directories separately
+	if len(matchedEntries) == 0 && len(matchedDirectories) == 0 {
 		c.JSON(http.StatusOK, gin.H{"message": "No matches found."})
 	} else {
+
 		// For debugging purposes
-		fmt.Printf("%+q\n", matchedFiles)
 		fmt.Printf("%+q\n", matchedDirectories)
 
-		c.JSON(http.StatusOK, gin.H{"files": matchedFiles, "directories": matchedDirectories})
+		// Return all matched files with there stats and the name now included the directory
+		c.JSON(http.StatusOK, matchedEntries)
 	}
 }
 
