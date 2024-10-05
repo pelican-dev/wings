@@ -100,6 +100,9 @@ func getFilesBySearch(c *gin.Context) {
 		pattern = "txt"
 	}
 
+	// Trim trailing slash from the directory if present
+	dir = strings.TrimSuffix(dir, "/")
+	
 	// Convert the pattern to lowercase for case-insensitive comparison
 	patternLower := strings.ToLower(pattern)
 
