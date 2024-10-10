@@ -141,11 +141,11 @@ func (f *ConfigurationFile) UnmarshalJSON(data []byte) error {
 	// test if "create_file" exists, if not just assume true
 	if val, exists := m["create_file"]; exists && val != nil {
 		if err := json.Unmarshal(*val, &f.AllowCreateFile); err != nil {
-			log.WithField("file", f.FileName).WithField("error", err).Warn("create_file unmarshal failed assumed true")
+			log.WithField("file", f.FileName).WithField("error", err).Warn("create_file unmarshal failed")
 			f.AllowCreateFile = true
 		}
 	} else {
-		log.WithField("file", f.FileName).Info("create_file not specified assumed true")
+		log.WithField("file", f.FileName).Debug("create_file not specified assumed true")
 		f.AllowCreateFile = true
 	}
 

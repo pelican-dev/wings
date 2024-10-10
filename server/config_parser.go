@@ -21,14 +21,18 @@ func (s *Server) UpdateConfigurationFiles() {
 		f := cf
 
 		pool.Submit(func() {
-			flags := ufs.O_RDWR
+			var file ufs.File
+			var err error
 			if f.AllowCreateFile {
-				flags |= ufs.O_CREATE
+				file, err = s.Filesystem().UnixFS().Touch(f.FileName, ufs.O_RDWR|ufs.O_CREATE, 0o644)
+			} else {
+				file, err = s.Filesystem().UnixFS().Open(f.FileName)
 			}
-			file, err := s.Filesystem().UnixFS().Touch(f.FileName, flags, 0o644)
 			if err != nil {
 				if !os.IsNotExist(err) || f.AllowCreateFile {
 					s.Log().WithField("file_name", f.FileName).WithField("error", err).Error("failed to open file for configuration")
+				} else {
+					s.Log().WithField("file_name", f.FileName).Debug("file not created")
 				}
 				return
 			}
