@@ -156,8 +156,6 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 	}
 	
 	// Manually specify the Panel URL as it won't be decoded from JSON.
-	// @see https://github.com/pterodactyl/panel/issues/5087
-	// @see https://github.com/pterodactyl/wings/security/advisories/GHSA-gqmf-jqgv-v8fw
 	cfg.PanelLocation = configureArgs.PanelURL
 
 	if err = config.WriteToDisk(cfg); err != nil {
