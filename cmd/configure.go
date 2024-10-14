@@ -154,6 +154,9 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 	if err := json.Unmarshal(b, cfg); err != nil {
 		panic(err)
 	}
+	
+	// Manually specify the Panel URL as it won't be decoded from JSON.
+	cfg.PanelLocation = configureArgs.PanelURL
 
 	if err = config.WriteToDisk(cfg); err != nil {
 		panic(err)
