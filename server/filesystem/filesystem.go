@@ -480,9 +480,9 @@ func (fs *Filesystem) ListDirectory(p string) ([]Stat, error) {
 		case a.IsDir() && b.IsDir():
 			return 0
 		case a.IsDir():
-			return 1
-		default:
 			return -1
+		default:
+			return 1
 		}
 	})
 
