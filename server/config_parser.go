@@ -1,6 +1,7 @@
 package server
 
 import (
+	"os"
 	"runtime"
 
 	"github.com/gammazero/workerpool"
@@ -20,9 +21,19 @@ func (s *Server) UpdateConfigurationFiles() {
 		f := cf
 
 		pool.Submit(func() {
-			file, err := s.Filesystem().UnixFS().Touch(f.FileName, ufs.O_RDWR|ufs.O_CREATE, 0o644)
+			var file ufs.File
+			var err error
+			if f.AllowCreateFile {
+				file, err = s.Filesystem().UnixFS().Touch(f.FileName, ufs.O_RDWR|ufs.O_CREATE, 0o644)
+			} else {
+				file, err = s.Filesystem().UnixFS().Open(f.FileName)
+			}
 			if err != nil {
-				s.Log().WithField("file_name", f.FileName).WithField("error", err).Error("failed to open file for configuration")
+				if !os.IsNotExist(err) || f.AllowCreateFile {
+					s.Log().WithField("file_name", f.FileName).WithField("error", err).Error("failed to open file for configuration")
+				} else {
+					s.Log().WithField("file_name", f.FileName).Debug("file not created")
+				}
 				return
 			}
 			defer file.Close()

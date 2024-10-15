@@ -104,9 +104,10 @@ func (cp ConfigurationParser) String() string {
 // ConfigurationFile defines a configuration file for the server startup. These
 // will be looped over and modified before the server finishes booting.
 type ConfigurationFile struct {
-	FileName string                         `json:"file"`
-	Parser   ConfigurationParser            `json:"parser"`
-	Replace  []ConfigurationFileReplacement `json:"replace"`
+	FileName        string                         `json:"file"`
+	Parser          ConfigurationParser            `json:"parser"`
+	Replace         []ConfigurationFileReplacement `json:"replace"`
+	AllowCreateFile bool                           `json:"create_file"` // assumed true by unmarshal as it was the original behaviour
 
 	// Tracks Wings' configuration so that we can quickly get values
 	// out of it when variables request it.
@@ -135,6 +136,17 @@ func (f *ConfigurationFile) UnmarshalJSON(data []byte) error {
 		log.WithField("file", f.FileName).WithField("error", err).Warn("failed to unmarshal configuration file replacement")
 
 		f.Replace = []ConfigurationFileReplacement{}
+	}
+
+	// test if "create_file" exists, if not just assume true
+	if val, exists := m["create_file"]; exists && val != nil {
+		if err := json.Unmarshal(*val, &f.AllowCreateFile); err != nil {
+			log.WithField("file", f.FileName).WithField("error", err).Warn("create_file unmarshal failed")
+			f.AllowCreateFile = true
+		}
+	} else {
+		log.WithField("file", f.FileName).Debug("create_file not specified assumed true")
+		f.AllowCreateFile = true
 	}
 
 	return nil
