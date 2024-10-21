@@ -148,9 +148,8 @@ func (e *Environment) Stop(ctx context.Context) error {
 			log.WithField("container_id", e.Id).Warn("no stop configuration detected for environment, using termination procedure")
 		}
 
-		signal := "SIGKILL"
-		// Handle a few common cases, otherwise just fall through and just pass along
-		// the os.Kill signal to the process.
+		var signal string
+		// Handle a few common cases, otherwise just fall through and use the default SIGKILL.
 		switch strings.ToUpper(s.Value) {
 		case "SIGABRT":
 			signal = "SIGABRT"
@@ -158,7 +157,7 @@ func (e *Environment) Stop(ctx context.Context) error {
 			signal = "SIGINT"
 		case "SIGTERM", "C":
 			signal = "SIGTERM"
-		case "SIGKILL":
+		default:
 			signal = "SIGKILL"
 		}
 		return e.Terminate(ctx, signal)
