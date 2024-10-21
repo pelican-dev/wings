@@ -8,7 +8,6 @@ import (
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 
@@ -26,7 +25,7 @@ import (
 // is running does not result in the server becoming un-bootable.
 func (e *Environment) OnBeforeStart(ctx context.Context) error {
 	// Always destroy and re-create the server container to ensure that synced data from the Panel is used.
-	if err := e.client.ContainerRemove(ctx, e.Id, types.ContainerRemoveOptions{RemoveVolumes: true}); err != nil {
+	if err := e.client.ContainerRemove(ctx, e.Id, container.RemoveOptions{RemoveVolumes: true}); err != nil {
 		if !client.IsErrNotFound(err) {
 			return errors.WrapIf(err, "environment/docker: failed to remove container during pre-boot")
 		}
@@ -119,7 +118,7 @@ func (e *Environment) Start(ctx context.Context) error {
 		return errors.WrapIf(err, "environment/docker: failed to attach to container")
 	}
 
-	if err := e.client.ContainerStart(actx, e.Id, types.ContainerStartOptions{}); err != nil {
+	if err := e.client.ContainerStart(actx, e.Id, container.StartOptions{}); err != nil {
 		return errors.WrapIf(err, "environment/docker: failed to start container")
 	}
 
