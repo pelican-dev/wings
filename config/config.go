@@ -321,6 +321,11 @@ type Configuration struct {
 	// This is required to have the "Server Mounts" feature work properly.
 	AllowedMounts []string `json:"-" yaml:"allowed_mounts"`
 
+	// BlockBaseDirMount indicates whether mounting to /home/container is blocked.
+	// If true, mounting to /home/container is blocked.
+	// If false, mounting to /home/container is allowed.
+	BlockBaseDirMount bool `default:"true" json:"-" yaml:"BlockBaseDirMount"`
+
 	// AllowedOrigins is a list of allowed request origins.
 	// The Panel URL is automatically allowed, this is only needed for adding
 	// additional origins.
