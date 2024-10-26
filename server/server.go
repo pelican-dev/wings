@@ -365,14 +365,6 @@ func (s *Server) OnStateChange() {
 		s.Events().Publish(StatusEvent, st)
 	}
 
-	// Push status update to Panel
-	sc := remote.ServerStateChange{prevState, st}
-	s.Log().WithField("state_change", sc).Debug("pushing server status change to panel")
-	err := s.client.PushServerStateChange(context.Background(), s.ID(), sc)
-	if err != nil {
-		s.Log().WithField("error", err).Error("error pushing server status change to panel")
-	}
-
 	// Reset the resource usage to 0 when the process fully stops so that all the UI
 	// views in the Panel correctly display 0.
 	if st == environment.ProcessOfflineState {
@@ -401,6 +393,14 @@ func (s *Server) OnStateChange() {
 				}
 			}
 		}(s)
+	}
+
+	// Push status update to Panel
+	sc := remote.ServerStateChange{PrevState: prevState, NewState: st}
+	s.Log().WithField("state_change", sc).Debug("pushing server status change to panel")
+	err := s.client.PushServerStateChange(context.Background(), s.ID(), sc)
+	if err != nil {
+		s.Log().WithField("error", err).Error("error pushing server status change to panel")
 	}
 }
 

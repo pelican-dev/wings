@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"strings"
-	"syscall"
 	"time"
 
 	"emperror.dev/errors"
@@ -148,16 +147,17 @@ func (e *Environment) Stop(ctx context.Context) error {
 			log.WithField("container_id", e.Id).Warn("no stop configuration detected for environment, using termination procedure")
 		}
 
-		signal := os.Kill
-		// Handle a few common cases, otherwise just fall through and just pass along
-		// the os.Kill signal to the process.
+		var signal string
+		// Handle a few common cases, otherwise just fall through and use the default SIGKILL.
 		switch strings.ToUpper(s.Value) {
 		case "SIGABRT":
-			signal = syscall.SIGABRT
+			signal = "SIGABRT"
 		case "SIGINT":
-			signal = syscall.SIGINT
-		case "SIGTERM":
-			signal = syscall.SIGTERM
+			signal = "SIGINT"
+		case "SIGTERM", "C":
+			signal = "SIGTERM"
+		default:
+			signal = "SIGKILL"
 		}
 		return e.Terminate(ctx, signal)
 	}
@@ -221,7 +221,7 @@ func (e *Environment) WaitForStop(ctx context.Context, duration time.Duration, t
 
 	doTermination := func(s string) error {
 		e.log().WithField("step", s).WithField("duration", duration).Warn("container stop did not complete in time, terminating process...")
-		return e.Terminate(ctx, os.Kill)
+		return e.Terminate(ctx, "SIGKILL")
 	}
 
 	// We pass through the timed context for this stop action so that if one of the
@@ -266,7 +266,7 @@ func (e *Environment) WaitForStop(ctx context.Context, duration time.Duration, t
 }
 
 // Terminate forcefully terminates the container using the signal provided.
-func (e *Environment) Terminate(ctx context.Context, signal os.Signal) error {
+func (e *Environment) Terminate(ctx context.Context, signal string) error {
 	c, err := e.ContainerInspect(ctx)
 	if err != nil {
 		// Treat missing containers as an okay error state, means it is obviously
@@ -289,12 +289,32 @@ func (e *Environment) Terminate(ctx context.Context, signal os.Signal) error {
 		return nil
 	}
 
-	// We set it to stopping than offline to prevent crash detection from being triggered.
+	// Timeout (optional) is the timeout (in seconds) to wait for the container
+	// to stop gracefully before forcibly terminating it with SIGKILL.
+	//
+	// - Use nil to use the default timeout (10 seconds).
+	// - Use '-1' to wait indefinitely.
+	// - Use '0' to not wait for the container to exit gracefully, and
+	//   immediately proceeds to forcibly terminating the container.
+	// - Other positive values are used as timeout (in seconds).
+	var noWaitTimeout int
+
+	// For every signal wait at max 10 seconds before SIGKILL is send (server did not stop in time)
+	// for SIGKILL just kill it without waiting
+	switch signal {
+	case "SIGKILL":
+		noWaitTimeout = 0
+	default:
+		noWaitTimeout = 10
+	}
+
+	// We set it to stopping then offline to prevent crash detection from being triggered.
 	e.SetState(environment.ProcessStoppingState)
-	sig := strings.TrimSuffix(strings.TrimPrefix(signal.String(), "signal "), "ed")
-	if err := e.client.ContainerKill(ctx, e.Id, sig); err != nil && !client.IsErrNotFound(err) {
+
+	if err := e.client.ContainerStop(ctx, e.Id, container.StopOptions{Timeout: &noWaitTimeout, Signal: signal}); err != nil && !client.IsErrNotFound(err) {
 		return errors.WithStack(err)
 	}
+
 	e.SetState(environment.ProcessOfflineState)
 
 	return nil
