@@ -151,9 +151,9 @@ func (e *Environment) Stop(ctx context.Context) error {
 		switch strings.ToUpper(s.Value) {
 		case "SIGABRT":
 			signal = "SIGABRT"
-		case "SIGINT":
+		case "SIGINT", "C":
 			signal = "SIGINT"
-		case "SIGTERM", "C":
+		case "SIGTERM":
 			signal = "SIGTERM"
 		default:
 			signal = "SIGKILL"
@@ -161,6 +161,12 @@ func (e *Environment) Stop(ctx context.Context) error {
 		return e.Terminate(ctx, signal)
 	}
 
+	// If the process is already offline don't switch it back to stopping. Just leave it how
+	// it is and continue through to the stop handling for the process.
+	// I'm not certain if this should still be here but it seems to work with it and without it so I leave it here.
+	if e.st.Load() != environment.ProcessOfflineState {
+		e.SetState(environment.ProcessStoppingState)
+	}
 
 	// Only attempt to send the stop command to the instance if we are actually attached to
 	// the instance. If we are not for some reason, just send the container stop event.
@@ -286,7 +292,6 @@ func (e *Environment) Terminate(ctx context.Context, signal string) error {
 
 		return nil
 	}
-
 
 	// We set it to stopping then offline to prevent crash detection from being triggered.
 	e.SetState(environment.ProcessStoppingState)
