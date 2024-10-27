@@ -291,7 +291,7 @@ func (e *Environment) Terminate(ctx context.Context, signal string) error {
 	// We set it to stopping then offline to prevent crash detection from being triggered.
 	e.SetState(environment.ProcessStoppingState)
 
-	if err := e.client.ContainerKill(ctx, e.Id, container.StopOptions{Signal: signal}); err != nil && !client.IsErrNotFound(err) {
+	if err := e.client.ContainerKill(ctx, e.Id, signal); err != nil && !client.IsErrNotFound(err) {
 		return errors.WithStack(err)
 	}
 
