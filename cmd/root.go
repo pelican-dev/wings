@@ -88,23 +88,24 @@ func init() {
 	rootCommand.AddCommand(versionCommand)
 	rootCommand.AddCommand(configureCmd)
 	rootCommand.AddCommand(newDiagnosticsCommand())
+	rootCommand.AddCommand(newSelfupdateCommand())
 }
 
 func isDockerSnap() bool {
-    cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-    if err != nil {
-        log.Fatalf("Unable to initialize Docker client: %s", err)
-    }
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		log.Fatalf("Unable to initialize Docker client: %s", err)
+	}
 
-    defer cli.Close() // Close the client when the function returns (should not be needed, but just to be safe)
+	defer cli.Close() // Close the client when the function returns (should not be needed, but just to be safe)
 
-    info, err := cli.Info(context.Background())
-    if err != nil {
-        log.Fatalf("Unable to get Docker info: %s", err)
-    }
+	info, err := cli.Info(context.Background())
+	if err != nil {
+		log.Fatalf("Unable to get Docker info: %s", err)
+	}
 
-    // Check if Docker root directory contains '/var/snap/docker'
-    return strings.Contains(info.DockerRootDir, "/var/snap/docker")
+	// Check if Docker root directory contains '/var/snap/docker'
+	return strings.Contains(info.DockerRootDir, "/var/snap/docker")
 }
 
 func rootCmdRun(cmd *cobra.Command, _ []string) {
