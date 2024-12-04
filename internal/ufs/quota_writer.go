@@ -4,7 +4,6 @@
 package ufs
 
 import (
-	"errors"
 	"io"
 	"sync/atomic"
 )
@@ -33,7 +32,7 @@ func (w *CountedWriter) BytesWritten() int64 {
 // Error returns the error from the writer if any. If the error is an EOF, nil
 // will be returned.
 func (w *CountedWriter) Error() error {
-	if errors.Is(w.err, io.EOF) {
+	if w.err == io.EOF {
 		return nil
 	}
 	return w.err
@@ -54,9 +53,8 @@ func (w *CountedWriter) Write(p []byte) (int, error) {
 	// TODO: is this how we actually want to handle errors with this?
 	if err == io.EOF {
 		return n, io.EOF
-	} else {
-		return n, nil
 	}
+	return n, nil
 }
 
 func (w *CountedWriter) ReadFrom(r io.Reader) (n int64, err error) {
@@ -92,7 +90,7 @@ func (r *CountedReader) BytesRead() int64 {
 // Error returns the error from the reader if any. If the error is an EOF, nil
 // will be returned.
 func (r *CountedReader) Error() error {
-	if errors.Is(r.err, io.EOF) {
+	if r.err == io.EOF {
 		return nil
 	}
 	return r.err
@@ -109,9 +107,9 @@ func (r *CountedReader) Read(p []byte) (int, error) {
 	r.counter.Add(int64(n))
 	r.err = err
 
+	// TODO: is this how we actually want to handle errors with this?
 	if err == io.EOF {
 		return n, io.EOF
-	} else {
-		return n, nil
 	}
+	return n, nil
 }
