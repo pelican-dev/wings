@@ -110,13 +110,8 @@ func selfupdateCmdRun(*cobra.Command, []string) {
 		return
 	}
 
-	fmt.Println("Restarting service...")
+	fmt.Println("Now restart the wings service. Example: systemctl restart wings")
 
-	if err := restartService(); err != nil {
-		fmt.Println("Error restarting the wings service:", err)
-	} else {
-		fmt.Println("Service restarted successfully.")
-	}
 }
 
 func fetchLatestGitHubRelease() (string, error) {
@@ -240,18 +235,4 @@ func (pw *progressWriter) Write(p []byte) (int, error) {
 	}
 
 	return n, err
-}
-
-func restartService() error {
-	// Try to run the systemctl restart command
-	cmd := exec.Command("systemctl", "restart", "wings")
-	cmdOutput, err := cmd.CombinedOutput()
-
-	if err != nil {
-		// If systemctl command fails, return the error with output
-		return fmt.Errorf("failed to restart service: %s\n%s", err.Error(), string(cmdOutput))
-	}
-
-	// If successful, return nil
-	return nil
 }
