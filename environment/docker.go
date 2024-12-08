@@ -39,7 +39,7 @@ func ConfigureDocker(ctx context.Context) error {
 	}
 
 	nw := config.Get().Docker.Network
-	resource, err := cli.NetworkInspect(ctx, nw.Name, types.NetworkInspectOptions{})
+	resource, err := cli.NetworkInspect(ctx, nw.Name, network.InspectOptions{})
 	if err != nil {
 		if !client.IsErrNotFound(err) {
 			return err

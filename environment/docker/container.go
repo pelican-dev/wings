@@ -12,7 +12,6 @@ import (
 	"emperror.dev/errors"
 	"github.com/apex/log"
 	"github.com/buger/jsonparser"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
@@ -196,12 +195,12 @@ func (e *Environment) Create() error {
 
 	networkMode := container.NetworkMode(cfg.Docker.Network.Mode)
 	if a.ForceOutgoingIP {
-		enableIPv6 := false // define a bool variable
+		enableIPv6 := false
 		e.log().Debug("environment/docker: forcing outgoing IP address")
 		networkName := "ip-" + strings.ReplaceAll(strings.ReplaceAll(a.DefaultMapping.Ip, ".", "-"), ":", "-")
 		networkMode = container.NetworkMode(networkName)
 
-		if _, err := e.client.NetworkInspect(ctx, networkName, types.NetworkInspectOptions{}); err != nil {
+		if _, err := e.client.NetworkInspect(ctx, networkName, network.InspectOptions{}); err != nil {
 			if !client.IsErrNotFound(err) {
 				return err
 			}
@@ -440,16 +439,15 @@ func (e *Environment) ensureImageExists(image string) error {
 }
 
 func (e *Environment) convertMounts() []mount.Mount {
-	var out []mount.Mount
-
-	for _, m := range e.Configuration.Mounts() {
-		out = append(out, mount.Mount{
+	mounts := e.Configuration.Mounts()
+	out := make([]mount.Mount, len(mounts))
+	for i, m := range mounts {
+		out[i] = mount.Mount{
 			Type:     mount.TypeBind,
 			Source:   m.Source,
 			Target:   m.Target,
 			ReadOnly: m.ReadOnly,
-		})
+		}
 	}
-
 	return out
 }
