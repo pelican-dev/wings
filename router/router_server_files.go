@@ -37,7 +37,13 @@ func getServerFileContents(c *gin.Context) {
 	}
 	f, st, err := s.Filesystem().File(p)
 	if err != nil {
-		middleware.CaptureAndAbort(c, err)
+		if strings.Contains(err.Error(), "file does not exist") {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+				"error":      "The requested resources was not found on the system.",
+				"request_id": c.Writer.Header().Get("X-Request-Id")})
+		} else {
+			middleware.CaptureAndAbort(c, err)
+		}
 		return
 	}
 	defer f.Close()
@@ -88,7 +94,6 @@ func getServerListDirectory(c *gin.Context) {
 		c.JSON(http.StatusOK, stats)
 	}
 }
-
 
 type renameFile struct {
 	To   string `json:"to"`
