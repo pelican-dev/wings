@@ -13,9 +13,10 @@ import (
 	"github.com/apex/log"
 	"github.com/buger/jsonparser"
 	"github.com/docker/docker/api/types/container"
+	dockerImage "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	dockerImage "github.com/docker/docker/api/types/image" // Alias the correct images package
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
@@ -205,7 +206,7 @@ func (e *Environment) Create() error {
 				return err
 			}
 
-			if _, err := e.client.NetworkCreate(ctx, networkName, types.NetworkCreate{
+			if _, err := e.client.NetworkCreate(ctx, networkName, network.CreateOptions{
 				Driver:     "bridge",
 				EnableIPv6: &enableIPv6,
 				Internal:   false,
