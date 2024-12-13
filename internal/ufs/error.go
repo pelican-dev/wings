@@ -114,6 +114,8 @@ func convertErrorType(err error) error {
 				Path: pErr.Path,
 				Err:  ErrBadPathResolution,
 			}
+			// TODO: EROFS
+			// TODO: ENOTEMPTY
 		}
 	}
 	return err

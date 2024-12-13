@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 )
 
+// Quota .
+// TODO: document
 type Quota struct {
 	// fs is the underlying filesystem that runs the actual I/O operations.
 	*UnixFS
@@ -26,6 +28,8 @@ type Quota struct {
 	usage atomic.Int64
 }
 
+// NewQuota .
+// TODO: document
 func NewQuota(fs *UnixFS, limit int64) *Quota {
 	qfs := Quota{UnixFS: fs}
 	qfs.limit.Store(limit)
