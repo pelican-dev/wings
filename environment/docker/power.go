@@ -296,11 +296,52 @@ func (e *Environment) Terminate(ctx context.Context, signal string) error {
 	// We set it to stopping then offline to prevent crash detection from being triggered.
 	e.SetState(environment.ProcessStoppingState)
 
+	// Send the initial signal to the container.
 	if err := e.client.ContainerKill(ctx, e.Id, signal); err != nil && !client.IsErrNotFound(err) {
 		return errors.WithStack(err)
 	}
 
-	e.SetState(environment.ProcessOfflineState)
+	// Wait for up to 10 seconds, polling every 500ms, to check if the container has stopped.
+	const checkInterval = 500 * time.Millisecond
+	const timeout = 10 * time.Second
 
-	return nil
+	ticker := time.NewTicker(checkInterval)
+	defer ticker.Stop()
+
+	timeLimit := time.After(timeout)
+
+	for {
+		select {
+		case <-ticker.C:
+			// Re-inspect the container to check its state.
+			c, err := e.ContainerInspect(ctx)
+			if err != nil {
+				if client.IsErrNotFound(err) {
+					// Container is gone, consider it stopped.
+					e.SetState(environment.ProcessOfflineState)
+					return nil
+				}
+				return errors.WithStack(err)
+			}
+
+			if !c.State.Running {
+				// Container has stopped, update the state and exit.
+				e.SetState(environment.ProcessOfflineState)
+				return nil
+			}
+
+		case <-timeLimit:
+			// Timeout reached, send SIGKILL as a last resort.
+			if err := e.client.ContainerKill(ctx, e.Id, "SIGKILL"); err != nil && !client.IsErrNotFound(err) {
+				return errors.WithStack(err)
+			}
+			e.log().WithFields(log.Fields{
+				"id": e.Id,
+			}).Debug("Sent SIGKILL to container because it did not stop by itself in time")
+			
+			// Update state to offline after SIGKILL.
+			e.SetState(environment.ProcessOfflineState)
+			return nil
+		}
+	}
 }
