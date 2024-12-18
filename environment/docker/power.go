@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"strings"
-	"syscall"
 	"time"
 
 	"emperror.dev/errors"
@@ -144,26 +143,27 @@ func (e *Environment) Stop(ctx context.Context) error {
 	// logic and end up only executing the container stop command (which may or
 	// may not work as expected).
 	if s.Type == "" || s.Type == remote.ProcessStopSignal {
-		if s.Type == "" {
-			log.WithField("container_id", e.Id).Warn("no stop configuration detected for environment, using termination procedure")
-		}
 
-		signal := os.Kill
-		// Handle a few common cases, otherwise just fall through and just pass along
-		// the os.Kill signal to the process.
+		log.WithField("signal_value", s.Value).Debug("stopping server using signal")
+
+		var signal string
+		// Handle a few common cases, otherwise just fall through and use the default SIGKILL.
 		switch strings.ToUpper(s.Value) {
 		case "SIGABRT":
-			signal = syscall.SIGABRT
-		case "SIGINT":
-			signal = syscall.SIGINT
+			signal = "SIGABRT"
+		case "SIGINT", "C":
+			signal = "SIGINT"
 		case "SIGTERM":
-			signal = syscall.SIGTERM
+			signal = "SIGTERM"
+		default:
+			signal = "SIGKILL"
 		}
 		return e.Terminate(ctx, signal)
 	}
 
 	// If the process is already offline don't switch it back to stopping. Just leave it how
 	// it is and continue through to the stop handling for the process.
+	// I'm not certain if this should still be here but it seems to work with it and without it so I leave it here.
 	if e.st.Load() != environment.ProcessOfflineState {
 		e.SetState(environment.ProcessStoppingState)
 	}
@@ -172,6 +172,10 @@ func (e *Environment) Stop(ctx context.Context) error {
 	// the instance. If we are not for some reason, just send the container stop event.
 	if e.IsAttached() && s.Type == remote.ProcessStopCommand {
 		return e.SendCommand(s.Value)
+	}
+
+	if s.Type == "" {
+		log.WithField("container_id", e.Id).Warn("no stop configuration detected for environment, using termination procedure")
 	}
 
 	// Allow the stop action to run for however long it takes, similar to executing a command
@@ -221,7 +225,7 @@ func (e *Environment) WaitForStop(ctx context.Context, duration time.Duration, t
 
 	doTermination := func(s string) error {
 		e.log().WithField("step", s).WithField("duration", duration).Warn("container stop did not complete in time, terminating process...")
-		return e.Terminate(ctx, os.Kill)
+		return e.Terminate(ctx, "SIGKILL")
 	}
 
 	// We pass through the timed context for this stop action so that if one of the
@@ -266,7 +270,7 @@ func (e *Environment) WaitForStop(ctx context.Context, duration time.Duration, t
 }
 
 // Terminate forcefully terminates the container using the signal provided.
-func (e *Environment) Terminate(ctx context.Context, signal os.Signal) error {
+func (e *Environment) Terminate(ctx context.Context, signal string) error {
 	c, err := e.ContainerInspect(ctx)
 	if err != nil {
 		// Treat missing containers as an okay error state, means it is obviously
@@ -289,12 +293,13 @@ func (e *Environment) Terminate(ctx context.Context, signal os.Signal) error {
 		return nil
 	}
 
-	// We set it to stopping than offline to prevent crash detection from being triggered.
+	// We set it to stopping then offline to prevent crash detection from being triggered.
 	e.SetState(environment.ProcessStoppingState)
-	sig := strings.TrimSuffix(strings.TrimPrefix(signal.String(), "signal "), "ed")
-	if err := e.client.ContainerKill(ctx, e.Id, sig); err != nil && !client.IsErrNotFound(err) {
+
+	if err := e.client.ContainerKill(ctx, e.Id, signal); err != nil && !client.IsErrNotFound(err) {
 		return errors.WithStack(err)
 	}
+
 	e.SetState(environment.ProcessOfflineState)
 
 	return nil
