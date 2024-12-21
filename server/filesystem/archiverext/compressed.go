@@ -13,7 +13,7 @@ import (
 	"io"
 	"io/fs"
 
-	"github.com/mholt/archiver/v4"
+	"github.com/mholt/archives"
 )
 
 // FileFS allows accessing a file on disk using a consistent file system interface.
@@ -29,7 +29,7 @@ type FileFS struct {
 
 	// If file is compressed, setting this field will
 	// transparently decompress reads.
-	Compression archiver.Decompressor
+	Compression archives.Decompressor
 }
 
 // Open opens the named file, which must be the file used to create the file system.
