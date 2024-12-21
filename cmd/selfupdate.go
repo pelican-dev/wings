@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -18,99 +19,139 @@ import (
 var updateArgs struct {
 	repoOwner string
 	repoName  string
+	force     bool
 }
 
 func newSelfupdateCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "update",
-		Short: "Update the wings to the latest version",
+		Short: "Update wings to the latest version",
 		Run:   selfupdateCmdRun,
 	}
 
-	command.Flags().StringVar(&updateArgs.repoOwner, "repo-owner", "pelican-dev", "GitHub username or organization that owns the repository containing the updates")
-	command.Flags().StringVar(&updateArgs.repoName, "repo-name", "wings", "The name of the GitHub repository to fetch updates from")
+	command.Flags().StringVar(&updateArgs.repoOwner, "repo-owner", "pelican-dev", "GitHub repository owner")
+	command.Flags().StringVar(&updateArgs.repoName, "repo-name", "wings", "GitHub repository name")
+	command.Flags().BoolVar(&updateArgs.force, "force", false, "Force update even if on latest version")
 
 	return command
 }
 
-func selfupdateCmdRun(*cobra.Command, []string) {
+func selfupdateCmdRun(_ *cobra.Command, _ []string) {
 	currentVersion := system.Version
 	if currentVersion == "" {
-		fmt.Println("Error: Current version is not defined")
+		fmt.Println("Error: current version is not defined")
 		return
 	}
 
-	if currentVersion == "develop" {
-		fmt.Println("Running in development mode. Skipping update.")
+	if currentVersion == "develop" && !updateArgs.force {
+		fmt.Println("Running in development mode. Use --force to override.")
 		return
 	}
 
-	fmt.Println("Current version:", currentVersion)
+	fmt.Printf("Current version: %s\n", currentVersion)
 
 	// Fetch the latest release tag from GitHub API
 	latestVersionTag, err := fetchLatestGitHubRelease()
 	if err != nil {
-		fmt.Println("Failed to fetch the latest version:", err)
+		fmt.Printf("Failed to fetch latest version: %v\n", err)
 		return
 	}
 
-	currentVersionTag := "v" + currentVersion
-	if latestVersionTag == currentVersionTag {
-		fmt.Println("You are running the latest version:", currentVersion)
-		return
+	var currentVersionTag string
+	if currentVersion != "develop" {
+		currentVersionTag = "v" + currentVersion
+	} else {
+		currentVersionTag = "develop"
 	}
 
-	fmt.Printf("A new version is available: %s (current: %s)\n", latestVersionTag, currentVersionTag)
+	if latestVersionTag == currentVersionTag && !updateArgs.force {
+		fmt.Printf("You are running the latest version: %s\n", currentVersion)
+		return
+	}
 
 	binaryName := determineBinaryName()
 	if binaryName == "" {
-		fmt.Println("Unsupported architecture")
+		fmt.Printf("Error: unsupported architecture: %s\n", runtime.GOARCH)
 		return
 	}
 
-	downloadURL := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s", updateArgs.repoOwner, updateArgs.repoName, latestVersionTag, binaryName)
-	checksumURL := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/checksums.txt", updateArgs.repoOwner, updateArgs.repoName, latestVersionTag)
+	fmt.Printf("Updating from %s to %s\n", currentVersionTag, latestVersionTag)
 
-	fmt.Println("Downloading checksums.txt...")
-	checksumFile, err := downloadFile(checksumURL, "checksums.txt")
+	if err := performUpdate(latestVersionTag, binaryName); err != nil {
+		fmt.Printf("Update failed: %v\n", err)
+		return
+	}
+
+	fmt.Println("\nUpdate successful! Please restart the wings service (e.g., systemctl restart wings)")
+}
+
+func performUpdate(version, binaryName string) error {
+	downloadURL := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s",
+		updateArgs.repoOwner, updateArgs.repoName, version, binaryName)
+	checksumURL := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/checksums.txt",
+		updateArgs.repoOwner, updateArgs.repoName, version)
+
+	tmpDir, err := os.MkdirTemp("", "wings-update-*")
 	if err != nil {
-		fmt.Println("Failed to download checksum file:", err)
-		return
+		return fmt.Errorf("failed to create temp directory: %v", err)
 	}
-	defer os.Remove(checksumFile)
+	defer os.RemoveAll(tmpDir)
 
-	fmt.Println("Downloading", binaryName, "...")
-	binaryFile, err := downloadFile(downloadURL, binaryName)
-	if err != nil {
-		fmt.Println("Failed to download binary file:", err)
-		return
+	checksumPath := filepath.Join(tmpDir, "checksums.txt")
+	if err := downloadWithProgress(checksumURL, checksumPath); err != nil {
+		return fmt.Errorf("failed to download checksums: %v", err)
 	}
-	defer os.Remove(binaryFile)
 
-	if err := verifyChecksum(binaryFile, checksumFile, binaryName); err != nil {
-		fmt.Println("Checksum verification failed:", err)
-		return
+	binaryPath := filepath.Join(tmpDir, binaryName)
+	if err := downloadWithProgress(downloadURL, binaryPath); err != nil {
+		return fmt.Errorf("failed to download binary: %v", err)
 	}
-	fmt.Println("\nChecksum verification successful.")
+
+	if err := verifyChecksum(binaryPath, checksumPath, binaryName); err != nil {
+		return fmt.Errorf("checksum verification failed: %v", err)
+	}
+
+	if err := os.Chmod(binaryPath, 0755); err != nil {
+		return fmt.Errorf("failed to set executable permissions: %v", err)
+	}
 
 	currentExecutable, err := os.Executable()
 	if err != nil {
-		fmt.Println("Failed to locate current executable:", err)
-		return
+		return fmt.Errorf("failed to locate current executable: %v", err)
 	}
 
-	if err := os.Chmod(binaryFile, 0755); err != nil {
-		fmt.Println("Failed to set executable permissions on the new binary:", err)
-		return
+	return os.Rename(binaryPath, currentExecutable)
+}
+
+func downloadWithProgress(url, dest string) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 
-	if err := replaceBinary(currentExecutable, binaryFile); err != nil {
-		fmt.Println("Failed to replace executable:", err)
-		return
+	out, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	filename := filepath.Base(dest)
+	fmt.Printf("Downloading %s (%.2f MB)...\n", filename, float64(resp.ContentLength)/1024/1024)
+
+	pw := &progressWriter{
+		Writer:    out,
+		Total:     resp.ContentLength,
+		StartTime: time.Now(),
 	}
 
-	fmt.Println("Now restart the wings service. Example: systemctl restart wings")
-
+	_, err = io.Copy(pw, resp.Body)
+	fmt.Println()
+	return err
 }
 
 func fetchLatestGitHubRelease() (string, error) {
@@ -147,33 +188,6 @@ func determineBinaryName() string {
 	}
 }
 
-func downloadFile(url, fileName string) (string, error) {
-	tmpFile, err := os.CreateTemp("", fileName)
-	if err != nil {
-		return "", err
-	}
-	defer tmpFile.Close()
-
-	resp, err := http.Get(url)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status: %s", resp.Status)
-	}
-
-	fmt.Printf("Downloading %s (%.2f MB)...\n", fileName, float64(resp.ContentLength)/1024/1024)
-	progressWriter := &progressWriter{Writer: tmpFile, Total: resp.ContentLength}
-	if _, err := io.Copy(progressWriter, resp.Body); err != nil {
-		return "", err
-	}
-
-	fmt.Println() // Ensure a newline after download progress
-	return tmpFile.Name(), nil
-}
-
 func verifyChecksum(binaryPath, checksumPath, binaryName string) error {
 	checksumData, err := os.ReadFile(checksumPath)
 	if err != nil {
@@ -206,15 +220,15 @@ func verifyChecksum(binaryPath, checksumPath, binaryName string) error {
 	}
 	actualChecksum := fmt.Sprintf("%x", hasher.Sum(nil))
 
+	if actualChecksum == expectedChecksum {
+		fmt.Printf("checksum matched!\n")
+	}
+
 	if actualChecksum != expectedChecksum {
 		return fmt.Errorf("checksum mismatch: expected %s, got %s", expectedChecksum, actualChecksum)
 	}
 
 	return nil
-}
-
-func replaceBinary(currentPath, newPath string) error {
-	return os.Rename(newPath, currentPath)
 }
 
 type progressWriter struct {
