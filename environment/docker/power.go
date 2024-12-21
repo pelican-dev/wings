@@ -337,7 +337,7 @@ func (e *Environment) Terminate(ctx context.Context, signal string) error {
 			}
 			e.log().WithFields(log.Fields{
 				"id": e.Id,
-			}).Debug("Sent SIGKILL to container because it did not stop by itself in time")
+			}).Debug("Sent SIGKILL to container: graceful shutdown timed out")
 			
 			// Update state to offline after SIGKILL.
 			e.SetState(environment.ProcessOfflineState)
