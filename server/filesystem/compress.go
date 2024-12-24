@@ -96,14 +96,17 @@ func (fs *Filesystem) archiverFileSystem(ctx context.Context, p string) (iofs.FS
 			// while ArchiveFS can't.
 			// zip.Reader doesn't suffer from issue #330 and #310 according to local test (but they should be fixed anyway)
 			return zip.NewReader(f, info.Size())
-		case archives.Archival:
-			return &archives.ArchiveFS{Stream: io.NewSectionReader(f, 0, info.Size()), Format: ff, Context: ctx}, nil
-		case archives.SevenZip:
-			return &archives.ArchiveFS{Stream: io.NewSectionReader(f, 0, info.Size()), Format: ff, Context: ctx}, nil
-		case archives.Rar:
-			return &archives.ArchiveFS{Stream: io.NewSectionReader(f, 0, info.Size()), Format: ff, Context: ctx}, nil			
+		case archives.Archival, archives.SevenZip, archives.Rar:
+			// Most common formats (tar, 7z, rar)
+			return &archives.ArchiveFS{Stream: io.NewSectionReader(f, 0, info.Size()), Format: ff.(archives.Extractor), Context: ctx}, nil
 		case archives.Compression:
 			return archiverext.FileFS{File: f, Compression: ff}, nil
+		default:
+			// Try to handle any other archive formats that implement the Extractor interface
+			if extractor, ok := format.(archives.Extractor); ok {
+				log.WithField("type", fmt.Sprintf("%T", format)).Debug("attempting to extract unknown format")
+				return &archives.ArchiveFS{Stream: io.NewSectionReader(f, 0, info.Size()), Format: extractor, Context: ctx}, nil
+			}
 		}
 	}
 	_ = f.Close()
