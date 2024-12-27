@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"emperror.dev/errors"
-	"github.com/apex/log"
 	"github.com/klauspost/compress/zip"
 	"github.com/mholt/archives"
 
