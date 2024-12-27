@@ -219,7 +219,7 @@ func verifyChecksum(binaryPath, checksumPath, binaryName string) error {
 	actualChecksum := fmt.Sprintf("%x", hasher.Sum(nil))
 
 	if actualChecksum == expectedChecksum {
-		fmt.Printf("checksum matched!\n")
+		fmt.Printf("Checksum verification successful!\n")
 	}
 
 	if actualChecksum != expectedChecksum {
