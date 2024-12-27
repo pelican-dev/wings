@@ -57,11 +57,9 @@ func selfupdateCmdRun(_ *cobra.Command, _ []string) {
 		return
 	}
 
-	var currentVersionTag string
-	if currentVersion != "develop" {
-		currentVersionTag = "v" + currentVersion
-	} else {
-		currentVersionTag = "develop"
+	currentVersionTag := "v" + currentVersion
+	if currentVersion == "develop" {
+		currentVersionTag = currentVersion
 	}
 
 	if latestVersionTag == currentVersionTag && !updateArgs.force {
