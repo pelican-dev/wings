@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"emperror.dev/errors"
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/goccy/go-json"
 
 	"github.com/pelican-dev/wings/environment"
@@ -57,7 +57,7 @@ func (e *Environment) pollResources(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			var v types.StatsJSON
+			var v container.StatsResponse
 			if err := dec.Decode(&v); err != nil {
 				if err != io.EOF && !errors.Is(err, context.Canceled) {
 					e.log().WithField("error", err).Warn("error while processing Docker stats output for container")
@@ -103,7 +103,7 @@ func (e *Environment) pollResources(ctx context.Context) error {
 // bothering me about it. It should also reflect a slightly more correct memory value anyways.
 //
 // @see https://github.com/docker/cli/blob/96e1d1d6/cli/command/container/stats_helpers.go#L227-L249
-func calculateDockerMemory(stats types.MemoryStats) uint64 {
+func calculateDockerMemory(stats container.MemoryStats) uint64 {
 	if v, ok := stats.Stats["total_inactive_file"]; ok && v < stats.Usage {
 		return stats.Usage - v
 	}
@@ -119,7 +119,7 @@ func calculateDockerMemory(stats types.MemoryStats) uint64 {
 // by the defined CPU limits on the container.
 //
 // @see https://github.com/docker/cli/blob/aa097cf1aa19099da70930460250797c8920b709/cli/command/container/stats_helpers.go#L166
-func calculateDockerAbsoluteCpu(pStats types.CPUStats, stats types.CPUStats) float64 {
+func calculateDockerAbsoluteCpu(pStats container.CPUStats, stats container.CPUStats) float64 {
 	// Calculate the change in CPU usage between the current and previous reading.
 	cpuDelta := float64(stats.CPUUsage.TotalUsage) - float64(pStats.CPUUsage.TotalUsage)
 
