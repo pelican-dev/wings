@@ -88,23 +88,24 @@ func init() {
 	rootCommand.AddCommand(versionCommand)
 	rootCommand.AddCommand(configureCmd)
 	rootCommand.AddCommand(newDiagnosticsCommand())
+	rootCommand.AddCommand(newSelfupdateCommand())
 }
 
 func isDockerSnap() bool {
-    cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-    if err != nil {
-        log.Fatalf("Unable to initialize Docker client: %s", err)
-    }
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		log.Fatalf("Unable to initialize Docker client: %s", err)
+	}
 
-    defer cli.Close() // Close the client when the function returns (should not be needed, but just to be safe)
+	defer cli.Close() // Close the client when the function returns (should not be needed, but just to be safe)
 
-    info, err := cli.Info(context.Background())
-    if err != nil {
-        log.Fatalf("Unable to get Docker info: %s", err)
-    }
+	info, err := cli.Info(context.Background())
+	if err != nil {
+		log.Fatalf("Unable to get Docker info: %s", err)
+	}
 
-    // Check if Docker root directory contains '/var/snap/docker'
-    return strings.Contains(info.DockerRootDir, "/var/snap/docker")
+	// Check if Docker root directory contains '/var/snap/docker'
+	return strings.Contains(info.DockerRootDir, "/var/snap/docker")
 }
 
 func rootCmdRun(cmd *cobra.Command, _ []string) {
@@ -290,7 +291,7 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 		log.WithField("error", err).Fatal("failed to initialize cron system")
 	} else {
 		log.WithField("subsystem", "cron").Info("starting cron processes")
-		s.StartAsync()
+		s.Start()
 	}
 
 	go func() {
@@ -401,12 +402,12 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 // Reads the configuration from the disk and then sets up the global singleton
 // with all the configuration values.
 func initConfig() {
-	if !strings.HasPrefix(configPath, "/") {
-		d, err := os.Getwd()
+	if !filepath.IsAbs(configPath) {
+		d, err := filepath.Abs(configPath)
 		if err != nil {
-			log2.Fatalf("cmd/root: could not determine directory: %s", err)
+			log2.Fatalf("cmd/root: failed to get path to config file: %s", err)
 		}
-		configPath = path.Clean(path.Join(d, configPath))
+		configPath = d
 	}
 	err := config.FromFile(configPath)
 	if err != nil {

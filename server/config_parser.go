@@ -1,6 +1,7 @@
 package server
 
 import (
+	"os"
 	"runtime"
 
 	"fmt"
@@ -43,9 +44,19 @@ func (s *Server) UpdateConfigurationFiles() {
 
 		pool.Submit(func() {
 			filename := replaceParserConfigPathVariables(f.FileName, s.Config().EnvVars)
-			file, err := s.Filesystem().UnixFS().Touch(filename, ufs.O_RDWR|ufs.O_CREATE, 0o644)
+			file, err := func() (ufs.File, error) {
+				if f.AllowCreateFile {
+					return s.Filesystem().UnixFS().Touch(filename, ufs.O_RDWR|ufs.O_CREATE, 0o644)
+				}
+				return s.Filesystem().UnixFS().Open(filename)
+			}()
 			if err != nil {
-				s.Log().WithField("file_name", f.FileName).WithField("error", err).Error("failed to open file for configuration")
+				log := s.Log().WithField("file_name", filename)
+				if os.IsNotExist(err) && !f.AllowCreateFile {
+					log.Debug("file not created")
+				} else {
+					log.WithField("error", err).Error("failed to open file for configuration")
+				}
 				return
 			}
 			defer file.Close()
