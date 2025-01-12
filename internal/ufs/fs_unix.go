@@ -621,7 +621,7 @@ func (fs *UnixFS) openat(dirfd int, name string, flag int, mode FileMode) (int, 
 		if err == unix.EINTR {
 			continue
 		}
-		return 0, convertErrorType(err)
+		return -1, convertErrorType(err)
 	}
 
 	// If we are using openat2, we don't need the additional security checks.
@@ -681,11 +681,11 @@ func (fs *UnixFS) _openat(dirfd int, name string, flag int, mode uint32) (int, e
 	case err == nil:
 		return fd, nil
 	case err == unix.EINTR:
-		return 0, err
+		return -1, err
 	case err == unix.EAGAIN:
-		return 0, err
+		return -1, err
 	default:
-		return 0, &PathError{Op: "openat", Path: name, Err: err}
+		return -1, &PathError{Op: "openat", Path: name, Err: err}
 	}
 }
 
@@ -720,11 +720,11 @@ func (fs *UnixFS) _openat2(dirfd int, name string, flag, mode uint64) (int, erro
 	case err == nil:
 		return fd, nil
 	case err == unix.EINTR:
-		return 0, err
+		return -1, err
 	case err == unix.EAGAIN:
-		return 0, err
+		return -1, err
 	default:
-		return 0, &PathError{Op: "openat2", Path: name, Err: err}
+		return -1, &PathError{Op: "openat2", Path: name, Err: err}
 	}
 }
 
@@ -768,13 +768,18 @@ func (fs *UnixFS) safePath(path string) (dirfd int, file string, closeFd func(),
 	// trim slashes.
 	dir = strings.TrimSuffix(dir, "/")
 	dirfd, err = fs.openat(fsDirfd, dir, O_DIRECTORY|O_RDONLY, 0)
-	if dirfd != 0 {
+	if err != nil {
+		// An error occurred while opening the directory, but we already opened
+		// the filesystem root, so we still need to ensure it gets closed.
+		closeFd = func() { _ = unix.Close(fsDirfd) }
+	} else {	
 		// Set closeFd to close the newly opened directory file descriptor.
 		closeFd = func() {
 			_ = unix.Close(dirfd)
 			_ = unix.Close(fsDirfd)
 		}
 	}
+
 
 	// Return dirfd, name, the closeFd func, and err
 	return
