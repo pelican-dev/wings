@@ -32,8 +32,10 @@ func (eh *eventHandler) Log(e models.Event, fa FileAction) error {
 		"files": []string{fa.Entity},
 	}
 	if fa.Target != "" {
-		metadata["from"] = fa.Entity
-		metadata["to"] = fa.Target
+		metadata := map[string]interface{}{
+			"from": fa.Entity,
+			"to": fa.Target,
+		}
 	}
 
 	a := models.Activity{
