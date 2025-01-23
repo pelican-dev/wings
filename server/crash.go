@@ -76,13 +76,6 @@ func (s *Server) handleServerCrash() error {
 	if err != nil {
 		return errors.Wrap(err, "Faild to get the last line out of the console")
 	}
-
-	// Log that the server has crashed
-	s.SaveActivity(s.NewRequestActivity("", ""), ActivityServerCrashed, models.ActivityMeta{
-		"exit_code": exitCode,
-		"oomkilled": oomKilled,
-		"logs":      logs,
-	})
 	
 	s.PublishConsoleOutputFromDaemon("---------- Detected server process in a crashed state! ----------")
 	s.PublishConsoleOutputFromDaemon(fmt.Sprintf("Exit code: %d", exitCode))
@@ -100,6 +93,13 @@ func (s *Server) handleServerCrash() error {
 		return &crashTooFrequent{}
 	}
 
+	// Log that the server has crashed
+	s.SaveActivity(s.NewRequestActivity("", ""), ActivityServerCrashed, models.ActivityMeta{
+		"exit_code": exitCode,
+		"oomkilled": oomKilled,
+		"logs":      logs,
+	})
+	
 	s.crasher.SetLastCrash(time.Now())
 
 	return errors.Wrap(s.HandlePowerAction(PowerActionStart), "failed to start server after crash detection")
