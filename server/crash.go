@@ -94,7 +94,7 @@ func (s *Server) handleServerCrash() error {
 	}
 
 	// Log that the server has crashed
-	s.SaveActivity(s.NewRequestActivity("", ""), ActivityServerCrashed, models.ActivityMeta{
+	s.SaveActivity(s.NewRequestActivity("", "127.0.0.1"), ActivityServerCrashed, models.ActivityMeta{
 		"exit_code": exitCode,
 		"oomkilled": oomKilled,
 		"logs":      logs,
