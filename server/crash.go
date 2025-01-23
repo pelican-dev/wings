@@ -10,6 +10,8 @@ import (
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
+	"github.com/pelican-dev/wings/internal/models"
+
 )
 
 type CrashHandler struct {
@@ -69,6 +71,19 @@ func (s *Server) handleServerCrash() error {
 		return nil
 	}
 
+	// Get the last line from the output before the crash so we can log it
+	logs, err := s.Environment.Readlog(config.Get().System.CrashActivityLogLines)
+	if err != nil {
+		return errors.Wrap(err, "Faild to get the last line out of the console")
+	}
+
+	// Log that the server has crashed
+	s.SaveActivity(s.NewRequestActivity("", ""), ActivityServerCrashed, models.ActivityMeta{
+		"exit_code": exitCode,
+		"oomkilled": oomKilled,
+		"logs":      logs,
+	})
+	
 	s.PublishConsoleOutputFromDaemon("---------- Detected server process in a crashed state! ----------")
 	s.PublishConsoleOutputFromDaemon(fmt.Sprintf("Exit code: %d", exitCode))
 	s.PublishConsoleOutputFromDaemon(fmt.Sprintf("Out of memory: %t", oomKilled))
