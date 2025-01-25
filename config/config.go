@@ -214,6 +214,9 @@ type SystemConfiguration struct {
 
 	CrashDetection CrashDetection `yaml:"crash_detection"`
 
+	// The ammount of lines the activity logs should log on server crash
+	CrashActivityLogLines int `default:"2" yaml:"crash_detection_activity_lines"`
+
 	Backups Backups `yaml:"backups"`
 
 	Transfers Transfers `yaml:"transfers"`
