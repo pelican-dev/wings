@@ -8,10 +8,10 @@ package ufs
 
 import (
 	"bytes"
+	"fmt"
 	iofs "io/fs"
 	"os"
 	"path"
-	"path/filepath"
 	"reflect"
 	"unsafe"
 
@@ -21,16 +21,12 @@ import (
 type WalkDiratFunc func(dirfd int, name, relative string, d DirEntry, err error) error
 
 func (fs *UnixFS) WalkDirat(dirfd int, name string, fn WalkDiratFunc) error {
-	if dirfd == 0 {
-		// TODO: proper validation, ideally a dedicated function.
-		dirfd = int(fs.dirfd.Load())
-	}
 	info, err := fs.Lstatat(dirfd, name)
 	if err != nil {
-		err = fn(dirfd, name, name, nil, err)
+		err = fn(dirfd, name, ".", nil, err)
 	} else {
 		b := newScratchBuffer()
-		err = fs.walkDir(b, dirfd, name, name, iofs.FileInfoToDirEntry(info), fn)
+		err = fs.walkDir(b, dirfd, name, ".", iofs.FileInfoToDirEntry(info), fn)
 	}
 	if err == SkipDir || err == SkipAll {
 		return nil
@@ -48,12 +44,14 @@ func (fs *UnixFS) walkDir(b []byte, parentfd int, name, relative string, d DirEn
 	}
 
 	dirfd, err := fs.openat(parentfd, name, O_DIRECTORY|O_RDONLY, 0)
+	if dirfd != 0 {
+		defer unix.Close(dirfd)
+	}
 	if err != nil {
 		return err
 	}
-	defer unix.Close(dirfd)
 
-	dirs, err := fs.readDir(dirfd, name, b)
+	dirs, err := fs.readDir(dirfd, name, relative, b)
 	if err != nil {
 		// Second call, to report ReadDir error.
 		err = walkDirFn(dirfd, name, relative, d, err)
@@ -66,20 +64,28 @@ func (fs *UnixFS) walkDir(b []byte, parentfd int, name, relative string, d DirEn
 	}
 
 	for _, d1 := range dirs {
-		// TODO: the path.Join on this line may actually be partially incorrect.
-		// If we are not walking starting at the root, relative will contain the
-		// name of the directory we are starting the walk from, which will be
-		// relative to the root of the filesystem instead of from where the walk
-		// was initiated from.
+		name := d1.Name()
+		// This fancy logic ensures that if we start walking from a subdirectory
+		// that we don't make the path relative to the root of the filesystem.
 		//
-		// ref; https://github.com/pterodactyl/panel/issues/5030
-		if err := fs.walkDir(b, dirfd, d1.Name(), path.Join(relative, d1.Name()), d1, walkDirFn); err != nil {
+		// For example, if we walk from the root of a filesystem, relative would
+		// be "." and path.Join would end up just returning name. But if relative
+		// was a subdirectory, relative could be "dir" and path.Join would make
+		// it "dir/child" even though we are walking starting at dir.
+		var rel string
+		if relative == "." {
+			rel = name
+		} else {
+			rel = path.Join(relative, name)
+		}
+		if err := fs.walkDir(b, dirfd, name, rel, d1, walkDirFn); err != nil {
 			if err == SkipDir {
 				break
 			}
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -97,7 +103,7 @@ func ReadDirMap[T any](fs *UnixFS, path string, fn func(DirEntry) (T, error)) ([
 	}
 	defer unix.Close(fd)
 
-	entries, err := fs.readDir(fd, ".", nil)
+	entries, err := fs.readDir(fd, ".", path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +118,7 @@ func ReadDirMap[T any](fs *UnixFS, path string, fn func(DirEntry) (T, error)) ([
 		}
 		out[idx] = v
 	}
+
 	return out, nil
 }
 
@@ -157,7 +164,7 @@ func nameFromDirent(de *unix.Dirent) (name []byte) {
 //
 // When the syscall constant is not recognized, this function falls back to a
 // Stat on the file system.
-func (fs *UnixFS) modeTypeFromDirent(fd int, de *unix.Dirent, osDirname, osBasename string) (FileMode, error) {
+func (fs *UnixFS) modeTypeFromDirent(de *unix.Dirent, fd int, name string) (FileMode, error) {
 	switch de.Type {
 	case unix.DT_REG:
 		return 0, nil
@@ -176,7 +183,7 @@ func (fs *UnixFS) modeTypeFromDirent(fd int, de *unix.Dirent, osDirname, osBasen
 	default:
 		// If syscall returned unknown type (e.g., DT_UNKNOWN, DT_WHT), then
 		// resolve actual mode by reading file information.
-		return fs.modeType(fd, filepath.Join(osDirname, osBasename))
+		return fs.modeType(fd, name)
 	}
 }
 
@@ -189,12 +196,12 @@ func (fs *UnixFS) modeTypeFromDirent(fd int, de *unix.Dirent, osDirname, osBasen
 // from syscall or stat call. Therefore, mask out the additional file mode bits
 // that are provided by stat but not by the syscall, so users can rely on their
 // values.
-func (fs *UnixFS) modeType(dirfd int, name string) (os.FileMode, error) {
+func (fs *UnixFS) modeType(dirfd int, name string) (FileMode, error) {
 	fi, err := fs.Lstatat(dirfd, name)
-	if err == nil {
-		return fi.Mode() & ModeType, nil
+	if err != nil {
+		return 0, fmt.Errorf("ufs: error finding mode type for %s during readDir: %w", name, convertErrorType(err))
 	}
-	return 0, err
+	return fi.Mode() & ModeType, nil
 }
 
 var minimumScratchBufferSize = os.Getpagesize()
@@ -203,7 +210,7 @@ func newScratchBuffer() []byte {
 	return make([]byte, minimumScratchBufferSize)
 }
 
-func (fs *UnixFS) readDir(fd int, name string, b []byte) ([]DirEntry, error) {
+func (fs *UnixFS) readDir(fd int, name, relative string, b []byte) ([]DirEntry, error) {
 	scratchBuffer := b
 	if scratchBuffer == nil || len(scratchBuffer) < minimumScratchBufferSize {
 		scratchBuffer = newScratchBuffer()
@@ -220,7 +227,7 @@ func (fs *UnixFS) readDir(fd int, name string, b []byte) ([]DirEntry, error) {
 				if err == unix.EINTR {
 					continue
 				}
-				return nil, convertErrorType(err)
+				return nil, fmt.Errorf("ufs: error with getdents during readDir: %w", convertErrorType(err))
 			}
 			if n <= 0 {
 				// end of directory: normal exit
@@ -245,23 +252,29 @@ func (fs *UnixFS) readDir(fd int, name string, b []byte) ([]DirEntry, error) {
 		}
 
 		childName := string(nameSlice)
-		mt, err := fs.modeTypeFromDirent(fd, &sde, name, childName)
+		mt, err := fs.modeTypeFromDirent(&sde, fd, childName)
 		if err != nil {
-			return nil, convertErrorType(err)
+			return nil, err
 		}
-		entries = append(entries, &dirent{name: childName, path: name, modeType: mt, dirfd: fd, fs: fs})
+		var rel string
+		if relative == "." {
+			rel = name
+		} else {
+			rel = path.Join(relative, childName)
+		}
+		entries = append(entries, &dirent{dirfd: fd, name: childName, path: rel, modeType: mt, fs: fs})
 	}
 }
 
 // dirent stores the name and file system mode type of discovered file system
 // entries.
 type dirent struct {
+	dirfd    int
 	name     string
 	path     string
 	modeType FileMode
 
-	dirfd int
-	fs    *UnixFS
+	fs *UnixFS
 }
 
 func (de dirent) Name() string {
@@ -281,6 +294,7 @@ func (de dirent) Info() (FileInfo, error) {
 		return nil, nil
 	}
 	return de.fs.Lstatat(de.dirfd, de.name)
+	// return de.fs.Lstat(de.path)
 }
 
 func (de dirent) Open() (File, error) {
@@ -288,6 +302,7 @@ func (de dirent) Open() (File, error) {
 		return nil, nil
 	}
 	return de.fs.OpenFileat(de.dirfd, de.name, O_RDONLY, 0)
+	// return de.fs.OpenFile(de.path, O_RDONLY, 0)
 }
 
 // reset releases memory held by entry err and name, and resets mode type to 0.
@@ -295,4 +310,5 @@ func (de *dirent) reset() {
 	de.name = ""
 	de.path = ""
 	de.modeType = 0
+	de.dirfd = 0
 }
