@@ -25,7 +25,7 @@ jobs:
         id: docker_meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/pelican-dev/wings
+          images: ghcr.io/${{ github.repository }}
           flavor: |
             latest=false
           tags: |
