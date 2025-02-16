@@ -2,9 +2,11 @@ package system
 
 import (
 	"context"
-	"github.com/docker/docker/api/types/filters"
 	"net"
 	"runtime"
+
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 
 	"github.com/acobaugh/osrelease"
 	"github.com/docker/docker/api/types"
@@ -185,9 +187,23 @@ func GetSystemUtilization() (*Utilization, error) {
 	if err != nil {
 		return nil, err
 	}
-	d, err := disk.Usage("/")
+	// Get all partitions
+	// Partitions returns disk partitions.
+	// If all is false, returns physical devices only (e.g. hard disks, cd-rom drives, USB keys) and ignore all others (e.g. memory partitions such as /dev/shm)
+	partitions, err := disk.Partitions(false)
 	if err != nil {
 		return nil, err
+	}
+
+	var totalDiskSpace uint64
+	var usedDiskSpace uint64
+
+	for _, partition := range partitions {
+		d, err := disk.Usage(partition.Mountpoint)
+		if err == nil {
+			totalDiskSpace += d.Total
+			usedDiskSpace += d.Used
+		}
 	}
 
 	return &Utilization{
@@ -199,8 +215,8 @@ func GetSystemUtilization() (*Utilization, error) {
 		LoadAvg1:    l.Load1,
 		LoadAvg5:    l.Load5,
 		LoadAvg15:   l.Load15,
-		DiskTotal:   d.Total,
-		DiskUsed:    d.Used,
+		DiskTotal:   totalDiskSpace,
+		DiskUsed:    usedDiskSpace,
 	}, nil
 }
 
@@ -245,17 +261,17 @@ func GetDockerDiskUsage(ctx context.Context) (*DockerDiskUsage, error) {
 	}, nil
 }
 
-func PruneDockerImages(ctx context.Context) (types.ImagesPruneReport, error) {
+func PruneDockerImages(ctx context.Context) (image.PruneReport, error) {
 	// TODO: find a way to re-use the client from the docker environment.
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return types.ImagesPruneReport{}, err
+		return image.PruneReport{}, err
 	}
 	defer c.Close()
 
 	prune, err := c.ImagesPrune(ctx, filters.Args{})
 	if err != nil {
-		return types.ImagesPruneReport{}, err
+		return image.PruneReport{}, err
 	}
 	return prune, nil
 }
