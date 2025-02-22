@@ -183,10 +183,7 @@ func parseInvocation(invocation string, envVars environment.Variables, memory in
 	for varname, varval := range envVars {
 		placeholder := fmt.Sprintf("${%s}", varname)
 
-		escapedValue, ok := varval.(string)
-		if ok {
-			escapedValue = strings.ReplaceAll(varval.(string), "|", "\\|")
-		}
+		escapedValue := strings.ReplaceAll(fmt.Sprint(varval), "|", "\\|")
 
 		// Temporarily replace protected segments with placeholders to prevent replacements within them
 		tempSegments := make([]string, len(protectedSegments))
@@ -196,7 +193,7 @@ func parseInvocation(invocation string, envVars environment.Variables, memory in
 		}
 
 		// Replace the placeholders outside of protected segments
-		invocation = strings.ReplaceAll(invocation, placeholder, fmt.Sprint(escapedValue))
+		invocation = strings.ReplaceAll(invocation, placeholder, escapedValue)
 
 		// Restore protected segments
 		for i, segment := range tempSegments {
