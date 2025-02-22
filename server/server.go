@@ -168,7 +168,7 @@ func DetermineServerTimezone(envvars map[string]interface{}, defaultTimezone str
 
 // parseInvocation parses the start command in the same way we already do in the entrypoint
 // We can use this to set the container command with all variables replaced.
-func parseInvocation(invocation string, envvars map[string]interface{}, memory int64, port int, ip string) (parsed string) {
+func parseInvocation(invocation string, envVars environment.Variables, memory int64, port int, ip string) (parsed string) {
 	// Replace "{{" and "}}" with "${" and "}" respectively
 	invocation = strings.ReplaceAll(invocation, "{{", "${")
 	invocation = strings.ReplaceAll(invocation, "}}", "}")
@@ -180,8 +180,13 @@ func parseInvocation(invocation string, envvars map[string]interface{}, memory i
 	protectedSegments := reProtected.FindAllString(invocation, -1)
 
 	// Replace ${varname} with varval if not in protected segments
-	for varname, varval := range envvars {
+	for varname, varval := range envVars {
 		placeholder := fmt.Sprintf("${%s}", varname)
+
+		escapedValue, ok := varval.(string)
+		if ok {
+			escapedValue = strings.ReplaceAll(varval.(string), "|", "\\|")
+		}
 
 		// Temporarily replace protected segments with placeholders to prevent replacements within them
 		tempSegments := make([]string, len(protectedSegments))
@@ -191,7 +196,7 @@ func parseInvocation(invocation string, envvars map[string]interface{}, memory i
 		}
 
 		// Replace the placeholders outside of protected segments
-		invocation = strings.ReplaceAll(invocation, placeholder, fmt.Sprint(varval))
+		invocation = strings.ReplaceAll(invocation, placeholder, fmt.Sprint(escapedValue))
 
 		// Restore protected segments
 		for i, segment := range tempSegments {
