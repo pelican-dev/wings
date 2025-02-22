@@ -56,7 +56,15 @@ func getSystemIps(c *gin.Context) {
 
 // Returns resource utilization info for the system wings is running on.
 func getSystemUtilization(c *gin.Context) {
-	u, err := system.GetSystemUtilization()
+	cfg := config.Get()
+	u, err := system.GetSystemUtilization(
+		cfg.System.RootDirectory,
+		cfg.System.LogDirectory,
+		cfg.System.Data,
+		cfg.System.ArchiveDirectory,
+		cfg.System.BackupDirectory,
+		cfg.System.TmpDirectory,
+	)
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
 		return

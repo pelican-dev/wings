@@ -3,12 +3,15 @@ package system
 import (
 	"context"
 	"net"
+	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 
 	"github.com/acobaugh/osrelease"
+
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
@@ -67,17 +70,26 @@ type IpAddresses struct {
 	IpAddresses []string `json:"ip_addresses"`
 }
 
+type DiskInfo struct {
+	Device     string   `json:"device"`
+	Mountpoint string   `json:"mountpoint"`
+	TotalSpace uint64   `json:"total_space"`
+	UsedSpace  uint64   `json:"used_space"`
+	Tags       []string `json:"tags"`
+}
+
 type Utilization struct {
-	MemoryTotal uint64  `json:"memory_total"`
-	MemoryUsed  uint64  `json:"memory_used"`
-	SwapTotal   uint64  `json:"swap_total"`
-	SwapUsed    uint64  `json:"swap_used"`
-	LoadAvg1    float64 `json:"load_average1"`
-	LoadAvg5    float64 `json:"load_average5"`
-	LoadAvg15   float64 `json:"load_average15"`
-	CpuPercent  float64 `json:"cpu_percent"`
-	DiskTotal   uint64  `json:"disk_total"`
-	DiskUsed    uint64  `json:"disk_used"`
+	MemoryTotal uint64     `json:"memory_total"`
+	MemoryUsed  uint64     `json:"memory_used"`
+	SwapTotal   uint64     `json:"swap_total"`
+	SwapUsed    uint64     `json:"swap_used"`
+	LoadAvg1    float64    `json:"load_average1"`
+	LoadAvg5    float64    `json:"load_average5"`
+	LoadAvg15   float64    `json:"load_average15"`
+	CpuPercent  float64    `json:"cpu_percent"`
+	DiskTotal   uint64     `json:"disk_total"`
+	DiskUsed    uint64     `json:"disk_used"`
+	DiskDetails []DiskInfo `json:"disk_details"`
 }
 
 type DockerDiskUsage struct {
@@ -170,7 +182,7 @@ func GetSystemIps() (*IpAddresses, error) {
 	return &IpAddresses{IpAddresses: ip_addrs}, nil
 }
 
-func GetSystemUtilization() (*Utilization, error) {
+func GetSystemUtilization(root, logs, data, archive, backup, temp string) (*Utilization, error) {
 	c, err := cpu.Percent(0, false)
 	if err != nil {
 		return nil, err
@@ -187,9 +199,17 @@ func GetSystemUtilization() (*Utilization, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Get all partitions
-	// Partitions returns disk partitions.
-	// If all is false, returns physical devices only (e.g. hard disks, cd-rom drives, USB keys) and ignore all others (e.g. memory partitions such as /dev/shm)
+
+	// Clean and normalize all paths
+	pathsToCheck := map[string]string{
+		"Root":    root,
+		"Logs":    logs,
+		"Data":    data,
+		"Archive": archive,
+		"Backup":  backup,
+		"Temp":    temp,
+	}
+
 	partitions, err := disk.Partitions(false)
 	if err != nil {
 		return nil, err
@@ -197,12 +217,31 @@ func GetSystemUtilization() (*Utilization, error) {
 
 	var totalDiskSpace uint64
 	var usedDiskSpace uint64
+	var diskDetails []DiskInfo
 
 	for _, partition := range partitions {
 		d, err := disk.Usage(partition.Mountpoint)
 		if err == nil {
 			totalDiskSpace += d.Total
 			usedDiskSpace += d.Used
+
+			diskInfo := DiskInfo{
+				Device:     partition.Device,
+				Mountpoint: partition.Mountpoint,
+				TotalSpace: d.Total,
+				UsedSpace:  d.Used,
+				Tags:       []string{},
+			}
+
+			// Check each path
+			for tagName, path := range pathsToCheck {
+				rel, err := filepath.Rel(partition.Mountpoint, path)
+				if err == nil && !strings.HasPrefix(rel, "..") {
+					diskInfo.Tags = append(diskInfo.Tags, tagName)
+				}
+			}
+
+			diskDetails = append(diskDetails, diskInfo)
 		}
 	}
 
@@ -217,6 +256,7 @@ func GetSystemUtilization() (*Utilization, error) {
 		LoadAvg15:   l.Load15,
 		DiskTotal:   totalDiskSpace,
 		DiskUsed:    usedDiskSpace,
+		DiskDetails: diskDetails,
 	}, nil
 }
 
