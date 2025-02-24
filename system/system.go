@@ -3,9 +3,8 @@ package system
 import (
 	"context"
 	"net"
-	"path/filepath"
 	"runtime"
-	"strings"
+	"syscall"
 
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
@@ -182,6 +181,26 @@ func GetSystemIps() (*IpAddresses, error) {
 	return &IpAddresses{IpAddresses: ip_addrs}, nil
 }
 
+// getDiskForPath finds the mountpoint where the given path is stored
+func getDiskForPath(path string, partitions []disk.PartitionStat) (string, string, error) {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(path, &stat); err != nil {
+		return "", "", err
+	}
+
+	for _, part := range partitions {
+		var pStat syscall.Statfs_t
+		if err := syscall.Statfs(part.Mountpoint, &pStat); err != nil {
+			continue
+		}
+		if stat.Fsid == pStat.Fsid {
+			return part.Device, part.Mountpoint, nil
+		}
+	}
+
+	return "", "", nil // No error, but couldn't find the disk
+}
+
 func GetSystemUtilization(root, logs, data, archive, backup, temp string) (*Utilization, error) {
 	c, err := cpu.Percent(0, false)
 	if err != nil {
@@ -200,8 +219,8 @@ func GetSystemUtilization(root, logs, data, archive, backup, temp string) (*Util
 		return nil, err
 	}
 
-	// Clean and normalize all paths
-	pathsToCheck := map[string]string{
+	// Define paths to check with their tags
+	paths := map[string]string{
 		"Root":    root,
 		"Logs":    logs,
 		"Data":    data,
@@ -210,39 +229,48 @@ func GetSystemUtilization(root, logs, data, archive, backup, temp string) (*Util
 		"Temp":    temp,
 	}
 
+	// Get all partitions
 	partitions, err := disk.Partitions(false)
 	if err != nil {
 		return nil, err
 	}
 
+	// Initialize disk map to store disk info by mountpoint
+	diskMap := make(map[string]*DiskInfo)
 	var totalDiskSpace uint64
 	var usedDiskSpace uint64
-	var diskDetails []DiskInfo
 
+	// First, gather all disk usage information
 	for _, partition := range partitions {
 		d, err := disk.Usage(partition.Mountpoint)
 		if err == nil {
 			totalDiskSpace += d.Total
 			usedDiskSpace += d.Used
 
-			diskInfo := DiskInfo{
+			diskMap[partition.Mountpoint] = &DiskInfo{
 				Device:     partition.Device,
 				Mountpoint: partition.Mountpoint,
 				TotalSpace: d.Total,
 				UsedSpace:  d.Used,
 				Tags:       []string{},
 			}
-
-			// Check each path
-			for tagName, path := range pathsToCheck {
-				rel, err := filepath.Rel(partition.Mountpoint, path)
-				if err == nil && !strings.HasPrefix(rel, "..") {
-					diskInfo.Tags = append(diskInfo.Tags, tagName)
-				}
-			}
-
-			diskDetails = append(diskDetails, diskInfo)
 		}
+	}
+
+	// Now add tags to the appropriate disks
+	for tag, path := range paths {
+		_, mountpoint, err := getDiskForPath(path, partitions)
+		if err == nil && mountpoint != "" {
+			if disk, exists := diskMap[mountpoint]; exists {
+				disk.Tags = append(disk.Tags, tag)
+			}
+		}
+	}
+
+	// Convert map to slice
+	var diskDetails []DiskInfo
+	for _, disk := range diskMap {
+		diskDetails = append(diskDetails, *disk)
 	}
 
 	return &Utilization{
