@@ -383,11 +383,11 @@ func NewAtPath(path string) (*Configuration, error) {
 // will be paused until it is complete.
 func Set(c *Configuration) {
 	mu.Lock()
-	if _config == nil || _config.AuthenticationToken != c.AuthenticationToken {
-		_jwtAlgo = jwt.NewHS256([]byte(c.AuthenticationToken))
+	defer mu.Unlock()
+	if _config == nil || _config.Token.Token != c.Token.Token {
+		_jwtAlgo = jwt.NewHS256([]byte(c.Token.Token))
 	}
 	_config = c
-	mu.Unlock()
 }
 
 // SetDebugViaFlag tracks if the application is running in debug mode because of
@@ -395,9 +395,9 @@ func Set(c *Configuration) {
 // change to the disk.
 func SetDebugViaFlag(d bool) {
 	mu.Lock()
+	defer mu.Unlock()
 	_config.Debug = d
 	_debugViaFlag = d
-	mu.Unlock()
 }
 
 // Get returns the global configuration instance. This is a thread-safe operation
@@ -422,8 +422,8 @@ func Get() *Configuration {
 // the global configuration.
 func Update(callback func(c *Configuration)) {
 	mu.Lock()
+	defer mu.Unlock()
 	callback(_config)
-	mu.Unlock()
 }
 
 // GetJwtAlgorithm returns the in-memory JWT algorithm.
