@@ -146,9 +146,10 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 		return
 	}
 
+	t := config.Get().Token
 	pclient := remote.New(
 		config.Get().PanelLocation,
-		remote.WithCredentials(config.Get().AuthenticationTokenId, config.Get().AuthenticationToken),
+		remote.WithCredentials(t.ID, t.Token),
 		remote.WithHttpClient(&http.Client{
 			Timeout: time.Second * time.Duration(config.Get().RemoteQuery.Timeout),
 		}),
