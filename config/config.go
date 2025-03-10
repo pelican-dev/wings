@@ -294,7 +294,7 @@ type Token struct {
 }
 
 type Configuration struct {
-	Token Token `json:"-"`
+	Token Token `json:"-" yaml:"-"`
 
 	// The location from which this configuration instance was instantiated.
 	path string
