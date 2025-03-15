@@ -117,7 +117,7 @@ func performUpdate(version, binaryName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to locate current executable: %v", err)
 	}
-	return os.Copy(binaryPath, currentExecutable)
+	return io.Copy(binaryPath, currentExecutable)
 }
 
 func downloadWithProgress(url, dest string) error {
