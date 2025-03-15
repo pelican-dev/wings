@@ -93,7 +93,6 @@ func performUpdate(version, binaryName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
 
 	checksumPath := filepath.Join(tmpDir, "checksums.txt")
 	if err := downloadWithProgress(checksumURL, checksumPath); err != nil {
@@ -109,15 +108,41 @@ func performUpdate(version, binaryName string) error {
 		return fmt.Errorf("checksum verification failed: %v", err)
 	}
 
-	if err := os.Chmod(binaryPath, 0755); err != nil {
-		return fmt.Errorf("failed to set executable permissions: %v", err)
-	}
-
 	currentExecutable, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to locate current executable: %v", err)
 	}
-	return io.Copy(binaryPath, currentExecutable)
+
+	// Get current executable permissions
+	info, err := os.Stat(currentExecutable)
+	if err != nil {
+		return fmt.Errorf("failed to get current executable permissions: %v", err)
+	}
+
+	// Open the source (new binary) and destination (current executable)
+	srcFile, err := os.Open(binaryPath)
+	if err != nil {
+		return fmt.Errorf("failed to open new binary: %v", err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(currentExecutable)
+	if err != nil {
+		return fmt.Errorf("failed to overwrite current executable: %v", err)
+	}
+	defer dstFile.Close()
+
+	// Copy the new binary over the existing executable
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return fmt.Errorf("failed to replace executable: %v", err)
+	}
+
+	// Restore original permissions
+	if err := os.Chmod(currentExecutable, info.Mode()); err != nil {
+		return fmt.Errorf("failed to restore permissions: %v", err)
+	}
+
+	return nil
 }
 
 func downloadWithProgress(url, dest string) error {
