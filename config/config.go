@@ -384,8 +384,13 @@ func NewAtPath(path string) (*Configuration, error) {
 func Set(c *Configuration) {
 	mu.Lock()
 	defer mu.Unlock()
-	if _config == nil || _config.Token.Token != c.Token.Token {
-		_jwtAlgo = jwt.NewHS256([]byte(c.Token.Token))
+	token := c.Token.Token
+	if token == "" {
+		c.Token.Token = c.AuthenticationToken
+		token = c.Token.Token
+	}
+	if _config == nil || _config.Token.Token != token {
+		_jwtAlgo = jwt.NewHS256([]byte(token))
 	}
 	_config = c
 }
