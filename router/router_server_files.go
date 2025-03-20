@@ -41,6 +41,11 @@ func getServerFileContents(c *gin.Context) {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"error":      "The requested resources was not found on the system.",
 				"request_id": c.Writer.Header().Get("X-Request-Id")})
+		} else if strings.Contains(err.Error(), "is a directory") {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"error":      "The requested resource is a directory, not a file.",
+				"request_id": c.Writer.Header().Get("X-Request-Id"),
+			})
 		} else {
 			middleware.CaptureAndAbort(c, err)
 		}
