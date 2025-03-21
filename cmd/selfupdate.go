@@ -137,11 +137,6 @@ func performUpdate(version, binaryName string) error {
 		return fmt.Errorf("failed to replace executable: %v", err)
 	}
 
-	// Restore original permissions
-	if err := os.Chmod(currentExecutable, info.Mode()); err != nil {
-		return fmt.Errorf("failed to restore permissions: %v", err)
-	}
-
 	return nil
 }
 
