@@ -83,7 +83,7 @@ func (fs *Filesystem) File(p string) (ufs.File, Stat, error) {
 		return nil, Stat{}, err
 	}
 	if st.IsDir() {
-		return f, Stat{}, errors.New("is a directory")
+		return f, Stat{}, errors.New("filesystem: is a directory")
 	}
 	return f, st, nil
 }
