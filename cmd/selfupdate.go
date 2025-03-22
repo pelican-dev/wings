@@ -93,6 +93,7 @@ func performUpdate(version, binaryName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %v", err)
 	}
+	defer os.RemoveAll(tmpDir)
 
 	checksumPath := filepath.Join(tmpDir, "checksums.txt")
 	if err := downloadWithProgress(checksumURL, checksumPath); err != nil {
@@ -108,33 +109,52 @@ func performUpdate(version, binaryName string) error {
 		return fmt.Errorf("checksum verification failed: %v", err)
 	}
 
+	if err := os.Chmod(binaryPath, 0755); err != nil {
+		return fmt.Errorf("failed to set executable permissions: %v", err)
+	}
+
 	currentExecutable, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to locate current executable: %v", err)
 	}
 
-	// Get current executable permissions
-	info, err := os.Stat(currentExecutable)
+	// Try rename first (faster if on same filesystem)
+	err = os.Rename(binaryPath, currentExecutable)
 	if err != nil {
-		return fmt.Errorf("failed to get current executable permissions: %v", err)
-	}
-
-	// Open the source (new binary) and destination (current executable)
-	srcFile, err := os.Open(binaryPath)
-	if err != nil {
-		return fmt.Errorf("failed to open new binary: %v", err)
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.Create(currentExecutable)
-	if err != nil {
-		return fmt.Errorf("failed to overwrite current executable: %v", err)
-	}
-	defer dstFile.Close()
-
-	// Copy the new binary over the existing executable
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		return fmt.Errorf("failed to replace executable: %v", err)
+		// If rename fails (likely due to cross-filesystem), use copy instead
+		fmt.Println("Direct replacement failed, using copy method...")
+		
+		// Open source file
+		src, err := os.Open(binaryPath)
+		if err != nil {
+			return fmt.Errorf("failed to open source file: %v", err)
+		}
+		defer src.Close()
+		
+		// Create a temporary file in the same directory as the executable
+		execDir := filepath.Dir(currentExecutable)
+		tempExec := filepath.Join(execDir, fmt.Sprintf(".%s.new", filepath.Base(currentExecutable)))
+		
+		// Create the new executable file
+		dst, err := os.OpenFile(tempExec, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+		if err != nil {
+			return fmt.Errorf("failed to create new executable: %v", err)
+		}
+		
+		// Copy the content
+		_, err = io.Copy(dst, src)
+		dst.Close()
+		if err != nil {
+			os.Remove(tempExec) // Clean up on failure
+			return fmt.Errorf("failed to copy new binary: %v", err)
+		}
+		
+		// Replace the old executable with the new one
+		err = os.Rename(tempExec, currentExecutable)
+		if err != nil {
+			os.Remove(tempExec) // Clean up on failure
+			return fmt.Errorf("failed to replace executable: %v", err)
+		}
 	}
 
 	return nil
