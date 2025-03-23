@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"crypto/subtle"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/remote"
 	"github.com/pelican-dev/wings/server"
+	"github.com/pelican-dev/wings/system"
 )
 
 // AttachRequestID attaches a unique ID to the incoming HTTP request so that any
@@ -170,6 +172,7 @@ func RequireAuthorization() gin.HandlerFunc {
 		// if it is rotated this value will never properly get updated.
 		token := config.Get().AuthenticationToken
 		auth := strings.SplitN(c.GetHeader("Authorization"), " ", 2)
+		c.Header("User-Agent", fmt.Sprintf("Pelican Wings/v%s (id:%s)", system.Version, config.Get().AuthenticationTokenId))
 		if len(auth) != 2 || auth[0] != "Bearer" {
 			c.Header("WWW-Authenticate", "Bearer")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "The required authorization heads were not present in the request."})
