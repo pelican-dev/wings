@@ -82,6 +82,9 @@ func (fs *Filesystem) File(p string) (ufs.File, Stat, error) {
 		_ = f.Close()
 		return nil, Stat{}, err
 	}
+	if st.IsDir() {
+		return f, Stat{}, errors.New("filesystem: is a directory")
+	}
 	return f, st, nil
 }
 
