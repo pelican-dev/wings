@@ -28,7 +28,7 @@ import (
 // All paths are relative to the dir that is passed in as the first argument,
 // and the compressed file will be placed at that location named
 // `archive-{date}.tar.gz`.
-func (fs *Filesystem) CompressFiles(dir string, paths []string) (ufs.FileInfo, error) {
+func (fs *Filesystem) CompressFiles(dir string, name string, paths []string) (ufs.FileInfo, error) {
 	var validPaths []string
 	for _, file := range paths {
 		if err := fs.IsIgnored(path.Join(dir, file)); err == nil {
@@ -44,7 +44,12 @@ func (fs *Filesystem) CompressFiles(dir string, paths []string) (ufs.FileInfo, e
 	a := &Archive{Filesystem: fs, BaseDirectory: dir, Files: validPaths}
 	d := path.Join(
 		dir,
-		fmt.Sprintf("archive-%s.tar.gz", strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", "")),
+		func() string {
+			if name != "" {
+				return name
+			}
+			return fmt.Sprintf("archive-%s", strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", ""))
+		}(),
 	)
 	f, err := fs.unixFS.OpenFile(d, ufs.O_WRONLY|ufs.O_CREATE, 0o644)
 	if err != nil {
