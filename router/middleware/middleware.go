@@ -170,7 +170,6 @@ func RequireAuthorization() gin.HandlerFunc {
 		// We don't put this value outside this function since the node's authentication
 		// token can be changed on the fly and the config.Get() call returns a copy, so
 		// if it is rotated this value will never properly get updated.
-		token := config.Get().AuthenticationToken
 		auth := strings.SplitN(c.GetHeader("Authorization"), " ", 2)
 		c.Header("User-Agent", fmt.Sprintf("Pelican Wings/v%s (id:%s)", system.Version, config.Get().AuthenticationTokenId))
 		if len(auth) != 2 || auth[0] != "Bearer" {
@@ -182,7 +181,7 @@ func RequireAuthorization() gin.HandlerFunc {
 		// All requests to Wings must be authorized with the authentication token present in
 		// the Wings configuration file. Remeber, all requests to Wings come from the Panel
 		// backend, or using a signed JWT for temporary authentication.
-		if subtle.ConstantTimeCompare([]byte(auth[1]), []byte(token)) != 1 {
+		if subtle.ConstantTimeCompare([]byte(auth[1]), []byte(config.Get().Token.Token)) != 1 {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You are not authorized to access this endpoint."})
 			return
 		}
