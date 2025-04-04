@@ -44,13 +44,15 @@ func (fs *Filesystem) CompressFiles(dir string, name string, paths []string) (uf
 	a := &Archive{Filesystem: fs, BaseDirectory: dir, Files: validPaths}
 	d := path.Join(
 		dir,
-		func() string {
-			if name != "" {
-				return name
-			}
-			return fmt.Sprintf("archive-%s", strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", ""))
-		}(),
-	)
+		fmt.Sprintf("%s.%s",
+			func() string {
+				if name != "" {
+					return name
+				}
+				return fmt.Sprintf("archive-%s", strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", ""))
+			}(),
+			".tar.gz",
+		))
 	f, err := fs.unixFS.OpenFile(d, ufs.O_WRONLY|ufs.O_CREATE, 0o644)
 	if err != nil {
 		return nil, err
