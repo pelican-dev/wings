@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"html/template"
 	"io"
 	"os"
@@ -374,7 +375,7 @@ func (ip *InstallationProcess) AfterExecute(containerId string) error {
 |
 | Environment Variables
 | ------------------------------
-{{ range $key, $value := .Server.GetEnvironmentVariables }}  {{ $value }}
+{{ range $value := .RedactedEnvVars }}  {{ $value }}
 {{ end }}
 
 |
@@ -385,13 +386,38 @@ func (ip *InstallationProcess) AfterExecute(containerId string) error {
 		return err
 	}
 
-	// Create a data structure that includes both the InstallationProcess and the kernel version
+	// Create redacted environment variables
+	redactedEnvVars := make([]string, 0)
+	for _, envVar := range ip.Server.GetEnvironmentVariables() {
+		// Parse the key=value format
+		parts := strings.SplitN(envVar, "=", 2)
+		if len(parts) != 2 {
+			// If not in key=value format, keep as is
+			redactedEnvVars = append(redactedEnvVars, envVar)
+			continue
+		}
+
+		key := parts[0]
+
+		// Check if the key contains sensitive information keywords
+		lowerKey := strings.ToLower(key)
+		if strings.Contains(lowerKey, "token") || strings.Contains(lowerKey, "password") || strings.Contains(key, "PASS") {
+			// Redact the value
+			redactedEnvVars = append(redactedEnvVars, fmt.Sprintf("%s=[REDACTED]", key))
+		} else {
+			// Keep the original key=value
+			redactedEnvVars = append(redactedEnvVars, envVar)
+		}
+	}
+
 	data := struct {
 		*InstallationProcess
 		KernelVersion string
+		RedactedEnvVars []string		
 	}{
 		InstallationProcess: ip,
 		KernelVersion:       v.String(),
+		RedactedEnvVars:     redactedEnvVars,
 	}
 
 	if err := tmpl.Execute(f, data); err != nil {
@@ -404,6 +430,7 @@ func (ip *InstallationProcess) AfterExecute(containerId string) error {
 
 	return nil
 }
+
 
 // Execute executes the installation process inside a specially created docker
 // container.
