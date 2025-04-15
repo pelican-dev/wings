@@ -37,10 +37,15 @@ func getServerFileContents(c *gin.Context) {
 	}
 	f, st, err := s.Filesystem().File(p)
 	if err != nil {
-		if strings.Contains(err.Error(), "file does not exist") {
+		if errors.Is(err, os.ErrNotExist) {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"error":      "The requested resources was not found on the system.",
 				"request_id": c.Writer.Header().Get("X-Request-Id")})
+		} else if strings.Contains(err.Error(), "filesystem: is a directory") {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"error":      "Cannot perform that action: file is a directory.",
+				"request_id": c.Writer.Header().Get("X-Request-Id"),
+			})
 		} else {
 			middleware.CaptureAndAbort(c, err)
 		}
@@ -89,6 +94,13 @@ func getServerListDirectory(c *gin.Context) {
 	s := middleware.ExtractServer(c)
 	dir := c.Query("directory")
 	if stats, err := s.Filesystem().ListDirectory(dir); err != nil {
+		// If the error is that the folder does not exist return a 404.
+		if errors.Is(err, os.ErrNotExist) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+				"error": "The requested directory was not found on the server.",
+			})
+			return
+		}
 		middleware.CaptureAndAbort(c, err)
 	} else {
 		c.JSON(http.StatusOK, stats)
@@ -417,6 +429,7 @@ func postServerCompressFiles(c *gin.Context) {
 	var data struct {
 		RootPath string   `json:"root"`
 		Files    []string `json:"files"`
+		Name     string   `json:"name"`
 	}
 
 	if err := c.BindJSON(&data); err != nil {
@@ -437,7 +450,7 @@ func postServerCompressFiles(c *gin.Context) {
 		return
 	}
 
-	f, err := s.Filesystem().CompressFiles(data.RootPath, data.Files)
+	f, err := s.Filesystem().CompressFiles(data.RootPath, data.Name, data.Files)
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
 		return

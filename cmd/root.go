@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/NYTimes/logrotate"
@@ -127,6 +128,7 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 
 	if err := config.ConfigureTimezone(); err != nil {
 		log.WithField("error", err).Fatal("failed to detect system timezone or use supplied configuration value")
+		return
 	}
 	log.WithField("timezone", config.Get().System.Timezone).Info("configured wings with system timezone")
 	if err := config.ConfigureDirectories(); err != nil {
@@ -135,6 +137,7 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 	}
 	if err := config.EnsurePelicanUser(); err != nil {
 		log.WithField("error", err).Fatal("failed to create pelican system user")
+		return
 	}
 	log.WithFields(log.Fields{
 		"username": config.Get().System.Username,
@@ -146,9 +149,10 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 		return
 	}
 
+	t := config.Get().Token
 	pclient := remote.New(
 		config.Get().PanelLocation,
-		remote.WithCredentials(config.Get().AuthenticationTokenId, config.Get().AuthenticationToken),
+		remote.WithCredentials(t.ID, t.Token),
 		remote.WithCustomHeader(config.Get().RemoteQuery.CustomHeaders),
 		remote.WithHttpClient(&http.Client{
 			Timeout: time.Second * time.Duration(config.Get().RemoteQuery.Timeout),
@@ -157,19 +161,26 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 
 	if err := database.Initialize(); err != nil {
 		log.WithField("error", err).Fatal("failed to initialize database")
+		return
 	}
 
 	manager, err := server.NewManager(cmd.Context(), pclient)
 	if err != nil {
 		log.WithField("error", err).Fatal("failed to load server configurations")
+		return
 	}
 
 	if err := environment.ConfigureDocker(cmd.Context()); err != nil {
 		log.WithField("error", err).Fatal("failed to configure docker environment")
+		return
 	}
 
 	if err := config.WriteToDisk(config.Get()); err != nil {
-		log.WithField("error", err).Fatal("failed to write configuration to disk")
+		if !errors.Is(err, syscall.EROFS) {
+			log.WithField("error", err).Error("failed to write configuration to disk")
+		} else {
+			log.WithField("error", err).Debug("failed to write configuration to disk")
+		}
 	}
 
 	// Just for some nice log output.

@@ -14,9 +14,11 @@ import (
 	"emperror.dev/errors"
 	"github.com/apex/log"
 	"github.com/docker/docker/api/types/container"
+	dockerImage "github.com/docker/docker/api/types/image"
+
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
-	dockerImage "github.com/docker/docker/api/types/image" // Alias the correct images package
+	"github.com/docker/docker/pkg/parsers/kernel"
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
@@ -342,6 +344,12 @@ func (ip *InstallationProcess) AfterExecute(containerId string) error {
 		return err
 	}
 
+	// Get kernel version using the kernel package
+	v, err := kernel.GetKernelVersion()
+	if err != nil {
+		return err
+	}
+
 	f, err := os.OpenFile(ip.GetLogPath(), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
@@ -361,6 +369,7 @@ func (ip *InstallationProcess) AfterExecute(containerId string) error {
   Server UUID:          {{.Server.ID}}
   Container Image:      {{.Script.ContainerImage}}
   Container Entrypoint: {{.Script.Entrypoint}}
+  Kernel Version:       {{.KernelVersion}}
 
 |
 | Environment Variables
@@ -376,7 +385,16 @@ func (ip *InstallationProcess) AfterExecute(containerId string) error {
 		return err
 	}
 
-	if err := tmpl.Execute(f, ip); err != nil {
+	// Create a data structure that includes both the InstallationProcess and the kernel version
+	data := struct {
+		*InstallationProcess
+		KernelVersion string
+	}{
+		InstallationProcess: ip,
+		KernelVersion:       v.String(),
+	}
+
+	if err := tmpl.Execute(f, data); err != nil {
 		return err
 	}
 

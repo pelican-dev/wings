@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -26,10 +25,6 @@ type UnixFS struct {
 	// basePath is the base path for file operations to take place in.
 	basePath string
 
-	// dirfd holds the file descriptor of BasePath and is used to ensure
-	// operations are restricted into descendants of BasePath.
-	dirfd atomic.Int64
-
 	// useOpenat2 controls whether the `openat2` syscall is used instead of the
 	// older `openat` syscall.
 	useOpenat2 bool
@@ -41,18 +36,10 @@ type UnixFS struct {
 // checked and prevented from enabling an escape in a non-raceable manor.
 func NewUnixFS(basePath string, useOpenat2 bool) (*UnixFS, error) {
 	basePath = strings.TrimSuffix(basePath, "/")
-	// We don't need Openat2, if we are given a basePath that is already unsafe
-	// I give up on trying to sandbox it.
-	dirfd, err := unix.Openat(AT_EMPTY_PATH, basePath, O_DIRECTORY|O_RDONLY, 0)
-	if err != nil {
-		return nil, convertErrorType(err)
-	}
-
 	fs := &UnixFS{
 		basePath:   basePath,
 		useOpenat2: useOpenat2,
 	}
-	fs.dirfd.Store(int64(dirfd))
 	return fs, nil
 }
 
@@ -66,12 +53,7 @@ func (fs *UnixFS) BasePath() string {
 // Close releases the file descriptor used to sandbox operations within the
 // base path of the filesystem.
 func (fs *UnixFS) Close() error {
-	// Once closed, change dirfd to something invalid to detect when it has been
-	// closed.
-	defer func() {
-		fs.dirfd.Store(-1)
-	}()
-	return unix.Close(int(fs.dirfd.Load()))
+	return nil
 }
 
 // Chmod changes the mode of the named file to mode.
@@ -99,7 +81,16 @@ func (fs *UnixFS) Chmod(name string, mode FileMode) error {
 	if err != nil {
 		return err
 	}
-	return convertErrorType(unix.Fchmodat(dirfd, name, uint32(mode), 0))
+	return fs.fchmodat("chmod", dirfd, name, mode)
+}
+
+// Chmodat is like Chmod but it takes a dirfd and name instead of a full path.
+func (fs *UnixFS) Chmodat(dirfd int, name string, mode FileMode) error {
+	return fs.fchmodat("chmodat", dirfd, name, mode)
+}
+
+func (fs *UnixFS) fchmodat(op string, dirfd int, name string, mode FileMode) error {
+	return ensurePathError(unix.Fchmodat(dirfd, name, uint32(mode), 0), op, name)
 }
 
 // Chown changes the numeric uid and gid of the named file.
@@ -111,7 +102,7 @@ func (fs *UnixFS) Chmod(name string, mode FileMode) error {
 // On Windows or Plan 9, Chown always returns the syscall.EWINDOWS or
 // EPLAN9 error, wrapped in *PathError.
 func (fs *UnixFS) Chown(name string, uid, gid int) error {
-	return fs.fchown(name, uid, gid, 0)
+	return ensurePathError(fs.fchown(name, uid, gid, 0), "chown", name)
 }
 
 // Lchown changes the numeric uid and gid of the named file.
@@ -124,7 +115,7 @@ func (fs *UnixFS) Chown(name string, uid, gid int) error {
 func (fs *UnixFS) Lchown(name string, uid, gid int) error {
 	// With AT_SYMLINK_NOFOLLOW, Fchownat acts like Lchown but allows us to
 	// pass a dirfd.
-	return fs.fchown(name, uid, gid, AT_SYMLINK_NOFOLLOW)
+	return ensurePathError(fs.fchown(name, uid, gid, AT_SYMLINK_NOFOLLOW), "lchown", name)
 }
 
 // fchown is a re-usable Fchownat syscall used by Chown and Lchown.
@@ -134,19 +125,19 @@ func (fs *UnixFS) fchown(name string, uid, gid, flags int) error {
 	if err != nil {
 		return err
 	}
-	return convertErrorType(unix.Fchownat(dirfd, name, uid, gid, flags))
+	return unix.Fchownat(dirfd, name, uid, gid, flags)
 }
 
 // Chownat is like Chown but allows passing an existing directory file
 // descriptor rather than needing to resolve one.
 func (fs *UnixFS) Chownat(dirfd int, name string, uid, gid int) error {
-	return convertErrorType(unix.Fchownat(dirfd, name, uid, gid, 0))
+	return ensurePathError(unix.Fchownat(dirfd, name, uid, gid, 0), "chownat", name)
 }
 
 // Lchownat is like Lchown but allows passing an existing directory file
 // descriptor rather than needing to resolve one.
 func (fs *UnixFS) Lchownat(dirfd int, name string, uid, gid int) error {
-	return convertErrorType(unix.Fchownat(dirfd, name, uid, gid, AT_SYMLINK_NOFOLLOW))
+	return ensurePathError(unix.Fchownat(dirfd, name, uid, gid, AT_SYMLINK_NOFOLLOW), "lchownat", name)
 }
 
 // Chtimes changes the access and modification times of the named
@@ -178,11 +169,9 @@ func (fs *UnixFS) Chtimesat(dirfd int, name string, atime, mtime time.Time) erro
 	}
 	set(0, atime)
 	set(1, mtime)
+
 	// This does support `AT_SYMLINK_NOFOLLOW` as well if needed.
-	if err := unix.UtimesNanoAt(dirfd, name, utimes[0:], 0); err != nil {
-		return convertErrorType(&PathError{Op: "chtimes", Path: name, Err: err})
-	}
-	return nil
+	return ensurePathError(unix.UtimesNanoAt(dirfd, name, utimes[0:], 0), "chtimes", name)
 }
 
 // Create creates or truncates the named file. If the file already exists,
@@ -206,11 +195,15 @@ func (fs *UnixFS) Mkdir(name string, mode FileMode) error {
 	if err != nil {
 		return err
 	}
-	return fs.Mkdirat(dirfd, name, mode)
+	return fs.mkdirat("mkdir", dirfd, name, mode)
 }
 
 func (fs *UnixFS) Mkdirat(dirfd int, name string, mode FileMode) error {
-	return convertErrorType(unix.Mkdirat(dirfd, name, uint32(mode)))
+	return fs.mkdirat("mkdirat", dirfd, name, mode)
+}
+
+func (fs *UnixFS) mkdirat(op string, dirfd int, name string, mode FileMode) error {
+	return ensurePathError(unix.Mkdirat(dirfd, name, uint32(mode)), op, name)
 }
 
 // MkdirAll creates a directory named path, along with any necessary
@@ -294,8 +287,10 @@ func (fs *UnixFS) ReadDir(path string) ([]DirEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer unix.Close(fd)
-	return fs.readDir(fd, name, nil)
+	defer func() {
+		_ = unix.Close(fd)
+	}()
+	return fs.readDir(fd, name, ".", nil)
 }
 
 // RemoveStat is a combination of Stat and Remove, it is used to more
@@ -329,7 +324,7 @@ func (fs *UnixFS) RemoveStat(name string) (FileInfo, error) {
 		err = fs.unlinkat(dirfd, name, 0)
 	}
 	if err != nil {
-		return s, convertErrorType(&PathError{Op: "remove", Path: name, Err: err})
+		return s, ensurePathError(err, "rename", name)
 	}
 	return s, nil
 }
@@ -378,7 +373,7 @@ func (fs *UnixFS) Remove(name string) error {
 	if err1 != unix.ENOTDIR {
 		err = err1
 	}
-	return convertErrorType(&PathError{Op: "remove", Path: name, Err: err})
+	return ensurePathError(err, "remove", name)
 }
 
 // RemoveAll removes path and any children it contains.
@@ -393,6 +388,7 @@ func (fs *UnixFS) RemoveAll(name string) error {
 	if err != nil {
 		return err
 	}
+
 	// While removeAll internally checks this, I want to make sure we check it
 	// and return the proper error so our tests can ensure that this will never
 	// be a possibility.
@@ -403,7 +399,27 @@ func (fs *UnixFS) RemoveAll(name string) error {
 			Err:  ErrBadPathResolution,
 		}
 	}
+
 	return fs.removeAll(name)
+}
+
+// RemoveContents recursively removes the contents of name.
+//
+// It removes everything it can but returns the first error
+// it encounters. If the path does not exist, RemoveContents
+// returns nil (no error).
+//
+// If there is an error, it will be of type [*PathError].
+func (fs *UnixFS) RemoveContents(name string) error {
+	name, err := fs.unsafePath(name)
+	if err != nil {
+		return err
+	}
+
+	// Unlike RemoveAll, we don't remove `name` itself, only it's contents.
+	// So there is no need to check for a name of `.` here.
+
+	return fs.removeContents(name)
 }
 
 func (fs *UnixFS) unlinkat(dirfd int, name string, flags int) error {
@@ -434,11 +450,11 @@ func (fs *UnixFS) Rename(oldpath, newpath string) error {
 	// While unix.Renameat ends up throwing a "device or resource busy" error,
 	// that doesn't mean we are protecting the system properly.
 	if oldname == "." {
-		return convertErrorType(&PathError{
+		return &PathError{
 			Op:   "rename",
 			Path: oldname,
 			Err:  ErrBadPathResolution,
-		})
+		}
 	}
 	// Stat the old target to return proper errors.
 	if _, err := fs.Lstatat(olddirfd, oldname); err != nil {
@@ -449,11 +465,11 @@ func (fs *UnixFS) Rename(oldpath, newpath string) error {
 	if err != nil {
 		closeFd2()
 		if !errors.Is(err, ErrNotExist) {
-			return convertErrorType(err)
+			return err
 		}
 		var pathErr *PathError
 		if !errors.As(err, &pathErr) {
-			return convertErrorType(err)
+			return err
 		}
 		if err := fs.MkdirAll(pathErr.Path, 0o755); err != nil {
 			return err
@@ -471,38 +487,41 @@ func (fs *UnixFS) Rename(oldpath, newpath string) error {
 	// While unix.Renameat ends up throwing a "device or resource busy" error,
 	// that doesn't mean we are protecting the system properly.
 	if newname == "." {
-		return convertErrorType(&PathError{
+		return &PathError{
 			Op:   "rename",
 			Path: newname,
 			Err:  ErrBadPathResolution,
-		})
+		}
 	}
 	// Stat the new target to return proper errors.
 	_, err = fs.Lstatat(newdirfd, newname)
 	switch {
 	case err == nil:
-		return convertErrorType(&PathError{
+		return &PathError{
 			Op:   "rename",
 			Path: newname,
 			Err:  ErrExist,
-		})
+		}
 	case !errors.Is(err, ErrNotExist):
 		return err
 	}
-	return unix.Renameat(olddirfd, oldname, newdirfd, newname)
+	if err := unix.Renameat(olddirfd, oldname, newdirfd, newname); err != nil {
+		return &LinkError{Op: "rename", Old: oldpath, New: newpath, Err: err}
+	}
+	return nil
 }
 
 // Stat returns a FileInfo describing the named file.
 //
 // If there is an error, it will be of type *PathError.
 func (fs *UnixFS) Stat(name string) (FileInfo, error) {
-	return fs.fstat(name, 0)
+	return fs._fstat("stat", name, 0)
 }
 
 // Statat is like Stat but allows passing an existing directory file
 // descriptor rather than needing to resolve one.
 func (fs *UnixFS) Statat(dirfd int, name string) (FileInfo, error) {
-	return fs.fstatat(dirfd, name, 0)
+	return fs._fstatat("statat", dirfd, name, 0)
 }
 
 // Lstat returns a FileInfo describing the named file.
@@ -512,30 +531,38 @@ func (fs *UnixFS) Statat(dirfd int, name string) (FileInfo, error) {
 //
 // If there is an error, it will be of type *PathError.
 func (fs *UnixFS) Lstat(name string) (FileInfo, error) {
-	return fs.fstat(name, AT_SYMLINK_NOFOLLOW)
+	return fs._fstat("lstat", name, AT_SYMLINK_NOFOLLOW)
 }
 
 // Lstatat is like Lstat but allows passing an existing directory file
 // descriptor rather than needing to resolve one.
 func (fs *UnixFS) Lstatat(dirfd int, name string) (FileInfo, error) {
-	return fs.fstatat(dirfd, name, AT_SYMLINK_NOFOLLOW)
+	return fs._fstatat("lstatat", dirfd, name, AT_SYMLINK_NOFOLLOW)
 }
 
 func (fs *UnixFS) fstat(name string, flags int) (FileInfo, error) {
+	return fs._fstat("fstat", name, flags)
+}
+
+func (fs *UnixFS) _fstat(op string, name string, flags int) (FileInfo, error) {
 	dirfd, name, closeFd, err := fs.safePath(name)
 	defer closeFd()
 	if err != nil {
 		return nil, err
 	}
-	return fs.fstatat(dirfd, name, flags)
+	return fs._fstatat(op, dirfd, name, flags)
 }
 
 func (fs *UnixFS) fstatat(dirfd int, name string, flags int) (FileInfo, error) {
+	return fs._fstatat("fstatat", dirfd, name, flags)
+}
+
+func (fs *UnixFS) _fstatat(op string, dirfd int, name string, flags int) (FileInfo, error) {
 	var s fileStat
 	if err := ignoringEINTR(func() error {
 		return unix.Fstatat(dirfd, name, &s.sys, flags)
 	}); err != nil {
-		return nil, &PathError{Op: "stat", Path: name, Err: err}
+		return nil, ensurePathError(err, op, name)
 	}
 	fillFileStatFromSys(&s, name)
 	return &s, nil
@@ -571,23 +598,42 @@ func (fs *UnixFS) Touch(path string, flag int, mode FileMode) (File, error) {
 	if flag&O_CREATE == 0 {
 		flag |= O_CREATE
 	}
-	dirfd, name, closeFd, err := fs.safePath(path)
+	dirfd, name, closeFd, err, _ := fs.TouchPath(path)
 	defer closeFd()
-	if err == nil {
-		return fs.OpenFileat(dirfd, name, flag, mode)
-	}
-	if !errors.Is(err, ErrNotExist) {
+	if err != nil {
 		return nil, err
 	}
+	return fs.OpenFileat(dirfd, name, flag, mode)
+}
+
+// TouchPath is like SafePath except that it will create any missing directories
+// in the path. Unlike SafePath, TouchPath returns an additional boolean which
+// indicates whether the parent directories already existed, this is intended to
+// be used as a way to know if the final destination could already exist.
+func (fs *UnixFS) TouchPath(path string) (int, string, func(), error, bool) {
+	dirfd, name, closeFd, err := fs.safePath(path)
+	switch {
+	case err == nil:
+		return dirfd, name, closeFd, nil, true
+	case !errors.Is(err, ErrNotExist):
+		return dirfd, name, closeFd, err, false
+	}
+
 	var pathErr *PathError
 	if !errors.As(err, &pathErr) {
-		return nil, err
+		return dirfd, name, closeFd, err, false
 	}
 	if err := fs.MkdirAll(pathErr.Path, 0o755); err != nil {
-		return nil, err
+		return dirfd, name, closeFd, err, false
 	}
-	// Try to open the file one more time after creating its parent directories.
-	return fs.OpenFile(path, flag, mode)
+
+	// Close the previous file descriptor since we are going to be opening
+	// a new one.
+	closeFd()
+
+	// Run safe path again now that the parent directories have been created.
+	dirfd, name, closeFd, err = fs.safePath(path)
+	return dirfd, name, closeFd, err, false
 }
 
 // WalkDir walks the file tree rooted at root, calling fn for each file or
@@ -629,43 +675,54 @@ func (fs *UnixFS) openat(dirfd int, name string, flag int, mode FileMode) (int, 
 		if err == unix.EINTR {
 			continue
 		}
-		return 0, convertErrorType(err)
+		return 0, err
+	}
+
+	// If we are using openat2, we don't need the additional security checks.
+	if fs.useOpenat2 {
+		return fd, nil
 	}
 
 	// If we are not using openat2, do additional path checking. This assumes
 	// that openat2 is using `RESOLVE_BENEATH` to avoid the same security
 	// issue.
-	if !fs.useOpenat2 {
-		var finalPath string
-		finalPath, err := filepath.EvalSymlinks(filepath.Join("/proc/self/fd/", strconv.Itoa(dirfd)))
-		if err != nil {
-			return fd, convertErrorType(err)
-		}
-		if err != nil {
-			if !errors.Is(err, ErrNotExist) {
-				return fd, fmt.Errorf("failed to evaluate symlink: %w", convertErrorType(err))
-			}
-
-			// The target of one of the symlinks (EvalSymlinks is recursive)
-			// does not exist. So get the path that does not exist and use
-			// that for further validation instead.
-			var pErr *PathError
-			if ok := errors.As(err, &pErr); !ok {
-				return fd, fmt.Errorf("failed to evaluate symlink: %w", convertErrorType(err))
-			}
-			finalPath = pErr.Path
+	var finalPath string
+	finalPath, err := filepath.EvalSymlinks(filepath.Join("/proc/self/fd/", strconv.Itoa(fd)))
+	if err != nil {
+		if !errors.Is(err, ErrNotExist) {
+			return fd, fmt.Errorf("failed to evaluate symlink: %w", convertErrorType(err))
 		}
 
-		// Check if the path is within our root.
-		if !fs.unsafeIsPathInsideOfBase(finalPath) {
-			return fd, convertErrorType(&PathError{
-				Op:   "openat",
-				Path: name,
-				Err:  ErrBadPathResolution,
-			})
+		// The target of one of the symlinks (EvalSymlinks is recursive)
+		// does not exist. So get the path that does not exist and use
+		// that for further validation instead.
+		var pErr *PathError
+		if !errors.As(err, &pErr) {
+			return fd, fmt.Errorf("failed to evaluate symlink: %w", convertErrorType(err))
+		}
+
+		// Update the final path to whatever directory or path didn't exist while
+		// recursing any symlinks.
+		finalPath = pErr.Path
+		// Ensure the error is wrapped correctly.
+		err = convertErrorType(err)
+	}
+
+	// Check if the path is within our root.
+	if !fs.unsafeIsPathInsideOfBase(finalPath) {
+		op := "openat"
+		if fs.useOpenat2 {
+			op = "openat2"
+		}
+		return fd, &PathError{
+			Op:   op,
+			Path: name,
+			Err:  ErrBadPathResolution,
 		}
 	}
-	return fd, nil
+
+	// Return the file descriptor and any potential error.
+	return fd, err
 }
 
 // _openat is a wrapper around unix.Openat. This method should never be directly
@@ -683,11 +740,11 @@ func (fs *UnixFS) _openat(dirfd int, name string, flag int, mode uint32) (int, e
 	case err == nil:
 		return fd, nil
 	case err == unix.EINTR:
-		return 0, err
+		return fd, err
 	case err == unix.EAGAIN:
-		return 0, err
+		return fd, err
 	default:
-		return 0, &PathError{Op: "openat", Path: name, Err: err}
+		return fd, ensurePathError(err, "openat", name)
 	}
 }
 
@@ -697,7 +754,7 @@ func (fs *UnixFS) _openat(dirfd int, name string, flag int, mode uint32) (int, e
 // present in Kernel 5.6 and above.
 //
 // This method should never be directly called, use `openat` instead.
-func (fs *UnixFS) _openat2(dirfd int, name string, flag uint64, mode uint64) (int, error) {
+func (fs *UnixFS) _openat2(dirfd int, name string, flag, mode uint64) (int, error) {
 	// Ensure the O_CLOEXEC flag is set.
 	// Go sets this when using the os package, but since we are directly using
 	// the unix package we need to set it ourselves.
@@ -722,11 +779,11 @@ func (fs *UnixFS) _openat2(dirfd int, name string, flag uint64, mode uint64) (in
 	case err == nil:
 		return fd, nil
 	case err == unix.EINTR:
-		return 0, err
+		return fd, err
 	case err == unix.EAGAIN:
-		return 0, err
+		return fd, err
 	default:
-		return 0, &PathError{Op: "openat2", Path: name, Err: err}
+		return fd, ensurePathError(err, "openat2", name)
 	}
 }
 
@@ -745,11 +802,11 @@ func (fs *UnixFS) safePath(path string) (dirfd int, file string, closeFd func(),
 		return
 	}
 
-	// Check if dirfd was closed, this will happen if (*UnixFS).Close()
-	// was called.
-	fsDirfd := int(fs.dirfd.Load())
-	if fsDirfd == -1 {
-		err = ErrClosed
+	// Open the base path. We use this as the sandbox root for any further
+	// operations.
+	var fsDirfd int
+	fsDirfd, err = fs._openat(AT_EMPTY_PATH, fs.basePath, O_DIRECTORY|O_RDONLY, 0)
+	if err != nil {
 		return
 	}
 
@@ -759,9 +816,8 @@ func (fs *UnixFS) safePath(path string) (dirfd int, file string, closeFd func(),
 	dir, file = filepath.Split(name)
 	// If dir is empty then name is not nested.
 	if dir == "" {
-		// We don't need to set closeFd here as it will default to a NO-OP and
-		// `fs.dirfd` is re-used until the filesystem is no-longer needed.
 		dirfd = fsDirfd
+		closeFd = func() { _ = unix.Close(dirfd) }
 
 		// Return dirfd, name, an empty closeFd func, and no error
 		return
@@ -771,26 +827,36 @@ func (fs *UnixFS) safePath(path string) (dirfd int, file string, closeFd func(),
 	// trim slashes.
 	dir = strings.TrimSuffix(dir, "/")
 	dirfd, err = fs.openat(fsDirfd, dir, O_DIRECTORY|O_RDONLY, 0)
-	if dirfd != 0 {
+	if err != nil {
+		// An error occurred while opening the directory, but we already opened
+		// the filesystem root, so we still need to ensure it gets closed.
+		closeFd = func() { _ = unix.Close(fsDirfd) }
+	} else {
 		// Set closeFd to close the newly opened directory file descriptor.
-		closeFd = func() { _ = unix.Close(dirfd) }
+		closeFd = func() {
+			_ = unix.Close(dirfd)
+			_ = unix.Close(fsDirfd)
+		}
 	}
 
 	// Return dirfd, name, the closeFd func, and err
 	return
 }
 
-// unsafePath prefixes the given path and prefixes it with the filesystem's
-// base path, cleaning the result. The path returned by this function may not
-// be inside the filesystem's base path, additional checks are required to
-// safely use paths returned by this function.
+// unsafePath strips and joins the given path with the filesystem's base path,
+// cleaning the result. The cleaned path is then checked if it starts with the
+// filesystem's base path to obvious any obvious path traversal escapes. The
+// fully resolved path (if symlinks are followed) may not be within the
+// filesystem's base path, additional checks are required to safely use paths
+// returned by this function.
 func (fs *UnixFS) unsafePath(path string) (string, error) {
-	// Calling filepath.Clean on the joined directory will resolve it to the
-	// absolute path, removing any ../ type of resolution arguments, and leaving
-	// us with a direct path link.
+	// Calling filepath.Clean on the path will resolve it to it's absolute path,
+	// removing any path traversal arguments (such as ..), leaving us with an
+	// absolute path we can then use.
 	//
-	// This will also trim the existing root path off the beginning of the path
-	// passed to the function since that can get a bit messy.
+	// This will also trim the filesystem's base path from the given path and
+	// join the base path back on to ensure the path starts with the base path
+	// without appending it twice.
 	r := filepath.Clean(filepath.Join(fs.basePath, strings.TrimPrefix(path, fs.basePath)))
 
 	if fs.unsafeIsPathInsideOfBase(r) {
@@ -817,6 +883,10 @@ func (fs *UnixFS) unsafePath(path string) (string, error) {
 
 // unsafeIsPathInsideOfBase checks if the given path is inside the filesystem's
 // base path.
+//
+// NOTE: this method doesn't clean the given path or attempt to join the
+// filesystem's base path. This is purely a basic prefix check against the
+// given path.
 func (fs *UnixFS) unsafeIsPathInsideOfBase(path string) bool {
 	return strings.HasPrefix(
 		strings.TrimSuffix(path, "/")+"/",

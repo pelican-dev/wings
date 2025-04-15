@@ -7,9 +7,12 @@ import (
 	"time"
 
 	"emperror.dev/errors"
+	"github.com/apex/log"
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
+	"github.com/pelican-dev/wings/internal/models"
+
 )
 
 type CrashHandler struct {
@@ -69,6 +72,12 @@ func (s *Server) handleServerCrash() error {
 		return nil
 	}
 
+	// Get the last lines from the output before the crash so we can log it
+	logs, err := s.Environment.Readlog(config.Get().System.CrashActivityLogLines)
+	if err != nil {
+		log.WithField("server_id", s.ID()).Warn("Faild to get the last lines out of the console for the activity logs")
+	}
+
 	s.PublishConsoleOutputFromDaemon("---------- Detected server process in a crashed state! ----------")
 	s.PublishConsoleOutputFromDaemon(fmt.Sprintf("Exit code: %d", exitCode))
 	s.PublishConsoleOutputFromDaemon(fmt.Sprintf("Out of memory: %t", oomKilled))
@@ -85,6 +94,13 @@ func (s *Server) handleServerCrash() error {
 		return &crashTooFrequent{}
 	}
 
+	// Log that the server has crashed
+	s.SaveActivity(s.NewRequestActivity("", "127.0.0.1"), ActivityServerCrashed, models.ActivityMeta{
+		"exit_code": exitCode,
+		"oomkilled": oomKilled,
+		"logs":      logs,
+	})
+	
 	s.crasher.SetLastCrash(time.Now())
 
 	return errors.Wrap(s.HandlePowerAction(PowerActionStart), "failed to start server after crash detection")

@@ -82,6 +82,9 @@ func (fs *Filesystem) File(p string) (ufs.File, Stat, error) {
 		_ = f.Close()
 		return nil, Stat{}, err
 	}
+	if st.IsDir() {
+		return f, Stat{}, errors.New("filesystem: is a directory")
+	}
 	return f, st, nil
 }
 
@@ -272,11 +275,15 @@ func (fs *Filesystem) Chmod(path string, mode ufs.FileMode) error {
 // looping endlessly.
 func (fs *Filesystem) findCopySuffix(dirfd int, name, extension string) (string, error) {
 	var i int
-	suffix := " copy"
+	suffix := ""
 
 	for i = 0; i < 51; i++ {
-		if i > 0 {
-			suffix = " copy " + strconv.Itoa(i)
+		if i == 1 {
+			suffix = " copy"
+		} else if i == 50 {
+			suffix = " copy." + time.Now().Format(time.RFC3339)
+		} else if i > 1 {
+			suffix = " copy " + strconv.Itoa(i-1)
 		}
 
 		n := name + suffix + extension
@@ -287,10 +294,6 @@ func (fs *Filesystem) findCopySuffix(dirfd int, name, extension string) (string,
 				return "", err
 			}
 			break
-		}
-
-		if i == 50 {
-			suffix = "copy." + time.Now().Format(time.RFC3339)
 		}
 	}
 
