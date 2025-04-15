@@ -195,34 +195,41 @@ func (e *Environment) Create() error {
 	}
 
 	networkMode := container.NetworkMode(cfg.Docker.Network.Mode)
-	if a.ForceOutgoingIP {
-		enableIPv6 := false
-		e.log().Debug("environment/docker: forcing outgoing IP address")
-		networkName := "ip-" + strings.ReplaceAll(strings.ReplaceAll(a.DefaultMapping.Ip, ".", "-"), ":", "-")
-		networkMode = container.NetworkMode(networkName)
-
-		if _, err := e.client.NetworkInspect(ctx, networkName, network.InspectOptions{}); err != nil {
-			if !client.IsErrNotFound(err) {
-				return err
+	if (a.ForceOutgoingIP){
+		// We can't use ForceOutgoingIP if we made a server with no allocation
+		if (a.DefaultMapping.Ip != ""){
+			enableIPv6 := false
+			e.log().Debug("environment/docker: forcing outgoing IP address")
+			networkName := "ip-" + strings.ReplaceAll(strings.ReplaceAll(a.DefaultMapping.Ip, ".", "-"), ":", "-")
+			networkMode = container.NetworkMode(networkName)
+	
+			if _, err := e.client.NetworkInspect(ctx, networkName, network.InspectOptions{}); err != nil {
+				if !client.IsErrNotFound(err) {
+					return err
+				}
+	
+				if _, err := e.client.NetworkCreate(ctx, networkName, network.CreateOptions{
+					Driver:     "bridge",
+					EnableIPv6: &enableIPv6,
+					Internal:   false,
+					Attachable: false,
+					Ingress:    false,
+					ConfigOnly: false,
+					Options: map[string]string{
+						"encryption": "false",
+						"com.docker.network.bridge.default_bridge": "false",
+						"com.docker.network.host_ipv4":             a.DefaultMapping.Ip,
+					},
+				}); err != nil {
+					return err
+				}
 			}
-
-			if _, err := e.client.NetworkCreate(ctx, networkName, network.CreateOptions{
-				Driver:     "bridge",
-				EnableIPv6: &enableIPv6,
-				Internal:   false,
-				Attachable: false,
-				Ingress:    false,
-				ConfigOnly: false,
-				Options: map[string]string{
-					"encryption": "false",
-					"com.docker.network.bridge.default_bridge": "false",
-					"com.docker.network.host_ipv4":             a.DefaultMapping.Ip,
-				},
-			}); err != nil {
-				return err
-			}
+		}else{
+			e.log().Warn("environment/docker: Cannot force outgoing IP - server has no allocation")
 		}
 	}
+
+
 
 	hostConf := &container.HostConfig{
 		PortBindings: a.DockerBindings(),
