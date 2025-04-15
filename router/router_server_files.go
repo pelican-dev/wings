@@ -429,6 +429,7 @@ func postServerCompressFiles(c *gin.Context) {
 	var data struct {
 		RootPath string   `json:"root"`
 		Files    []string `json:"files"`
+		Name     string   `json:"name"`
 	}
 
 	if err := c.BindJSON(&data); err != nil {
@@ -449,7 +450,7 @@ func postServerCompressFiles(c *gin.Context) {
 		return
 	}
 
-	f, err := s.Filesystem().CompressFiles(data.RootPath, data.Files)
+	f, err := s.Filesystem().CompressFiles(data.RootPath, data.Name, data.Files)
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
 		return
