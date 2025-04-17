@@ -19,6 +19,7 @@ const (
 	TransferLogsEvent           = "transfer logs"
 	TransferStatusEvent         = "transfer status"
 	DeletedEvent                = "deleted"
+	EventFeatureMatch           = "feature match"
 )
 
 // Events returns the server's emitter instance.

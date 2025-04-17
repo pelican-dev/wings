@@ -14,6 +14,10 @@ type EggConfiguration struct {
 	// or basically any type of access on the server by any user. This is NOT the same
 	// as a per-user denylist, this is defined at the Egg level.
 	FileDenylist []string `json:"file_denylist"`
+
+	// Features is a map of feature identifiers to a list of console output strings
+	// that should trigger a match (e.g., for things like EULA prompts).
+	Features map[string][]string `json:"features"`
 }
 
 type ConfigurationMeta struct {
