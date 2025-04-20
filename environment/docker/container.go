@@ -155,11 +155,15 @@ func (e *Environment) Create() error {
 	cfg := config.Get()
 	a := e.Configuration.Allocations()
 	evs := e.Configuration.EnvironmentVariables()
-	for i, v := range evs {
-		// Convert 127.0.0.1 to the pelican0 network interface if the environment is Docker
-		// so that the server operates as expected.
-		if v == "SERVER_IP=127.0.0.1" {
-			evs[i] = "SERVER_IP=" + cfg.Docker.Network.Interface
+	
+	// If Ip is empty then we have a server with no allocation and this should stay 127.0.0.1 and not the docker network interface ip.
+	if a.DefaultMapping.Ip != "" {
+		for i, v := range evs {
+			// Convert 127.0.0.1 to the pelican0 network interface if the environment is Docker
+			// so that the server operates as expected.
+			if v == "SERVER_IP=127.0.0.1" {
+				evs[i] = "SERVER_IP=" + cfg.Docker.Network.Interface
+			}
 		}
 	}
 
