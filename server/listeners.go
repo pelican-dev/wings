@@ -210,7 +210,7 @@ func (s *Server) onConsoleOutput(data []byte) {
 					// Send a WebSocket event to notify the frontend of the match.
 					// This can be used for triggering UI behaviors or user prompts.
 					s.Events().Publish(
-						EventFeatureMatch,
+						FeatureMatchEvent,
 						FeatureMatchPayload{
 							Key:     key,
 							Pattern: pattern,
