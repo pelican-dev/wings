@@ -232,34 +232,45 @@ func GetSystemUtilization(root, logs, data, archive, backup, temp string) (*Util
 		return nil, err
 	}
 
-	/* ----------- dedupe-by-Fsid block ----------- */
-	seen := map[uint64]struct{}{}          // Fsid → empty
-	diskMap := make(map[string]*DiskInfo)  // mountpoint → info
-	var total, used uint64
+  	/* -------- Disk usage (dedupe by Device) -------------------------
+	   gopsutil/disk.Partitions(false) can return multiple mount-points
+	   that sit on the same block device (e.g. Docker overlay bind-mounts).
+	   Counting each mount separately inflates total_disk_bytes.
 
-	for _, p := range partitions {
-		var st syscall.Statfs_t
-		if err := syscall.Statfs(p.Mountpoint, &st); err == nil {
-			if _, dup := seen[st.Fsid]; dup {
-				continue // already counted this block-device
-			}
-			seen[st.Fsid] = struct{}{}
+	   We keep the first encounter of every partition.Device and skip all
+	   later duplicates, ensuring each physical disk contributes exactly
+	   once to the totals that Wings reports to the Panel.
+	------------------------------------------------------------------ */
+
+	seenDevices := make(map[string]struct{}) // Device path → seen flag
+	diskMap     := make(map[string]*DiskInfo)
+
+	var diskTotal uint64
+	var diskUsed  uint64
+
+	for _, part := range partitions {
+		if _, dup := seenDevices[part.Device]; dup {
+			continue // block-device already counted
 		}
+		seenDevices[part.Device] = struct{}{}
 
-		if u, err := disk.Usage(p.Mountpoint); err == nil {
-			total += u.Total
-			used += u.Used
+		if u, err := disk.Usage(part.Mountpoint); err == nil {
+			diskTotal += u.Total
+			diskUsed  += u.Used
 
-			diskMap[p.Mountpoint] = &DiskInfo{
-				Device:     p.Device,
-				Mountpoint: p.Mountpoint,
+			diskMap[part.Mountpoint] = &DiskInfo{
+				Device:     part.Device,
+				Mountpoint: part.Mountpoint,
 				TotalSpace: u.Total,
 				UsedSpace:  u.Used,
 				Tags:       []string{},
 			}
 		}
 	}
-	/* ----------- end dedupe block ----------- */
+
+	/* -------- end disk-usage block --------------------------------- */
+
+
 
 	// Tag disks (root, logs, data, etc.)
 	for tag, path := range paths {
@@ -285,10 +296,11 @@ func GetSystemUtilization(root, logs, data, archive, backup, temp string) (*Util
 		LoadAvg1:    loadavg.Load1,
 		LoadAvg5:    loadavg.Load5,
 		LoadAvg15:   loadavg.Load15,
-		DiskTotal:   total,
-		DiskUsed:    used,
+		DiskTotal:   diskTotal,   // ← updated
+		DiskUsed:    diskUsed,    // ← updated
 		DiskDetails: details,
 	}, nil
+	
 }
 
 /* ------------------------------------------------------------------ */
