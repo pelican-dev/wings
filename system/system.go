@@ -6,12 +6,10 @@ import (
 	"runtime"
 	"syscall"
 
+	"github.com/acobaugh/osrelease"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
-
-	"github.com/acobaugh/osrelease"
-
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/parsers/kernel"
@@ -20,6 +18,10 @@ import (
 	"github.com/shirou/gopsutil/v3/load"
 	"github.com/shirou/gopsutil/v3/mem"
 )
+
+/* ------------------------------------------------------------------ */
+/*  Types                                                             */
+/* ------------------------------------------------------------------ */
 
 type Information struct {
 	Version string            `json:"version"`
@@ -99,6 +101,10 @@ type DockerDiskUsage struct {
 	BuildCacheSize int64 `json:"build_cache_size"`
 }
 
+/* ------------------------------------------------------------------ */
+/*  High-level information helpers                                    */
+/* ------------------------------------------------------------------ */
+
 func GetSystemInformation() (*Information, error) {
 	k, err := kernel.GetKernelVersion()
 	if err != nil {
@@ -126,11 +132,10 @@ func GetSystemInformation() (*Information, error) {
 
 	var filesystem string
 	for _, v := range info.DriverStatus {
-		if v[0] != "Backing Filesystem" {
-			continue
+		if v[0] == "Backing Filesystem" {
+			filesystem = v[1]
+			break
 		}
-		filesystem = v[1]
-		break
 	}
 
 	return &Information{
@@ -167,200 +172,191 @@ func GetSystemInformation() (*Information, error) {
 }
 
 func GetSystemIps() (*IpAddresses, error) {
-	var ip_addrs []string
-	iface_addrs, err := net.InterfaceAddrs()
+	var ipAddrs []string
+	ifaceAddrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return nil, err
 	}
-	for _, addr := range iface_addrs {
-		ipNet, valid := addr.(*net.IPNet)
-		if valid && !ipNet.IP.IsLoopback() {
-			ip_addrs = append(ip_addrs, ipNet.IP.String())
+	for _, addr := range ifaceAddrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			ipAddrs = append(ipAddrs, ipnet.IP.String())
 		}
 	}
-	return &IpAddresses{IpAddresses: ip_addrs}, nil
+	return &IpAddresses{IpAddresses: ipAddrs}, nil
 }
 
-// getDiskForPath finds the mountpoint where the given path is stored
-func getDiskForPath(path string, partitions []disk.PartitionStat) (string, string, error) {
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(path, &stat); err != nil {
+/* ------------------------------------------------------------------ */
+/*  Disk helpers                                                      */
+/* ------------------------------------------------------------------ */
+
+// getDiskForPath returns the device and mountpoint for a given path.
+func getDiskForPath(path string, parts []disk.PartitionStat) (string, string, error) {
+	var st syscall.Statfs_t
+	if err := syscall.Statfs(path, &st); err != nil {
 		return "", "", err
 	}
-
-	for _, part := range partitions {
-		var pStat syscall.Statfs_t
-		if err := syscall.Statfs(part.Mountpoint, &pStat); err != nil {
+	for _, p := range parts {
+		var pst syscall.Statfs_t
+		if err := syscall.Statfs(p.Mountpoint, &pst); err != nil {
 			continue
 		}
-		if stat.Fsid == pStat.Fsid {
-			return part.Device, part.Mountpoint, nil
+		if st.Fsid == pst.Fsid {
+			return p.Device, p.Mountpoint, nil
 		}
 	}
-
-	return "", "", nil // No error, but couldn't find the disk
+	return "", "", nil
 }
 
+/* ------------------------------------------------------------------ */
+/*  Main Utilization collector                                        */
+/* ------------------------------------------------------------------ */
+
 func GetSystemUtilization(root, logs, data, archive, backup, temp string) (*Utilization, error) {
+	// CPU, memory, load averages
 	c, err := cpu.Percent(0, false)
 	if err != nil {
 		return nil, err
 	}
-	m, err := mem.VirtualMemory()
-	if err != nil {
-		return nil, err
-	}
-	s, err := mem.SwapMemory()
-	if err != nil {
-		return nil, err
-	}
-	l, err := load.Avg()
-	if err != nil {
-		return nil, err
-	}
+	vmstat, _ := mem.VirtualMemory()
+	swap, _ := mem.SwapMemory()
+	loadavg, _ := load.Avg()
 
-	// Define paths to check with their tags
+	// Path tags for DiskDetails
 	paths := map[string]string{
-		"Root":    root,
-		"Logs":    logs,
-		"Data":    data,
-		"Archive": archive,
-		"Backup":  backup,
-		"Temp":    temp,
+		"Root": root, "Logs": logs, "Data": data,
+		"Archive": archive, "Backup": backup, "Temp": temp,
 	}
 
-	// Get all partitions
-	partitions, err := disk.Partitions(false)
+	partitions, err := disk.Partitions(false) // physical filesystems only
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize disk map to store disk info by mountpoint
-	diskMap := make(map[string]*DiskInfo)
-	var totalDiskSpace uint64
-	var usedDiskSpace uint64
+	/* ----------- dedupe-by-Fsid block ----------- */
+	seen := map[uint64]struct{}{}          // Fsid → empty
+	diskMap := make(map[string]*DiskInfo)  // mountpoint → info
+	var total, used uint64
 
-	// First, gather all disk usage information
-	for _, partition := range partitions {
-		d, err := disk.Usage(partition.Mountpoint)
-		if err == nil {
-			totalDiskSpace += d.Total
-			usedDiskSpace += d.Used
+	for _, p := range partitions {
+		var st syscall.Statfs_t
+		if err := syscall.Statfs(p.Mountpoint, &st); err == nil {
+			if _, dup := seen[st.Fsid]; dup {
+				continue // already counted this block-device
+			}
+			seen[st.Fsid] = struct{}{}
+		}
 
-			diskMap[partition.Mountpoint] = &DiskInfo{
-				Device:     partition.Device,
-				Mountpoint: partition.Mountpoint,
-				TotalSpace: d.Total,
-				UsedSpace:  d.Used,
+		if u, err := disk.Usage(p.Mountpoint); err == nil {
+			total += u.Total
+			used += u.Used
+
+			diskMap[p.Mountpoint] = &DiskInfo{
+				Device:     p.Device,
+				Mountpoint: p.Mountpoint,
+				TotalSpace: u.Total,
+				UsedSpace:  u.Used,
 				Tags:       []string{},
 			}
 		}
 	}
+	/* ----------- end dedupe block ----------- */
 
-	// Now add tags to the appropriate disks
+	// Tag disks (root, logs, data, etc.)
 	for tag, path := range paths {
-		_, mountpoint, err := getDiskForPath(path, partitions)
-		if err == nil && mountpoint != "" {
-			if disk, exists := diskMap[mountpoint]; exists {
-				disk.Tags = append(disk.Tags, tag)
+		_, mp, err := getDiskForPath(path, partitions)
+		if err == nil && mp != "" {
+			if d, ok := diskMap[mp]; ok {
+				d.Tags = append(d.Tags, tag)
 			}
 		}
 	}
 
-	// Convert map to slice
-	var diskDetails []DiskInfo
-	for _, disk := range diskMap {
-		diskDetails = append(diskDetails, *disk)
+	details := make([]DiskInfo, 0, len(diskMap))
+	for _, d := range diskMap {
+		details = append(details, *d)
 	}
 
 	return &Utilization{
-		MemoryTotal: m.Total,
-		MemoryUsed:  m.Used,
-		SwapTotal:   s.Total,
-		SwapUsed:    s.Used,
+		MemoryTotal: vmstat.Total,
+		MemoryUsed:  vmstat.Used,
+		SwapTotal:   swap.Total,
+		SwapUsed:    swap.Used,
 		CpuPercent:  c[0],
-		LoadAvg1:    l.Load1,
-		LoadAvg5:    l.Load5,
-		LoadAvg15:   l.Load15,
-		DiskTotal:   totalDiskSpace,
-		DiskUsed:    usedDiskSpace,
-		DiskDetails: diskDetails,
+		LoadAvg1:    loadavg.Load1,
+		LoadAvg5:    loadavg.Load5,
+		LoadAvg15:   loadavg.Load15,
+		DiskTotal:   total,
+		DiskUsed:    used,
+		DiskDetails: details,
 	}, nil
 }
 
+/* ------------------------------------------------------------------ */
+/*  Docker helpers                                                    */
+/* ------------------------------------------------------------------ */
+
 func GetDockerDiskUsage(ctx context.Context) (*DockerDiskUsage, error) {
-	// TODO: find a way to re-use the client from the docker environment.
-	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return &DockerDiskUsage{}, err
 	}
-	defer c.Close()
+	defer cli.Close()
 
-	d, err := c.DiskUsage(ctx, types.DiskUsageOptions{})
+	d, err := cli.DiskUsage(ctx, types.DiskUsageOptions{})
 	if err != nil {
 		return &DockerDiskUsage{}, err
 	}
 
-	var bcs int64
+	var buildSize, containerSize int64
 	for _, bc := range d.BuildCache {
 		if !bc.Shared {
-			bcs += bc.Size
+			buildSize += bc.Size
 		}
 	}
+	for _, c := range d.Containers {
+		containerSize += c.SizeRootFs
+	}
 
-	var a int64
+	var activeImages int64
 	for _, i := range d.Images {
 		if i.Containers > 0 {
-			a++
+			activeImages++
 		}
-	}
-
-	var cs int64
-	for _, b := range d.Containers {
-		cs += b.SizeRootFs
 	}
 
 	return &DockerDiskUsage{
 		ImagesTotal:    len(d.Images),
-		ImagesActive:   a,
+		ImagesActive:   activeImages,
 		ImagesSize:     int64(d.LayersSize),
-		ContainersSize: int64(cs),
-		BuildCacheSize: bcs,
+		ContainersSize: containerSize,
+		BuildCacheSize: buildSize,
 	}, nil
 }
 
 func PruneDockerImages(ctx context.Context) (image.PruneReport, error) {
-	// TODO: find a way to re-use the client from the docker environment.
-	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return image.PruneReport{}, err
 	}
-	defer c.Close()
+	defer cli.Close()
 
-	prune, err := c.ImagesPrune(ctx, filters.Args{})
-	if err != nil {
-		return image.PruneReport{}, err
-	}
-	return prune, nil
+	return cli.ImagesPrune(ctx, filters.Args{})
 }
 
 func GetDockerInfo(ctx context.Context) (types.Version, system.Info, error) {
-	// TODO: find a way to re-use the client from the docker environment.
-	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return types.Version{}, system.Info{}, err
 	}
-	defer c.Close()
+	defer cli.Close()
 
-	dockerVersion, err := c.ServerVersion(ctx)
+	version, err := cli.ServerVersion(ctx)
 	if err != nil {
 		return types.Version{}, system.Info{}, err
 	}
-
-	dockerInfo, err := c.Info(ctx)
+	info, err := cli.Info(ctx)
 	if err != nil {
 		return types.Version{}, system.Info{}, err
 	}
-
-	return dockerVersion, dockerInfo, nil
+	return version, info, nil
 }
