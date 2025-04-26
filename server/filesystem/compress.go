@@ -53,7 +53,9 @@ func (fs *Filesystem) CompressFiles(dir string, name string, paths []string) (uf
 			return nil, err
 		}
 
-		name, err = fs.findCopySuffix(dirfd, name, ".tar.gz")
+		extension := fs.Ext(name)
+
+		name, err = fs.findCopySuffix(dirfd, name, extension)
 		if err != nil {
 			return nil, err
 		}
