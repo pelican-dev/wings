@@ -202,11 +202,14 @@ func (s *Server) onConsoleOutput(data []byte) {
 		// Convert the console output to a string for easier pattern matching.
 		output := string(v)
 
+		outputLower := strings.ToLower(output)
+
 	foundMatch:
 		for key, patterns := range EggConfiguration {
 			for _, pattern := range patterns {
+				patternLower := strings.ToLower(pattern)
 				// Check if the current line contains a defined feature match string.
-				if strings.Contains(output, pattern) {
+				if strings.Contains(outputLower, patternLower) {
 					// Send a WebSocket event to notify the frontend of the match.
 					// This can be used for triggering UI behaviors or user prompts.
 					s.Events().Publish(
