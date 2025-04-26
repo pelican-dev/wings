@@ -19,9 +19,7 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                             */
-/* ------------------------------------------------------------------ */
+/* ----------------------------- types ------------------------------ */
 
 type Information struct {
 	Version string            `json:"version"`
@@ -37,26 +35,10 @@ type DockerInformation struct {
 	Runc       DockerRunc       `json:"runc"`
 }
 
-type DockerCgroups struct {
-	Driver  string `json:"driver"`
-	Version string `json:"version"`
-}
-
-type DockerContainers struct {
-	Total   int `json:"total"`
-	Running int `json:"running"`
-	Paused  int `json:"paused"`
-	Stopped int `json:"stopped"`
-}
-
-type DockerStorage struct {
-	Driver     string `json:"driver"`
-	Filesystem string `json:"filesystem"`
-}
-
-type DockerRunc struct {
-	Version string `json:"version"`
-}
+type DockerCgroups struct{ Driver, Version string }
+type DockerContainers struct{ Total, Running, Paused, Stopped int }
+type DockerStorage struct{ Driver, Filesystem string }
+type DockerRunc struct{ Version string }
 
 type System struct {
 	Architecture  string `json:"architecture"`
@@ -67,43 +49,30 @@ type System struct {
 	OSType        string `json:"os_type"`
 }
 
-type IpAddresses struct {
-	IpAddresses []string `json:"ip_addresses"`
-}
+type IpAddresses struct{ IpAddresses []string }
 
 type DiskInfo struct {
-	Device     string   `json:"device"`
-	Mountpoint string   `json:"mountpoint"`
-	TotalSpace uint64   `json:"total_space"`
-	UsedSpace  uint64   `json:"used_space"`
-	Tags       []string `json:"tags"`
+	Device, Mountpoint       string
+	TotalSpace, UsedSpace    uint64
+	Tags                     []string
 }
 
 type Utilization struct {
-	MemoryTotal uint64     `json:"memory_total"`
-	MemoryUsed  uint64     `json:"memory_used"`
-	SwapTotal   uint64     `json:"swap_total"`
-	SwapUsed    uint64     `json:"swap_used"`
-	LoadAvg1    float64    `json:"load_average1"`
-	LoadAvg5    float64    `json:"load_average5"`
-	LoadAvg15   float64    `json:"load_average15"`
-	CpuPercent  float64    `json:"cpu_percent"`
-	DiskTotal   uint64     `json:"disk_total"`
-	DiskUsed    uint64     `json:"disk_used"`
-	DiskDetails []DiskInfo `json:"disk_details"`
+	MemoryTotal, MemoryUsed uint64
+	SwapTotal, SwapUsed     uint64
+	LoadAvg1, LoadAvg5,
+	LoadAvg15, CpuPercent   float64
+	DiskTotal, DiskUsed     uint64
+	DiskDetails             []DiskInfo
 }
 
 type DockerDiskUsage struct {
-	ContainersSize int64 `json:"containers_size"`
-	ImagesTotal    int   `json:"images_total"`
-	ImagesActive   int64 `json:"images_active"`
-	ImagesSize     int64 `json:"images_size"`
-	BuildCacheSize int64 `json:"build_cache_size"`
+	ContainersSize, ImagesActive,
+	ImagesSize, BuildCacheSize int64
+	ImagesTotal                int
 }
 
-/* ------------------------------------------------------------------ */
-/*  High-level information helpers                                    */
-/* ------------------------------------------------------------------ */
+/* ------------------ high-level information helpers ---------------- */
 
 func GetSystemInformation() (*Information, error) {
 	k, err := kernel.GetKernelVersion()
@@ -116,80 +85,59 @@ func GetSystemInformation() (*Information, error) {
 		return nil, err
 	}
 
-	release, err := osrelease.Read()
-	if err != nil {
-		return nil, err
-	}
-
-	var os string
-	if release["PRETTY_NAME"] != "" {
-		os = release["PRETTY_NAME"]
-	} else if release["NAME"] != "" {
-		os = release["NAME"]
-	} else {
-		os = info.OperatingSystem
+	release, _ := osrelease.Read()
+	osName := info.OperatingSystem
+	if v := release["PRETTY_NAME"]; v != "" {
+		osName = v
+	} else if v := release["NAME"]; v != "" {
+		osName = v
 	}
 
 	var filesystem string
 	for _, v := range info.DriverStatus {
-		if v[0] == "Backing Filesystem" {
-			filesystem = v[1]
-			break
+		if v[0] != "Backing Filesystem" {
+			continue
 		}
+		filesystem = v[1]
+		break
 	}
 
 	return &Information{
 		Version: Version,
 		Docker: DockerInformation{
 			Version: version.Version,
-			Cgroups: DockerCgroups{
-				Driver:  info.CgroupDriver,
-				Version: info.CgroupVersion,
-			},
+			Cgroups: DockerCgroups{Driver: info.CgroupDriver, Version: info.CgroupVersion},
 			Containers: DockerContainers{
-				Total:   info.Containers,
-				Running: info.ContainersRunning,
-				Paused:  info.ContainersPaused,
-				Stopped: info.ContainersStopped,
+				Total: info.Containers, Running: info.ContainersRunning,
+				Paused: info.ContainersPaused, Stopped: info.ContainersStopped,
 			},
-			Storage: DockerStorage{
-				Driver:     info.Driver,
-				Filesystem: filesystem,
-			},
-			Runc: DockerRunc{
-				Version: info.RuncCommit.ID,
-			},
+			Storage: DockerStorage{Driver: info.Driver, Filesystem: filesystem},
+			Runc:    DockerRunc{Version: info.RuncCommit.ID},
 		},
 		System: System{
-			Architecture:  runtime.GOARCH,
-			CPUThreads:    runtime.NumCPU(),
-			MemoryBytes:   info.MemTotal,
-			KernelVersion: k.String(),
-			OS:            os,
-			OSType:        runtime.GOOS,
+			Architecture: runtime.GOARCH, CPUThreads: runtime.NumCPU(),
+			MemoryBytes: info.MemTotal, KernelVersion: k.String(),
+			OS: osName, OSType: runtime.GOOS,
 		},
 	}, nil
 }
 
 func GetSystemIps() (*IpAddresses, error) {
-	var ipAddrs []string
-	ifaceAddrs, err := net.InterfaceAddrs()
+	var out []string
+	ifaces, err := net.InterfaceAddrs()
 	if err != nil {
 		return nil, err
 	}
-	for _, addr := range ifaceAddrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			ipAddrs = append(ipAddrs, ipnet.IP.String())
+	for _, a := range ifaces {
+		if ipn, ok := a.(*net.IPNet); ok && !ipn.IP.IsLoopback() {
+			out = append(out, ipn.IP.String())
 		}
 	}
-	return &IpAddresses{IpAddresses: ipAddrs}, nil
+	return &IpAddresses{IpAddresses: out}, nil
 }
 
-/* ------------------------------------------------------------------ */
-/*  Disk helpers                                                      */
-/* ------------------------------------------------------------------ */
+/* --------------------------- disk helpers ------------------------- */
 
-// getDiskForPath returns the device and mountpoint for a given path.
 func getDiskForPath(path string, parts []disk.PartitionStat) (string, string, error) {
 	var st syscall.Statfs_t
 	if err := syscall.Statfs(path, &st); err != nil {
@@ -207,102 +155,70 @@ func getDiskForPath(path string, parts []disk.PartitionStat) (string, string, er
 	return "", "", nil
 }
 
-/* ------------------------------------------------------------------ */
-/*  Main Utilization collector                                        */
-/* ------------------------------------------------------------------ */
+/* -------------------- main utilization collector ------------------ */
 
 func GetSystemUtilization(root, logs, data, archive, backup, temp string) (*Utilization, error) {
-	// CPU, memory, load averages
-	c, err := cpu.Percent(0, false)
-	if err != nil {
-		return nil, err
-	}
-	vmstat, _ := mem.VirtualMemory()
+	cpuPct, _ := cpu.Percent(0, false)
+	vm, _ := mem.VirtualMemory()
 	swap, _ := mem.SwapMemory()
 	loadavg, _ := load.Avg()
 
-	// Path tags for DiskDetails
-	paths := map[string]string{
-		"Root": root, "Logs": logs, "Data": data,
-		"Archive": archive, "Backup": backup, "Temp": temp,
-	}
+	paths := map[string]string{"Root": root, "Logs": logs, "Data": data,
+		"Archive": archive, "Backup": backup, "Temp": temp}
 
-	partitions, err := disk.Partitions(false) // physical filesystems only
+	parts, err := disk.Partitions(false)
 	if err != nil {
 		return nil, err
 	}
 
-	/* ----------------------------------------------------------------
-	   Disk usage – count each block-device exactly once.
-
-	   gopsutil/disk.Partitions(false) may list multiple mount-points
-	   for the same backing device (e.g. Docker overlay bind mounts).
-	   Summing those individually inflates DiskTotal/DiskUsed.
-
-	   We record the first sighting of every partition.Device and skip
-	   duplicates so each physical disk is counted exactly one time.
+	/* -------- disk usage: dedupe by Device --------------------------
+	   Skip duplicate partition.Device entries so each block device is
+	   counted exactly once (prevents inflated totals from overlay/binds)
 	------------------------------------------------------------------ */
+	seen := make(map[string]struct{})
+	diskMap := make(map[string]*DiskInfo)
+	var diskTotal, diskUsed uint64
 
-	seenDevices := make(map[string]struct{}) // device path → seen
-	diskMap     := make(map[string]*DiskInfo)
-
-	var diskTotal uint64
-	var diskUsed  uint64
-
-	for _, part := range partitions {
-		if _, dup := seenDevices[part.Device]; dup {
-			continue // already counted this block device
+	for _, p := range parts {
+		if _, dup := seen[p.Device]; dup {
+			continue
 		}
-		seenDevices[part.Device] = struct{}{}
-
-		if u, err := disk.Usage(part.Mountpoint); err == nil {
+		seen[p.Device] = struct{}{}
+		if u, err := disk.Usage(p.Mountpoint); err == nil {
 			diskTotal += u.Total
 			diskUsed += u.Used
-
-			diskMap[part.Mountpoint] = &DiskInfo{
-				Device:     part.Device,
-				Mountpoint: part.Mountpoint,
+			diskMap[p.Mountpoint] = &DiskInfo{
+				Device:     p.Device,
+				Mountpoint: p.Mountpoint,
 				TotalSpace: u.Total,
 				UsedSpace:  u.Used,
-				Tags:       []string{},
 			}
 		}
 	}
-	/* ----------------------- end dedupe block ----------------------- */
+	/* --------------------------------------------------------------- */
 
-	// Tag disks (root, logs, data, etc.)
-	for tag, path := range paths {
-		_, mp, err := getDiskForPath(path, partitions)
-		if err == nil && mp != "" {
-			if d, ok := diskMap[mp]; ok {
-				d.Tags = append(d.Tags, tag)
-			}
+	// tag disks
+	for tag, pth := range paths {
+		_, mp, _ := getDiskForPath(pth, parts)
+		if d, ok := diskMap[mp]; ok {
+			d.Tags = append(d.Tags, tag)
 		}
 	}
-
-	details := make([]DiskInfo, 0, len(diskMap))
+	var details []DiskInfo
 	for _, d := range diskMap {
 		details = append(details, *d)
 	}
 
 	return &Utilization{
-		MemoryTotal: vmstat.Total,
-		MemoryUsed:  vmstat.Used,
-		SwapTotal:   swap.Total,
-		SwapUsed:    swap.Used,
-		CpuPercent:  c[0],
-		LoadAvg1:    loadavg.Load1,
-		LoadAvg5:    loadavg.Load5,
-		LoadAvg15:   loadavg.Load15,
-		DiskTotal:   diskTotal,
-		DiskUsed:    diskUsed,
-		DiskDetails: details,
+		MemoryTotal: vm.Total, MemoryUsed: vm.Used,
+		SwapTotal: swap.Total, SwapUsed: swap.Used,
+		CpuPercent: cpuPct[0],
+		LoadAvg1: loadavg.Load1, LoadAvg5: loadavg.Load5, LoadAvg15: loadavg.Load15,
+		DiskTotal: diskTotal, DiskUsed: diskUsed, DiskDetails: details,
 	}, nil
 }
 
-/* ------------------------------------------------------------------ */
-/*  Docker helpers                                                    */
-/* ------------------------------------------------------------------ */
+/* --------------------------- docker helpers ----------------------- */
 
 func GetDockerDiskUsage(ctx context.Context) (*DockerDiskUsage, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
@@ -325,20 +241,16 @@ func GetDockerDiskUsage(ctx context.Context) (*DockerDiskUsage, error) {
 	for _, c := range d.Containers {
 		containerSize += c.SizeRootFs
 	}
-
 	var activeImages int64
 	for _, i := range d.Images {
 		if i.Containers > 0 {
 			activeImages++
 		}
 	}
-
 	return &DockerDiskUsage{
-		ImagesTotal:    len(d.Images),
-		ImagesActive:   activeImages,
-		ImagesSize:     int64(d.LayersSize),
-		ContainersSize: containerSize,
-		BuildCacheSize: buildSize,
+		ImagesTotal: len(d.Images), ImagesActive: activeImages,
+		ImagesSize: int64(d.LayersSize),
+		ContainersSize: containerSize, BuildCacheSize: buildSize,
 	}, nil
 }
 
@@ -348,7 +260,6 @@ func PruneDockerImages(ctx context.Context) (image.PruneReport, error) {
 		return image.PruneReport{}, err
 	}
 	defer cli.Close()
-
 	return cli.ImagesPrune(ctx, filters.Args{})
 }
 
@@ -359,13 +270,13 @@ func GetDockerInfo(ctx context.Context) (types.Version, system.Info, error) {
 	}
 	defer cli.Close()
 
-	version, err := cli.ServerVersion(ctx)
+	v, err := cli.ServerVersion(ctx)
 	if err != nil {
 		return types.Version{}, system.Info{}, err
 	}
-	info, err := cli.Info(ctx)
+	i, err := cli.Info(ctx)
 	if err != nil {
 		return types.Version{}, system.Info{}, err
 	}
-	return version, info, nil
+	return v, i, nil
 }
