@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,12 @@ type diskSpaceLimiter struct {
 	o      sync.Once
 	mu     sync.Mutex
 	server *Server
+}
+
+type FeatureMatchPayload struct {
+	Key     string `json:"key"`
+	Pattern string `json:"pattern"`
+	Line    string `json:"line"`
 }
 
 func newDiskLimiter(s *Server) *diskSpaceLimiter {
@@ -152,6 +159,7 @@ func (s *Server) onConsoleOutput(data []byte) {
 	}
 
 	processConfiguration := s.ProcessConfiguration()
+	EggConfiguration := s.cfg.Egg.Features
 
 	// Make a copy of the data provided since it is by reference, otherwise you'll
 	// potentially introduce a race condition by modifying the value.
@@ -183,6 +191,50 @@ func (s *Server) onConsoleOutput(data []byte) {
 			break
 		}
 	}
+
+	// Check if this Egg has Features configured that we need to listen for.
+	if EggConfiguration != nil {
+		// Check if we should strip ansi color codes.
+		if processConfiguration.Startup.StripAnsi {
+			v = stripAnsiRegex.ReplaceAll(v, []byte(""))
+		}
+
+		// Convert the console output to a string for easier pattern matching.
+		output := string(v)
+
+		outputLower := strings.ToLower(output)
+
+	foundMatch:
+		for key, patterns := range EggConfiguration {
+			for _, pattern := range patterns {
+				patternLower := strings.ToLower(pattern)
+				// Check if the current line contains a defined feature match string.
+				if strings.Contains(outputLower, patternLower) {
+					// Send a WebSocket event to notify the frontend of the match.
+					// This can be used for triggering UI behaviors or user prompts.
+					s.Events().Publish(
+						FeatureMatchEvent,
+						FeatureMatchPayload{
+							Key:     key,
+							Pattern: pattern,
+							Line:    output,
+						},
+					)
+
+					// Log the match internally for debugging or tracing purposes.
+					s.Log().WithFields(log.Fields{
+						"match":   pattern,
+						"key":     key,
+						"against": strconv.QuoteToASCII(output),
+					}).Debug("Feature: detected based on console line output")
+
+					// Break out of both loops — we only want one match trigger per console line.
+					break foundMatch
+				}
+			}
+		}
+	}
+
 
 	// If the command sent to the server is one that should stop the server we will need to
 	// set the server to be in a stopping state, otherwise crash detection will kick in and
