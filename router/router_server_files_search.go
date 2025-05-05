@@ -125,11 +125,7 @@ func getFilesBySearch(c *gin.Context) {
 	// Start the search from the initial directory
 	searchDirectory(s, dir, patternLower, 0, &matchedEntries, &matchedDirectories, c)
 
-	// Return the matched stats (only those that matched the pattern) and directories separately
-	if len(matchedEntries) == 0 && len(matchedDirectories) != 0 {
-		c.JSON(http.StatusOK, gin.H{"message": "No matches found."})
-	} else {
-		// Return all matched files with their stats and the name now included the directory
-		c.JSON(http.StatusOK, matchedEntries)
-	}
+	// Return all matched files with their stats and the name now included the directory
+	c.JSON(http.StatusOK, matchedEntries)
+
 }
