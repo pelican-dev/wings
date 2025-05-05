@@ -75,6 +75,7 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 		server.DELETE("", deleteServer)
 
 		server.GET("/logs", getServerLogs)
+		server.GET("/install-logs", getServerInstallLogs)
 		server.POST("/power", postServerPower)
 		server.POST("/commands", postServerCommands)
 		server.POST("/install", postServerInstall)
