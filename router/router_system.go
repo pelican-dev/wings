@@ -46,6 +46,11 @@ func getSystemInformation(c *gin.Context) {
 
 // Returns list of host machine IP addresses
 func getSystemIps(c *gin.Context) {
+	if len(config.Get().Docker.SystemIps) != 0 {
+		c.JSON(http.StatusOK, system.IpAddresses{IpAddresses: config.Get().Docker.SystemIps})
+		return
+	}
+
 	i, err := system.GetSystemIps()
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
