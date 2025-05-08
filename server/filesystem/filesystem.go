@@ -330,16 +330,8 @@ func (fs *Filesystem) Copy(p string) error {
 	}
 
 	base := info.Name()
-	extension := filepath.Ext(base)
+	extension := fs.Ext(base)
 	baseName := strings.TrimSuffix(base, extension)
-
-	// Ensure that ".tar" is also counted as apart of the file extension.
-	// There might be a better way to handle this for other double file extensions,
-	// but this is a good workaround for now.
-	if strings.HasSuffix(baseName, ".tar") {
-		extension = ".tar" + extension
-		baseName = strings.TrimSuffix(baseName, ".tar")
-	}
 
 	newName, err := fs.findCopySuffix(dirfd, baseName, extension)
 	if err != nil {
@@ -362,6 +354,21 @@ func (fs *Filesystem) Copy(p string) error {
 	}
 	// Return the error from io.Copy.
 	return err
+}
+
+func (fs *Filesystem) Ext(n string) string {
+
+	extension := filepath.Ext(n)
+	baseName := strings.TrimSuffix(n, extension)
+
+	// Ensure that ".tar" is also counted as apart of the file extension.
+	// There might be a better way to handle this for other double file extensions,
+	// but this is a good workaround for now.
+	if strings.HasSuffix(baseName, ".tar") {
+		extension = ".tar" + extension
+		baseName = strings.TrimSuffix(baseName, ".tar")
+	}
+	return extension
 }
 
 // TruncateRootDirectory removes _all_ files and directories from a server's

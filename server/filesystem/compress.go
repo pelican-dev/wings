@@ -41,23 +41,26 @@ func (fs *Filesystem) CompressFiles(dir string, name string, paths []string) (uf
 		return nil, fmt.Errorf("no valid files to compress")
 	}
 
-	dirfd, _, closeFd, err := fs.unixFS.SafePath(dir)
-	defer closeFd()
-	if err != nil {
-		return nil, err
-	}
-
+	d := path.Join(dir, name)
+	extension := ".tar.gz"
 	a := &Archive{Filesystem: fs, BaseDirectory: dir, Files: validPaths}
 	if name == "" {
-		name = fmt.Sprintf("archive-%s.tar.gz", strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", ""))
+		name = fmt.Sprintf("archive-%s%s", strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", ""), extension)
 	} else {
-		name, err = fs.findCopySuffix(dirfd, name, ".tar.gz")
+		dirfd, _, closeFd, err := fs.unixFS.SafePath(d + extension)
+		defer closeFd()
+		if err != nil {
+			return nil, err
+		}
+
+		name, err = fs.findCopySuffix(dirfd, name, extension)
 		if err != nil {
 			return nil, err
 		}
 	}
+	d = path.Join(dir, name)
 
-	f, err := fs.unixFS.OpenFileat(dirfd, name, ufs.O_WRONLY|ufs.O_CREATE, 0o644)
+	f, err := fs.unixFS.OpenFile(d, ufs.O_WRONLY|ufs.O_CREATE, 0o644)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +72,7 @@ func (fs *Filesystem) CompressFiles(dir string, name string, paths []string) (uf
 	}
 
 	if !fs.unixFS.CanFit(cw.BytesWritten()) {
-		_ = fs.unixFS.Remove(path.Join(dir, name))
+		_ = fs.unixFS.Remove(d)
 		return nil, newFilesystemError(ErrCodeDiskSpace, nil)
 	}
 
