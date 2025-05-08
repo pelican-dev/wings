@@ -329,8 +329,9 @@ func (fs *Filesystem) Copy(p string) error {
 		return err
 	}
 
-	baseName := info.Name()
-	extension := fs.Ext(baseName)
+	base := info.Name()
+	extension := fs.Ext(base)
+	baseName := strings.TrimSuffix(base, extension)
 
 	newName, err := fs.findCopySuffix(dirfd, baseName, extension)
 	if err != nil {
