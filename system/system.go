@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"github.com/pelican-dev/wings/config"
 	"net"
 	"runtime"
 	"syscall"
@@ -167,6 +168,10 @@ func GetSystemInformation() (*Information, error) {
 }
 
 func GetSystemIps() (*IpAddresses, error) {
+	if len(config.Get().Docker.SystemIps) != 0 {
+		return &IpAddresses{IpAddresses: config.Get().Docker.SystemIps}, nil
+	}
+
 	var ip_addrs []string
 	iface_addrs, err := net.InterfaceAddrs()
 	if err != nil {
