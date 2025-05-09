@@ -225,7 +225,7 @@ func postServerReinstall(c *gin.Context) {
 // Deletes a server from the wings daemon and dissociate its objects.
 func deleteServer(c *gin.Context) {
 	s := middleware.ExtractServer(c)
-
+	ID := s.ID()
 	// Immediately suspend the server to prevent a user from attempting
 	// to start it while this process is running.
 	s.Config().SetSuspended(true)
@@ -245,6 +245,13 @@ func deleteServer(c *gin.Context) {
 	// Remove any pending remote file downloads for the server.
 	for _, dl := range downloader.ByServer(s.ID()) {
 		dl.Cancel()
+	}
+
+	// Remove the install log from this server
+	filename := filepath.Join(config.Get().System.LogDirectory, "install", ID+".log")
+	err := os.Remove(filename)
+	if err != nil {
+		log.WithFields(log.Fields{"server_id": ID, "error": err}).Warn("failed to remove server install log during deletion process")
 	}
 
 	// Remove all server backups unless config setting is specified
