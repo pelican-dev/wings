@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"sync"
 
 	"github.com/pelican-dev/wings/environment"
@@ -18,6 +19,34 @@ type EggConfiguration struct {
 	// Features is a map of feature identifiers to a list of console output strings
 	// that should trigger a match (e.g., for things like EULA prompts).
 	Features map[string][]string `json:"features"`
+}
+
+func (egg *EggConfiguration) UnmarshalJSON(b []byte) (err error) {
+	var eggConfiguration struct {
+		// The internal UUID of the Egg on the Panel.
+		ID string `json:"id"`
+
+		// Maintains a list of files that are blacklisted for opening/editing/downloading
+		// or basically any type of access on the server by any user. This is NOT the same
+		// as a per-user denylist, this is defined at the Egg level.
+		FileDenylist []string `json:"file_denylist"`
+
+		// Features is a map of feature identifiers to a list of console output strings
+		// that should trigger a match (e.g., for things like EULA prompts).
+		Features map[string][]string `json:"features"`
+	}
+
+	// try unmarshalling first
+	if err := json.Unmarshal(b, &eggConfiguration); err != nil {
+		egg.Features = nil
+	} else {
+		egg.Features = eggConfiguration.Features
+	}
+
+	egg.ID = eggConfiguration.ID
+	egg.FileDenylist = eggConfiguration.FileDenylist
+
+	return nil
 }
 
 type ConfigurationMeta struct {
