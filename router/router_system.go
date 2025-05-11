@@ -56,14 +56,14 @@ func getSystemIps(c *gin.Context) {
 	// Append config defined ips as well
 	for i := range config.Get().Docker.SystemIps {
 		targetIp := config.Get().Docker.SystemIps[i]
-		if !slices.Contains(interfaces, targetIp) {
+		if slices.Contains(interfaces, targetIp) {
 			continue
 		}
 
 		interfaces = append(interfaces, targetIp)
 	}
 
-	c.JSON(http.StatusOK, system.IpAddresses{IpAddresses: interfaces})
+	c.JSON(http.StatusOK, &system.IpAddresses{IpAddresses: interfaces})
 }
 
 // Returns resource utilization info for the system wings is running on.
