@@ -63,6 +63,8 @@ func getSystemIps(c *gin.Context) {
 		interfaces = append(interfaces, targetIp)
 	}
 
+	log.Infof("Found %d IP addresses: %v", len(interfaces), interfaces)
+
 	c.JSON(http.StatusOK, &system.IpAddresses{IpAddresses: interfaces})
 }
 
