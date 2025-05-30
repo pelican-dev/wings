@@ -10,6 +10,7 @@ import (
 
 	"emperror.dev/errors"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/versions"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
@@ -49,7 +50,7 @@ func configure(c *client.Client) {
 // a large number of requests to this endpoint are spawned by Wings, and the
 // standard "encoding/json" shows its performance woes badly even with single
 // containers running.
-func (e *Environment) ContainerInspect(ctx context.Context) (types.ContainerJSON, error) {
+func (e *Environment) ContainerInspect(ctx context.Context) (container.InspectResponse, error) {
 	configure(e.client)
 
 	// Support feature flagging of this functionality so that if something goes
@@ -59,7 +60,7 @@ func (e *Environment) ContainerInspect(ctx context.Context) (types.ContainerJSON
 		return e.client.ContainerInspect(ctx, e.Id)
 	}
 
-	var st types.ContainerJSON
+	var st container.InspectResponse
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/containers/"+e.Id+"/json", nil)
 	if err != nil {
 		return st, errors.WithStack(err)
