@@ -20,6 +20,7 @@ import (
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/internal/models"
+	"github.com/pelican-dev/wings/internal/ufs"
 	"github.com/pelican-dev/wings/router/downloader"
 	"github.com/pelican-dev/wings/router/middleware"
 	"github.com/pelican-dev/wings/router/tokens"
@@ -409,9 +410,15 @@ func postServerCreateDirectory(c *gin.Context) {
 	}
 
 	if err := s.Filesystem().CreateDirectory(data.Name, data.Path); err != nil {
-		if err.Error() == "not a directory" {
+		if errors.Is(err, ufs.ErrNotDirectory) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error": "Part of the path being created is not a directory (ENOTDIR).",
+			})
+			return
+		}
+		if errors.Is(err, os.ErrExist) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"error": "Cannot create directory, name conflicts with an existing file by the same name.",
 			})
 			return
 		}
