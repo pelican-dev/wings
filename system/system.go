@@ -174,7 +174,7 @@ func GetSystemIps() ([]string, error) {
 	}
 	for _, addr := range iface_addrs {
 		ipNet, valid := addr.(*net.IPNet)
-		if valid && !ipNet.IP.IsLoopback() {
+		if valid && !ipNet.IP.IsLoopback() && (len(ipNet.IP) == net.IPv6len && !ipNet.IP.IsLinkLocalUnicast()) {
 			ip_addrs = append(ip_addrs, ipNet.IP.String())
 		}
 	}
