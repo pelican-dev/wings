@@ -202,6 +202,16 @@ func getDiskForPath(path string, partitions []disk.PartitionStat) (string, strin
 	return "", "", nil // No error, but couldn't find the disk
 }
 
+// Gets the system release name.
+func getSystemName() (string, error) {
+	// use osrelease to get release version and ID
+	release, err := osrelease.Read()
+	if err != nil {
+		return "", err
+	}
+	return release["ID"], nil
+}
+
 func GetSystemUtilization(root, logs, data, archive, backup, temp string) (*Utilization, error) {
 	c, err := cpu.Percent(0, false)
 	if err != nil {
@@ -235,6 +245,14 @@ func GetSystemUtilization(root, logs, data, archive, backup, temp string) (*Util
 		return nil, err
 	}
 
+	sysName, err := getSystemName()
+	if err != nil {
+		return nil, err
+	}
+
+	// We are in docker
+	runningInContainer := (sysName == "distroless")
+
 	diskMap := make(map[string]*DiskInfo)
 	seenDevices := make(map[string]bool)
 	var totalDiskSpace uint64
@@ -245,7 +263,7 @@ func GetSystemUtilization(root, logs, data, archive, backup, temp string) (*Util
 		// Skip pseudo or irrelevant filesystems
 		if strings.HasPrefix(partition.Fstype, "tmpfs") ||
 			strings.HasPrefix(partition.Fstype, "devtmpfs") ||
-			strings.HasPrefix(partition.Fstype, "overlay") ||
+			(strings.HasPrefix(partition.Fstype, "overlay") && !runningInContainer) ||
 			strings.HasPrefix(partition.Fstype, "squashfs") ||
 			partition.Fstype == "" {
 			continue
