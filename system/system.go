@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"runtime"
+	"strings"
 	"syscall"
 
 	"github.com/docker/docker/api/types/filters"
@@ -229,35 +230,51 @@ func GetSystemUtilization(root, logs, data, archive, backup, temp string) (*Util
 		"Temp":    temp,
 	}
 
-	// Get all partitions
 	partitions, err := disk.Partitions(false)
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize disk map to store disk info by mountpoint
 	diskMap := make(map[string]*DiskInfo)
+	seenDevices := make(map[string]bool)
 	var totalDiskSpace uint64
 	var usedDiskSpace uint64
 
-	// First, gather all disk usage information
+	// Collect disk usage from valid partitions and avoid overcounting
 	for _, partition := range partitions {
-		d, err := disk.Usage(partition.Mountpoint)
-		if err == nil {
-			totalDiskSpace += d.Total
-			usedDiskSpace += d.Used
+		// Skip pseudo or irrelevant filesystems
+		if strings.HasPrefix(partition.Fstype, "tmpfs") ||
+			strings.HasPrefix(partition.Fstype, "devtmpfs") ||
+			strings.HasPrefix(partition.Fstype, "overlay") ||
+			strings.HasPrefix(partition.Fstype, "squashfs") ||
+			partition.Fstype == "" {
+			continue
+		}
 
-			diskMap[partition.Mountpoint] = &DiskInfo{
-				Device:     partition.Device,
-				Mountpoint: partition.Mountpoint,
-				TotalSpace: d.Total,
-				UsedSpace:  d.Used,
-				Tags:       []string{},
-			}
+		// Avoid counting the same physical device multiple times
+		if _, seen := seenDevices[partition.Device]; seen {
+			continue
+		}
+
+		usage, err := disk.Usage(partition.Mountpoint)
+		if err != nil {
+			continue
+		}
+
+		totalDiskSpace += usage.Total
+		usedDiskSpace += usage.Used
+		seenDevices[partition.Device] = true
+
+		diskMap[partition.Mountpoint] = &DiskInfo{
+			Device:     partition.Device,
+			Mountpoint: partition.Mountpoint,
+			TotalSpace: usage.Total,
+			UsedSpace:  usage.Used,
+			Tags:       []string{},
 		}
 	}
 
-	// Now add tags to the appropriate disks
+	// Add tags to corresponding disks based on paths
 	for tag, path := range paths {
 		_, mountpoint, err := getDiskForPath(path, partitions)
 		if err == nil && mountpoint != "" {
@@ -267,7 +284,7 @@ func GetSystemUtilization(root, logs, data, archive, backup, temp string) (*Util
 		}
 	}
 
-	// Convert map to slice
+	// Convert disk map to slice for return
 	var diskDetails []DiskInfo
 	for _, disk := range diskMap {
 		diskDetails = append(diskDetails, *disk)
