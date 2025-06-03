@@ -166,7 +166,7 @@ func GetSystemInformation() (*Information, error) {
 	}, nil
 }
 
-func GetSystemIps() (*IpAddresses, error) {
+func GetSystemIps() ([]string, error) {
 	var ip_addrs []string
 	iface_addrs, err := net.InterfaceAddrs()
 	if err != nil {
@@ -178,7 +178,7 @@ func GetSystemIps() (*IpAddresses, error) {
 			ip_addrs = append(ip_addrs, ipNet.IP.String())
 		}
 	}
-	return &IpAddresses{IpAddresses: ip_addrs}, nil
+	return ip_addrs, nil
 }
 
 // getDiskForPath finds the mountpoint where the given path is stored
