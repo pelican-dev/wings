@@ -166,13 +166,6 @@ func DetermineServerTimezone(envvars map[string]interface{}, defaultTimezone str
 	return defaultTimezone
 }
 
-// Return the loopback ip address if a server is made with no allocation
-func getIP(ip string) string {
-    if ip != "" {
-        return ip
-    }
-    return "127.0.0.1"
-}
 
 // parseInvocation parses the start command in the same way we already do in the entrypoint
 // We can use this to set the container command with all variables replaced.
@@ -220,9 +213,9 @@ func parseInvocation(invocation string, envvars map[string]interface{}, memory i
 func (s *Server) GetEnvironmentVariables() []string {
 	out := []string{
 		fmt.Sprintf("TZ=%s", DetermineServerTimezone(s.Config().EnvVars, config.Get().System.Timezone)),
-		fmt.Sprintf("STARTUP=%s", parseInvocation(s.Config().Invocation, s.Config().EnvVars, s.MemoryLimit(), s.Config().Allocations.DefaultMapping.Port, getIP(s.Config().Allocations.DefaultMapping.Ip))),
+		fmt.Sprintf("STARTUP=%s", parseInvocation(s.Config().Invocation, s.Config().EnvVars, s.MemoryLimit(), s.Config().Allocations.DefaultMapping.Port, s.Config().Allocations.DefaultMapping.Ip)),
 		fmt.Sprintf("SERVER_MEMORY=%d", s.MemoryLimit()),
-		fmt.Sprintf("SERVER_IP=%s", getIP(s.Config().Allocations.DefaultMapping.Ip)),
+		fmt.Sprintf("SERVER_IP=%s", s.Config().Allocations.DefaultMapping.Ip),
 		fmt.Sprintf("SERVER_PORT=%d", s.Config().Allocations.DefaultMapping.Port),
 	}
 
