@@ -201,7 +201,7 @@ func (e *Environment) Create() error {
 	networkMode := container.NetworkMode(cfg.Docker.Network.Mode)
 	if a.ForceOutgoingIP {
 		// We can't use ForceOutgoingIP if we made a server with no allocation
-		if a.DefaultMapping.Ip != "" {
+		if a.DefaultMapping.Port != 0 {
 			enableIPv6 := false
 			e.log().Debug("environment/docker: forcing outgoing IP address")
 			networkName := "ip-" + strings.ReplaceAll(strings.ReplaceAll(a.DefaultMapping.Ip, ".", "-"), ":", "-")
