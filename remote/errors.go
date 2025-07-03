@@ -62,3 +62,9 @@ type SftpInvalidCredentialsError struct{}
 func (ice SftpInvalidCredentialsError) Error() string {
 	return "the credentials provided were invalid"
 }
+
+type SftpKeyOnlyError struct{}
+
+func (ice SftpKeyOnlyError) Error() string {
+	return "password authentication is disabled; only SSH keys are allowed"
+}

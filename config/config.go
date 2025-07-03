@@ -70,6 +70,8 @@ type SftpConfiguration struct {
 	Port int `default:"2022" json:"bind_port" yaml:"bind_port"`
 	// If set to true, no write actions will be allowed on the SFTP server.
 	ReadOnly bool `default:"false" yaml:"read_only"`
+	// If set to true users won't be able to login using their password.
+	KeyOnly bool `default:"false" yaml:"key_only"`
 }
 
 // ApiConfiguration defines the configuration for the internal API that is
