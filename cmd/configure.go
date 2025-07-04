@@ -110,7 +110,10 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 		})
 	}
 
-	if err := survey.Ask(questions, &configureArgs); err != nil && err != terminal.InterruptErr {
+	if err := survey.Ask(questions, &configureArgs); err != nil {
+		if err == terminal.InterruptErr {
+			return
+		}
 		log.Fatal(err)
 	}
 
