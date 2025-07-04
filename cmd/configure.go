@@ -13,10 +13,10 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/AlecAivazis/survey/v2/terminal"
+	"github.com/charmbracelet/huh"
 	"github.com/goccy/go-json"
-	"github.com/spf13/cobra"
-
 	"github.com/pelican-dev/wings/config"
+	"github.com/spf13/cobra"
 )
 
 var configureArgs struct {
@@ -53,7 +53,10 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 	}
 
 	if _, err := os.Stat(configureArgs.ConfigPath); err == nil && !configureArgs.Override {
-		survey.AskOne(&survey.Confirm{Message: "Override existing configuration file"}, &configureArgs.Override)
+		huh.NewConfirm().
+			Title("Override existing configuration file?").
+			Value(&configureArgs.Override).
+			Run()
 		if !configureArgs.Override {
 			fmt.Println("Aborting process; a configuration file already exists for this node.")
 			os.Exit(1)
@@ -154,7 +157,7 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 	if err := json.Unmarshal(b, cfg); err != nil {
 		panic(err)
 	}
-	
+
 	// Manually specify the Panel URL as it won't be decoded from JSON.
 	cfg.PanelLocation = configureArgs.PanelURL
 
