@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -53,13 +54,15 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 	}
 
 	if _, err := os.Stat(configureArgs.ConfigPath); err == nil && !configureArgs.Override {
-		survey.AskOne(&survey.Confirm{Message: "Override existing configuration file"}, &configureArgs.Override)
+		err := survey.AskOne(&survey.Confirm{Message: "Override existing configuration file"}, &configureArgs.Override)
+		if err != nil && err != terminal.InterruptErr {
+			log.Fatal(err)
+		}
 		if !configureArgs.Override {
-			fmt.Println("Aborting process; a configuration file already exists for this node.")
-			os.Exit(1)
+			log.Fatal("Aborting process; a configuration file already exists for this node.")
 		}
 	} else if err != nil && !os.IsNotExist(err) {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	var questions []*survey.Question
@@ -111,8 +114,7 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 		if err == terminal.InterruptErr {
 			return
 		}
-
-		panic(err)
+		log.Fatal(err)
 	}
 
 	c := &http.Client{
@@ -121,7 +123,7 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 
 	req, err := getRequest()
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	fmt.Printf("%+v", req.Header)
@@ -148,18 +150,18 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 
 	cfg, err := config.NewAtPath(configPath)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	if err := json.Unmarshal(b, cfg); err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
-	
+
 	// Manually specify the Panel URL as it won't be decoded from JSON.
 	cfg.PanelLocation = configureArgs.PanelURL
 
 	if err = config.WriteToDisk(cfg); err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	fmt.Println("Successfully configured wings.")
@@ -168,7 +170,7 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 func getRequest() (*http.Request, error) {
 	u, err := url.Parse(configureArgs.PanelURL)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	u.Path = path.Join(u.Path, fmt.Sprintf("api/application/nodes/%s/configuration", configureArgs.Node))
