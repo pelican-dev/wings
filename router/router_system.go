@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/apex/log"
@@ -46,17 +47,36 @@ func getSystemInformation(c *gin.Context) {
 
 // Returns list of host machine IP addresses
 func getSystemIps(c *gin.Context) {
-	i, err := system.GetSystemIps()
+	interfaces, err := system.GetSystemIps()
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, i)
+
+	// Append config defined ips as well
+	for i := range config.Get().Docker.SystemIps {
+		targetIp := config.Get().Docker.SystemIps[i]
+		if slices.Contains(interfaces, targetIp) {
+			continue
+		}
+
+		interfaces = append(interfaces, targetIp)
+	}
+
+	c.JSON(http.StatusOK, &system.IpAddresses{IpAddresses: interfaces})
 }
 
 // Returns resource utilization info for the system wings is running on.
 func getSystemUtilization(c *gin.Context) {
-	u, err := system.GetSystemUtilization()
+	cfg := config.Get()
+	u, err := system.GetSystemUtilization(
+		cfg.System.RootDirectory,
+		cfg.System.LogDirectory,
+		cfg.System.Data,
+		cfg.System.ArchiveDirectory,
+		cfg.System.BackupDirectory,
+		cfg.System.TmpDirectory,
+	)
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
 		return

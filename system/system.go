@@ -2,11 +2,16 @@ package system
 
 import (
 	"context"
-	"github.com/docker/docker/api/types/filters"
 	"net"
 	"runtime"
+	"strings"
+	"syscall"
+
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 
 	"github.com/acobaugh/osrelease"
+
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
@@ -65,17 +70,26 @@ type IpAddresses struct {
 	IpAddresses []string `json:"ip_addresses"`
 }
 
+type DiskInfo struct {
+	Device     string   `json:"device"`
+	Mountpoint string   `json:"mountpoint"`
+	TotalSpace uint64   `json:"total_space"`
+	UsedSpace  uint64   `json:"used_space"`
+	Tags       []string `json:"tags"`
+}
+
 type Utilization struct {
-	MemoryTotal uint64  `json:"memory_total"`
-	MemoryUsed  uint64  `json:"memory_used"`
-	SwapTotal   uint64  `json:"swap_total"`
-	SwapUsed    uint64  `json:"swap_used"`
-	LoadAvg1    float64 `json:"load_average1"`
-	LoadAvg5    float64 `json:"load_average5"`
-	LoadAvg15   float64 `json:"load_average15"`
-	CpuPercent  float64 `json:"cpu_percent"`
-	DiskTotal   uint64  `json:"disk_total"`
-	DiskUsed    uint64  `json:"disk_used"`
+	MemoryTotal uint64     `json:"memory_total"`
+	MemoryUsed  uint64     `json:"memory_used"`
+	SwapTotal   uint64     `json:"swap_total"`
+	SwapUsed    uint64     `json:"swap_used"`
+	LoadAvg1    float64    `json:"load_average1"`
+	LoadAvg5    float64    `json:"load_average5"`
+	LoadAvg15   float64    `json:"load_average15"`
+	CpuPercent  float64    `json:"cpu_percent"`
+	DiskTotal   uint64     `json:"disk_total"`
+	DiskUsed    uint64     `json:"disk_used"`
+	DiskDetails []DiskInfo `json:"disk_details"`
 }
 
 type DockerDiskUsage struct {
@@ -153,7 +167,7 @@ func GetSystemInformation() (*Information, error) {
 	}, nil
 }
 
-func GetSystemIps() (*IpAddresses, error) {
+func GetSystemIps() ([]string, error) {
 	var ip_addrs []string
 	iface_addrs, err := net.InterfaceAddrs()
 	if err != nil {
@@ -161,14 +175,44 @@ func GetSystemIps() (*IpAddresses, error) {
 	}
 	for _, addr := range iface_addrs {
 		ipNet, valid := addr.(*net.IPNet)
-		if valid && !ipNet.IP.IsLoopback() {
+		if valid && !ipNet.IP.IsLoopback() && (len(ipNet.IP) == net.IPv6len && !ipNet.IP.IsLinkLocalUnicast()) {
 			ip_addrs = append(ip_addrs, ipNet.IP.String())
 		}
 	}
-	return &IpAddresses{IpAddresses: ip_addrs}, nil
+	return ip_addrs, nil
 }
 
-func GetSystemUtilization() (*Utilization, error) {
+// getDiskForPath finds the mountpoint where the given path is stored
+func getDiskForPath(path string, partitions []disk.PartitionStat) (string, string, error) {
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(path, &stat); err != nil {
+		return "", "", err
+	}
+
+	for _, part := range partitions {
+		var pStat syscall.Statfs_t
+		if err := syscall.Statfs(part.Mountpoint, &pStat); err != nil {
+			continue
+		}
+		if stat.Fsid == pStat.Fsid {
+			return part.Device, part.Mountpoint, nil
+		}
+	}
+
+	return "", "", nil // No error, but couldn't find the disk
+}
+
+// Gets the system release name.
+func getSystemName() (string, error) {
+	// use osrelease to get release version and ID
+	release, err := osrelease.Read()
+	if err != nil {
+		return "", err
+	}
+	return release["ID"], nil
+}
+
+func GetSystemUtilization(root, logs, data, archive, backup, temp string) (*Utilization, error) {
 	c, err := cpu.Percent(0, false)
 	if err != nil {
 		return nil, err
@@ -185,9 +229,83 @@ func GetSystemUtilization() (*Utilization, error) {
 	if err != nil {
 		return nil, err
 	}
-	d, err := disk.Usage("/")
+
+	// Define paths to check with their tags
+	paths := map[string]string{
+		"Root":    root,
+		"Logs":    logs,
+		"Data":    data,
+		"Archive": archive,
+		"Backup":  backup,
+		"Temp":    temp,
+	}
+
+	partitions, err := disk.Partitions(false)
 	if err != nil {
 		return nil, err
+	}
+
+	sysName, err := getSystemName()
+	if err != nil {
+		return nil, err
+	}
+
+	// We are in docker
+	runningInContainer := (sysName == "distroless")
+
+	diskMap := make(map[string]*DiskInfo)
+	seenDevices := make(map[string]bool)
+	var totalDiskSpace uint64
+	var usedDiskSpace uint64
+
+	// Collect disk usage from valid partitions and avoid overcounting
+	for _, partition := range partitions {
+		// Skip pseudo or irrelevant filesystems
+		if strings.HasPrefix(partition.Fstype, "tmpfs") ||
+			strings.HasPrefix(partition.Fstype, "devtmpfs") ||
+			(strings.HasPrefix(partition.Fstype, "overlay") && !runningInContainer) ||
+			strings.HasPrefix(partition.Fstype, "squashfs") ||
+			partition.Fstype == "" {
+			continue
+		}
+
+		// Avoid counting the same physical device multiple times
+		if _, seen := seenDevices[partition.Device]; seen {
+			continue
+		}
+
+		usage, err := disk.Usage(partition.Mountpoint)
+		if err != nil {
+			continue
+		}
+
+		totalDiskSpace += usage.Total
+		usedDiskSpace += usage.Used
+		seenDevices[partition.Device] = true
+
+		diskMap[partition.Mountpoint] = &DiskInfo{
+			Device:     partition.Device,
+			Mountpoint: partition.Mountpoint,
+			TotalSpace: usage.Total,
+			UsedSpace:  usage.Used,
+			Tags:       []string{},
+		}
+	}
+
+	// Add tags to corresponding disks based on paths
+	for tag, path := range paths {
+		_, mountpoint, err := getDiskForPath(path, partitions)
+		if err == nil && mountpoint != "" {
+			if disk, exists := diskMap[mountpoint]; exists {
+				disk.Tags = append(disk.Tags, tag)
+			}
+		}
+	}
+
+	// Convert disk map to slice for return
+	var diskDetails []DiskInfo
+	for _, disk := range diskMap {
+		diskDetails = append(diskDetails, *disk)
 	}
 
 	return &Utilization{
@@ -199,8 +317,9 @@ func GetSystemUtilization() (*Utilization, error) {
 		LoadAvg1:    l.Load1,
 		LoadAvg5:    l.Load5,
 		LoadAvg15:   l.Load15,
-		DiskTotal:   d.Total,
-		DiskUsed:    d.Used,
+		DiskTotal:   totalDiskSpace,
+		DiskUsed:    usedDiskSpace,
+		DiskDetails: diskDetails,
 	}, nil
 }
 
@@ -245,17 +364,17 @@ func GetDockerDiskUsage(ctx context.Context) (*DockerDiskUsage, error) {
 	}, nil
 }
 
-func PruneDockerImages(ctx context.Context) (types.ImagesPruneReport, error) {
+func PruneDockerImages(ctx context.Context) (image.PruneReport, error) {
 	// TODO: find a way to re-use the client from the docker environment.
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return types.ImagesPruneReport{}, err
+		return image.PruneReport{}, err
 	}
 	defer c.Close()
 
 	prune, err := c.ImagesPrune(ctx, filters.Args{})
 	if err != nil {
-		return types.ImagesPruneReport{}, err
+		return image.PruneReport{}, err
 	}
 	return prune, nil
 }

@@ -75,6 +75,7 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 		server.DELETE("", deleteServer)
 
 		server.GET("/logs", getServerLogs)
+		server.GET("/install-logs", getServerInstallLogs)
 		server.POST("/power", postServerPower)
 		server.POST("/commands", postServerCommands)
 		server.POST("/install", postServerInstall)
@@ -102,6 +103,7 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 			files.POST("/compress", postServerCompressFiles)
 			files.POST("/decompress", postServerDecompressFiles)
 			files.POST("/chmod", postServerChmodFile)
+			files.GET("/search", getFilesBySearch)
 
 			files.GET("/pull", middleware.RemoteDownloadEnabled(), getServerPullingFiles)
 			files.POST("/pull", middleware.RemoteDownloadEnabled(), postServerPullRemoteFile)

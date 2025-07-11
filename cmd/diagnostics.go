@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	DefaultHastebinUrl = "https://paste.pelistuff.com"
+	DefaultHastebinUrl = "https://logs.pelican.dev"
 	DefaultLogLines    = 200
 )
 

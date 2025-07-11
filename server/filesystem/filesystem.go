@@ -82,6 +82,9 @@ func (fs *Filesystem) File(p string) (ufs.File, Stat, error) {
 		_ = f.Close()
 		return nil, Stat{}, err
 	}
+	if st.IsDir() {
+		return f, Stat{}, errors.New("filesystem: is a directory")
+	}
 	return f, st, nil
 }
 
@@ -272,11 +275,15 @@ func (fs *Filesystem) Chmod(path string, mode ufs.FileMode) error {
 // looping endlessly.
 func (fs *Filesystem) findCopySuffix(dirfd int, name, extension string) (string, error) {
 	var i int
-	suffix := " copy"
+	suffix := ""
 
 	for i = 0; i < 51; i++ {
-		if i > 0 {
-			suffix = " copy " + strconv.Itoa(i)
+		if i == 1 {
+			suffix = " copy"
+		} else if i == 50 {
+			suffix = " copy." + time.Now().Format(time.RFC3339)
+		} else if i > 1 {
+			suffix = " copy " + strconv.Itoa(i-1)
 		}
 
 		n := name + suffix + extension
@@ -287,10 +294,6 @@ func (fs *Filesystem) findCopySuffix(dirfd int, name, extension string) (string,
 				return "", err
 			}
 			break
-		}
-
-		if i == 50 {
-			suffix = "copy." + time.Now().Format(time.RFC3339)
 		}
 	}
 
@@ -327,16 +330,8 @@ func (fs *Filesystem) Copy(p string) error {
 	}
 
 	base := info.Name()
-	extension := filepath.Ext(base)
+	extension := fs.Ext(base)
 	baseName := strings.TrimSuffix(base, extension)
-
-	// Ensure that ".tar" is also counted as apart of the file extension.
-	// There might be a better way to handle this for other double file extensions,
-	// but this is a good workaround for now.
-	if strings.HasSuffix(baseName, ".tar") {
-		extension = ".tar" + extension
-		baseName = strings.TrimSuffix(baseName, ".tar")
-	}
 
 	newName, err := fs.findCopySuffix(dirfd, baseName, extension)
 	if err != nil {
@@ -359,6 +354,21 @@ func (fs *Filesystem) Copy(p string) error {
 	}
 	// Return the error from io.Copy.
 	return err
+}
+
+func (fs *Filesystem) Ext(n string) string {
+
+	extension := filepath.Ext(n)
+	baseName := strings.TrimSuffix(n, extension)
+
+	// Ensure that ".tar" is also counted as apart of the file extension.
+	// There might be a better way to handle this for other double file extensions,
+	// but this is a good workaround for now.
+	if strings.HasSuffix(baseName, ".tar") {
+		extension = ".tar" + extension
+		baseName = strings.TrimSuffix(baseName, ".tar")
+	}
+	return extension
 }
 
 // TruncateRootDirectory removes _all_ files and directories from a server's
@@ -480,9 +490,9 @@ func (fs *Filesystem) ListDirectory(p string) ([]Stat, error) {
 		case a.IsDir() && b.IsDir():
 			return 0
 		case a.IsDir():
-			return 1
-		default:
 			return -1
+		default:
+			return 1
 		}
 	})
 

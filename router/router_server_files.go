@@ -20,6 +20,7 @@ import (
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/internal/models"
+	"github.com/pelican-dev/wings/internal/ufs"
 	"github.com/pelican-dev/wings/router/downloader"
 	"github.com/pelican-dev/wings/router/middleware"
 	"github.com/pelican-dev/wings/router/tokens"
@@ -37,7 +38,18 @@ func getServerFileContents(c *gin.Context) {
 	}
 	f, st, err := s.Filesystem().File(p)
 	if err != nil {
-		middleware.CaptureAndAbort(c, err)
+		if errors.Is(err, os.ErrNotExist) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+				"error":      "The requested resources was not found on the system.",
+				"request_id": c.Writer.Header().Get("X-Request-Id")})
+		} else if strings.Contains(err.Error(), "filesystem: is a directory") {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"error":      "Cannot perform that action: file is a directory.",
+				"request_id": c.Writer.Header().Get("X-Request-Id"),
+			})
+		} else {
+			middleware.CaptureAndAbort(c, err)
+		}
 		return
 	}
 	defer f.Close()
@@ -80,9 +92,16 @@ func getServerFileContents(c *gin.Context) {
 
 // Returns the contents of a directory for a server.
 func getServerListDirectory(c *gin.Context) {
-	s := ExtractServer(c)
+	s := middleware.ExtractServer(c)
 	dir := c.Query("directory")
 	if stats, err := s.Filesystem().ListDirectory(dir); err != nil {
+		// If the error is that the folder does not exist return a 404.
+		if errors.Is(err, os.ErrNotExist) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+				"error": "The requested directory was not found on the server.",
+			})
+			return
+		}
 		middleware.CaptureAndAbort(c, err)
 	} else {
 		c.JSON(http.StatusOK, stats)
@@ -391,9 +410,15 @@ func postServerCreateDirectory(c *gin.Context) {
 	}
 
 	if err := s.Filesystem().CreateDirectory(data.Name, data.Path); err != nil {
-		if err.Error() == "not a directory" {
+		if errors.Is(err, ufs.ErrNotDirectory) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error": "Part of the path being created is not a directory (ENOTDIR).",
+			})
+			return
+		}
+		if errors.Is(err, os.ErrExist) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"error": "Cannot create directory, name conflicts with an existing file by the same name.",
 			})
 			return
 		}
@@ -411,6 +436,7 @@ func postServerCompressFiles(c *gin.Context) {
 	var data struct {
 		RootPath string   `json:"root"`
 		Files    []string `json:"files"`
+		Name     string   `json:"name"`
 	}
 
 	if err := c.BindJSON(&data); err != nil {
@@ -431,7 +457,7 @@ func postServerCompressFiles(c *gin.Context) {
 		return
 	}
 
-	f, err := s.Filesystem().CompressFiles(data.RootPath, data.Files)
+	f, err := s.Filesystem().CompressFiles(data.RootPath, data.Name, data.Files)
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
 		return

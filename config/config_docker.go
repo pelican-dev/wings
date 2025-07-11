@@ -89,6 +89,9 @@ type DockerConfiguration struct {
 	// remapping disabled
 	UsernsMode string `default:"" json:"userns_mode" yaml:"userns_mode"`
 
+	// Sets the IPS that the user is able to bind to
+	SystemIps []string `default:"[]" json:"system_ips" yaml:"system_ips"`
+
 	LogConfig struct {
 		Type   string            `default:"local" json:"type" yaml:"type"`
 		Config map[string]string `default:"{\"max-size\":\"5m\",\"max-file\":\"1\",\"compress\":\"false\",\"mode\":\"non-blocking\"}" json:"config" yaml:"config"`

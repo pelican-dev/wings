@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04]
-        go: ["1.22.7", "1.23.1"]
+        go: ["1.23.7", "1.24.1"]
         goos: [linux]
         goarch: [amd64, arm64]
 
@@ -42,8 +42,8 @@ jobs:
           CGO_ENABLED: 0
           SRC_PATH: github.com/pelican-dev/wings
         run: |
-          go build -v -trimpath -ldflags="-s -w -X ${SRC_PATH}/system.Version=dev-${GIT_COMMIT:0:7}" -o dist/wings ${SRC_PATH}
-          go build -v -trimpath -ldflags="-X ${SRC_PATH}/system.Version=dev-${GIT_COMMIT:0:7}" -o dist/wings_debug ${SRC_PATH}
+          go build -v -trimpath -ldflags="-s -w -X ${SRC_PATH}/system.Version=dev-${GITHUB_SHA:0:7}" -o dist/wings ${SRC_PATH}
+          go build -v -trimpath -ldflags="-X ${SRC_PATH}/system.Version=dev-${GITHUB_SHA:0:7}" -o dist/wings_debug ${SRC_PATH}
           chmod 755 dist/*
 
       - name: go test
@@ -62,14 +62,14 @@ jobs:
 
       - name: Upload Release Artifact
         uses: actions/upload-artifact@v4
-        if: ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && matrix.go == '1.22.7' }}
+        if: ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && matrix.go == '1.23.7' }}
         with:
           name: wings_linux_${{ matrix.goarch }}
           path: dist/wings
 
       - name: Upload Debug Artifact
         uses: actions/upload-artifact@v4
-        if: ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && matrix.go == '1.22.7' }}
+        if: ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && matrix.go == '1.23.7' }}
         with:
           name: wings_linux_${{ matrix.goarch }}_debug
           path: dist/wings_debug

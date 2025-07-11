@@ -2,10 +2,13 @@ package router
 
 import (
 	"context"
-	"github.com/pelican-dev/wings/config"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
+
+	"github.com/pelican-dev/wings/config"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
@@ -25,7 +28,7 @@ func getServer(c *gin.Context) {
 
 // Returns the logs for a given server instance.
 func getServerLogs(c *gin.Context) {
-	s := ExtractServer(c)
+	s := middleware.ExtractServer(c)
 
 	l, _ := strconv.Atoi(c.DefaultQuery("size", "100"))
 	if l <= 0 {
@@ -42,6 +45,36 @@ func getServerLogs(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"data": out})
 }
+
+// getServerInstallLogs reads the installation log file for a server and returns
+// the portion of the file after the "Script Output" section header.
+// If the header is not found, it returns the entire file content.
+// If the file cannot be read, it returns an error response.
+func getServerInstallLogs(c *gin.Context) {
+	s := middleware.ExtractServer(c)
+	ID := s.ID()
+
+	filename := filepath.Join(config.Get().System.LogDirectory, "install", ID+".log")
+
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read the log for the installation process."})
+		return
+	}
+
+	// Try to find the script output section
+	parts := strings.SplitN(string(content), "| Script Output\n| ------------------------------\n", 2)
+	var output string
+	if len(parts) == 2 {
+		output = parts[1]
+	} else {
+		// If header not found, return full file
+		output = string(content)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": output})
+}
+
 
 // Handles a request to control the power state of a server. If the action being passed
 // through is invalid a 404 is returned. Otherwise, a HTTP/202 Accepted response is returned
@@ -192,7 +225,7 @@ func postServerReinstall(c *gin.Context) {
 // Deletes a server from the wings daemon and dissociate its objects.
 func deleteServer(c *gin.Context) {
 	s := middleware.ExtractServer(c)
-
+	ID := s.ID()
 	// Immediately suspend the server to prevent a user from attempting
 	// to start it while this process is running.
 	s.Config().SetSuspended(true)
@@ -212,6 +245,13 @@ func deleteServer(c *gin.Context) {
 	// Remove any pending remote file downloads for the server.
 	for _, dl := range downloader.ByServer(s.ID()) {
 		dl.Cancel()
+	}
+
+	// Remove the install log from this server
+	filename := filepath.Join(config.Get().System.LogDirectory, "install", ID+".log")
+	err := os.Remove(filename)
+	if err != nil {
+		log.WithFields(log.Fields{"server_id": ID, "error": err}).Warn("failed to remove server install log during deletion process")
 	}
 
 	// Remove all server backups unless config setting is specified

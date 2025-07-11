@@ -12,12 +12,11 @@ import (
 	"emperror.dev/errors"
 	"github.com/apex/log"
 	"github.com/buger/jsonparser"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	dockerImage "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	dockerImage "github.com/docker/docker/api/types/image" // Alias the correct images package
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
@@ -156,11 +155,15 @@ func (e *Environment) Create() error {
 	cfg := config.Get()
 	a := e.Configuration.Allocations()
 	evs := e.Configuration.EnvironmentVariables()
-	for i, v := range evs {
-		// Convert 127.0.0.1 to the pelican0 network interface if the environment is Docker
-		// so that the server operates as expected.
-		if v == "SERVER_IP=127.0.0.1" {
-			evs[i] = "SERVER_IP=" + cfg.Docker.Network.Interface
+
+	// If port is 0 then we have a server with no allocation and this should stay 127.0.0.1 and not the docker network interface ip.
+	if a.DefaultMapping.Port != 0 {
+		for i, v := range evs {
+			// Convert 127.0.0.1 to the pelican0 network interface if the environment is Docker
+			// so that the server operates as expected.
+			if v == "SERVER_IP=127.0.0.1" {
+				evs[i] = "SERVER_IP=" + cfg.Docker.Network.Interface
+			}
 		}
 	}
 
@@ -197,31 +200,36 @@ func (e *Environment) Create() error {
 
 	networkMode := container.NetworkMode(cfg.Docker.Network.Mode)
 	if a.ForceOutgoingIP {
-		enableIPv6 := false // define a bool variable
-		e.log().Debug("environment/docker: forcing outgoing IP address")
-		networkName := "ip-" + strings.ReplaceAll(strings.ReplaceAll(a.DefaultMapping.Ip, ".", "-"), ":", "-")
-		networkMode = container.NetworkMode(networkName)
+		// We can't use ForceOutgoingIP if we made a server with no allocation
+		if a.DefaultMapping.Port != 0 {
+			enableIPv6 := false
+			e.log().Debug("environment/docker: forcing outgoing IP address")
+			networkName := "ip-" + strings.ReplaceAll(strings.ReplaceAll(a.DefaultMapping.Ip, ".", "-"), ":", "-")
+			networkMode = container.NetworkMode(networkName)
 
-		if _, err := e.client.NetworkInspect(ctx, networkName, types.NetworkInspectOptions{}); err != nil {
-			if !client.IsErrNotFound(err) {
-				return err
-			}
+			if _, err := e.client.NetworkInspect(ctx, networkName, network.InspectOptions{}); err != nil {
+				if !client.IsErrNotFound(err) {
+					return err
+				}
 
-			if _, err := e.client.NetworkCreate(ctx, networkName, types.NetworkCreate{
-				Driver:     "bridge",
-				EnableIPv6: &enableIPv6,
-				Internal:   false,
-				Attachable: false,
-				Ingress:    false,
-				ConfigOnly: false,
-				Options: map[string]string{
-					"encryption": "false",
-					"com.docker.network.bridge.default_bridge": "false",
-					"com.docker.network.host_ipv4":             a.DefaultMapping.Ip,
-				},
-			}); err != nil {
-				return err
+				if _, err := e.client.NetworkCreate(ctx, networkName, network.CreateOptions{
+					Driver:     "bridge",
+					EnableIPv6: &enableIPv6,
+					Internal:   false,
+					Attachable: false,
+					Ingress:    false,
+					ConfigOnly: false,
+					Options: map[string]string{
+						"encryption": "false",
+						"com.docker.network.bridge.default_bridge": "false",
+						"com.docker.network.host_ipv4":             a.DefaultMapping.Ip,
+					},
+				}); err != nil {
+					return err
+				}
 			}
+		} else {
+			e.log().Warn("environment/docker: Cannot force outgoing IP - server has no allocation")
 		}
 	}
 
@@ -459,16 +467,15 @@ func (e *Environment) ensureImageExists(image string) error {
 }
 
 func (e *Environment) convertMounts() []mount.Mount {
-	var out []mount.Mount
-
-	for _, m := range e.Configuration.Mounts() {
-		out = append(out, mount.Mount{
+	mounts := e.Configuration.Mounts()
+	out := make([]mount.Mount, len(mounts))
+	for i, m := range mounts {
+		out[i] = mount.Mount{
 			Type:     mount.TypeBind,
 			Source:   m.Source,
 			Target:   m.Target,
 			ReadOnly: m.ReadOnly,
-		})
+		}
 	}
-
 	return out
 }
