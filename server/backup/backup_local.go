@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"github.com/apex/log"
 	"io"
 	"os"
 	"path/filepath"
@@ -107,7 +108,12 @@ func (b *LocalBackup) Restore(ctx context.Context, _ io.Reader, callback Restore
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			log.WithError(err).Error("failed to close local backup file")
+		}
+	}(f)
 
 	var reader io.Reader = f
 	// Steal the logic we use for making backups which will be applied when restoring

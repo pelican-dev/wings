@@ -666,7 +666,12 @@ func EnableLogRotation() error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			log.WithError(err).Error("failed to close logrotate file")
+		}
+	}(f)
 
 	t, err := template.New("logrotate").Parse(`{{.LogDirectory}}/wings.log {
     size 10M

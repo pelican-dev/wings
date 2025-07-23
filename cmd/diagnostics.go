@@ -19,11 +19,11 @@ import (
 	"github.com/AlecAivazis/survey/v2/terminal"
 	"github.com/apex/log"
 	"github.com/docker/docker/api/types"
+	dockerSystem "github.com/docker/docker/api/types/system" // Alias the correct system package
 	"github.com/docker/docker/pkg/parsers/kernel"
 	"github.com/docker/docker/pkg/parsers/operatingsystem"
 	"github.com/goccy/go-json"
 	"github.com/spf13/cobra"
-	dockerSystem "github.com/docker/docker/api/types/system" // Alias the correct system package
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
@@ -97,89 +97,344 @@ func diagnosticsCmdRun(*cobra.Command, []string) {
 	dockerVersion, dockerInfo, dockerErr := getDockerInfo()
 
 	output := &strings.Builder{}
-	fmt.Fprintln(output, "Pelican Wings - Diagnostics Report")
-	printHeader(output, "Versions")
-	fmt.Fprintln(output, "               Wings:", system.Version)
-	if dockerErr == nil {
-		fmt.Fprintln(output, "              Docker:", dockerVersion.Version)
+	type diagnosticField struct {
+		name   string
+		format string
+		args   []any
 	}
-	if v, err := kernel.GetKernelVersion(); err == nil {
-		fmt.Fprintln(output, "              Kernel:", v)
+	diagnosticFields := []diagnosticField{
+		{
+			name:   "title",
+			format: "Pelican Wings - Diagnostics Report",
+		},
+		{
+			name:   "versions header",
+			format: printHeader("Versions"),
+		},
+		{
+			name:   "wings version",
+			format: "               Wings: %v",
+			args:   []any{system.Version},
+		},
+		{
+			name:   "docker version",
+			format: "              Docker: %v",
+			args: []any{
+				func() string {
+					version := "unknown"
+					if dockerErr != nil {
+						log.WithError(dockerErr).Warn("failed to get docker version")
+					} else {
+						version = dockerVersion.Version
+					}
+					return version
+				}(),
+			},
+		},
+		{
+			name:   "kernel version",
+			format: "              Kernel: %v",
+			args: []any{
+				func() string {
+					version := "unknown"
+					kernelver, err := kernel.GetKernelVersion()
+					if err != nil {
+						log.WithError(err).Warn("failed to get kernel version")
+					} else {
+						version = fmt.Sprint(kernelver)
+					}
+					return version
+				}(),
+			},
+		},
+		{
+			name:   "operating system",
+			format: "                  OS: %v",
+			args: []any{
+				func() string {
+					os, err := operatingsystem.GetOperatingSystem()
+					if err != nil {
+						log.WithError(err).Warn("failed to get operating system")
+						os = "unknown"
+					}
+					return os
+				}(),
+			},
+		},
 	}
-	if os, err := operatingsystem.GetOperatingSystem(); err == nil {
-		fmt.Fprintln(output, "                  OS:", os)
-	}
-
-	printHeader(output, "Wings Configuration")
-	if err := config.FromFile(config.DefaultLocation); err != nil {
+	diagnosticFields = append(diagnosticFields, diagnosticField{
+		name:   "wings configuration header",
+		format: printHeader("Wings Configuration"),
+	})
+	err := config.FromFile(config.DefaultLocation)
+	if err != nil {
+		log.WithError(err).Warn("failed to load configuration so configuration information will not be included in the report")
+		diagnosticFields = append(diagnosticFields, diagnosticField{
+			name:   "wings configuration",
+			format: "Failed to load configuration",
+		},
+		)
 	}
 	cfg := config.Get()
-	fmt.Fprintln(output, "      Panel Location:", redact(cfg.PanelLocation))
-	fmt.Fprintln(output, "")
-	fmt.Fprintln(output, "  Internal Webserver:", redact(cfg.Api.Host), ":", cfg.Api.Port)
-	fmt.Fprintln(output, "         SSL Enabled:", cfg.Api.Ssl.Enabled)
-	fmt.Fprintln(output, "     SSL Certificate:", redact(cfg.Api.Ssl.CertificateFile))
-	fmt.Fprintln(output, "             SSL Key:", redact(cfg.Api.Ssl.KeyFile))
-	fmt.Fprintln(output, "")
-	fmt.Fprintln(output, "         SFTP Server:", redact(cfg.System.Sftp.Address), ":", cfg.System.Sftp.Port)
-	fmt.Fprintln(output, "      SFTP Read-Only:", cfg.System.Sftp.ReadOnly)
-	fmt.Fprintln(output, "")
-	fmt.Fprintln(output, "      Root Directory:", cfg.System.RootDirectory)
-	fmt.Fprintln(output, "      Logs Directory:", cfg.System.LogDirectory)
-	fmt.Fprintln(output, "      Data Directory:", cfg.System.Data)
-	fmt.Fprintln(output, "   Archive Directory:", cfg.System.ArchiveDirectory)
-	fmt.Fprintln(output, "    Backup Directory:", cfg.System.BackupDirectory)
-	fmt.Fprintln(output, "")
-	fmt.Fprintln(output, "            Username:", cfg.System.Username)
-	fmt.Fprintln(output, "         Server Time:", time.Now().Format(time.RFC1123Z))
-	fmt.Fprintln(output, "          Debug Mode:", cfg.Debug)
+	if err == nil {
+		diagnosticFields = append(diagnosticFields, []diagnosticField{
+			{
+				name:   "wings configuration header",
+				format: printHeader("Wings Configuration"),
+			},
+			{
+				name:   "panel location",
+				format: "      Panel Location: %v\n",
+				args: []any{
+					redact(cfg.PanelLocation),
+				},
+			},
+			{
+				name:   "internal webserver",
+				format: "  Internal Webserver: %v : %v",
+				args: []any{
+					redact(cfg.Api.Host),
+					cfg.Api.Port,
+				},
+			},
+			{
+				name:   "ssl enabled",
+				format: "         SSL Enabled: %v",
+				args: []any{
+					cfg.Api.Ssl.Enabled,
+				},
+			},
+			{
+				name:   "ssl certificate",
+				format: "     SSL Certificate: %v",
+				args: []any{
+					redact(cfg.Api.Ssl.CertificateFile),
+				},
+			},
+			{
+				name:   "ssl key",
+				format: "             SSL Key: %v\n",
+				args: []any{
+					redact(cfg.Api.Ssl.KeyFile),
+				},
+			},
+			{
+				name:   "sftp server",
+				format: "         SFTP Server: %v : %v",
+				args: []any{
+					redact(cfg.System.Sftp.Address),
+					cfg.System.Sftp.Port,
+				},
+			},
+			{
+				name:   "sftp read-only",
+				format: "      SFTP Read-Only: %v\n",
+				args: []any{
+					cfg.System.Sftp.ReadOnly,
+				},
+			},
+			{
+				name:   "root directory",
+				format: "      Root Directory: %v",
+				args: []any{
+					cfg.System.RootDirectory,
+				},
+			},
+			{
+				name:   "logs directory",
+				format: "      Logs Directory: %v",
+				args: []any{
+					cfg.System.LogDirectory,
+				},
+			},
+			{
+				name:   "data directory",
+				format: "      Data Directory: %v",
+				args: []any{
+					cfg.System.Data,
+				},
+			},
+			{
+				name:   "archive directory",
+				format: "   Archive Directory: %v",
+				args: []any{
+					cfg.System.ArchiveDirectory,
+				},
+			},
+			{
+				name:   "backup directory",
+				format: "    Backup Directory: %v\n",
+				args: []any{
+					cfg.System.BackupDirectory,
+				},
+			},
+			{
+				name:   "username",
+				format: "            Username: %v",
+				args: []any{
+					cfg.System.Username,
+				},
+			},
+			{
+				name:   "debug mode",
+				format: "          Debug Mode: %v",
+				args: []any{
+					cfg.Debug,
+				},
+			},
+		}...)
+	}
+	diagnosticFields = append(diagnosticFields, []diagnosticField{
+		{
+			name:   "server time",
+			format: "         Server Time: %v",
+			args: []any{
+				time.Now().Format(time.RFC1123Z),
+			},
+		},
+		{
+			name:   "docker info header",
+			format: printHeader("Docker: Info"),
+		},
+	}...)
 
-	printHeader(output, "Docker: Info")
-	if dockerErr == nil {
-		fmt.Fprintln(output, "Server Version:", dockerInfo.ServerVersion)
-		fmt.Fprintln(output, "Storage Driver:", dockerInfo.Driver)
+	if dockerErr != nil {
+		log.WithError(dockerErr).Warn("failed to get docker info, so docker information will not be included in the report")
+		diagnosticFields = append(diagnosticFields, diagnosticField{
+			name:   "docker info",
+			format: "Failed to get docker info due to error %v",
+			args: []any{
+				dockerErr,
+			},
+		})
+	} else {
+		diagnosticFields = append(diagnosticFields, []diagnosticField{
+			{
+				name:   "docker server version",
+				format: "Server Version: %v",
+				args: []any{
+					dockerInfo.ServerVersion,
+				},
+			},
+			{
+				name:   "docker storage driver",
+				format: "Storage Driver: %v",
+				args: []any{
+					dockerInfo.Driver,
+				},
+			},
+		}...)
 		if dockerInfo.DriverStatus != nil {
 			for _, pair := range dockerInfo.DriverStatus {
-				fmt.Fprintf(output, "  %s: %s\n", pair[0], pair[1])
+				diagnosticFields = append(diagnosticFields, diagnosticField{
+					name:   "docker driver status",
+					format: "  %v: %v",
+					args: []any{
+						pair[0],
+						pair[1],
+					},
+				})
 			}
 		}
 		if dockerInfo.SystemStatus != nil {
 			for _, pair := range dockerInfo.SystemStatus {
-				fmt.Fprintf(output, " %s: %s\n", pair[0], pair[1])
+				diagnosticFields = append(diagnosticFields, diagnosticField{
+					name:   "docker driver status",
+					format: "  %v: %v",
+					args: []any{
+						pair[0],
+						pair[1],
+					},
+				})
 			}
 		}
-		fmt.Fprintln(output, "LoggingDriver:", dockerInfo.LoggingDriver)
-		fmt.Fprintln(output, " CgroupDriver:", dockerInfo.CgroupDriver)
+		diagnosticFields = append(diagnosticFields, []diagnosticField{
+			{
+				name:   "docker LoggingDriver",
+				format: "LoggingDriver: %v",
+				args: []any{
+					dockerInfo.LoggingDriver,
+				},
+			},
+			{
+				name:   "docker CgroupDriver",
+				format: " CgroupDriver: %v",
+				args: []any{
+					dockerInfo.CgroupDriver,
+				},
+			},
+		}...)
 		if len(dockerInfo.Warnings) > 0 {
 			for _, w := range dockerInfo.Warnings {
-				fmt.Fprintln(output, w)
+				diagnosticFields = append(diagnosticFields, diagnosticField{
+					name:   "docker warning",
+					format: "%v",
+					args: []any{
+						w,
+					},
+				})
 			}
 		}
-	} else {
-		fmt.Fprintln(output, dockerErr.Error())
 	}
 
-	printHeader(output, "Docker: Running Containers")
+	diagnosticFields = append(diagnosticFields, diagnosticField{
+		name:   "docker running containers header",
+		format: printHeader("Docker: Running Containers"),
+	})
 	c := exec.Command("docker", "ps")
 	if co, err := c.Output(); err == nil {
-		output.Write(co)
+		diagnosticFields = append(diagnosticFields, diagnosticField{
+			name:   "docker running containers",
+			format: "%v",
+			args: []any{
+				string(co),
+			},
+		})
 	} else {
-		fmt.Fprint(output, "Couldn't list containers: ", err)
+		diagnosticFields = append(diagnosticFields, diagnosticField{
+			name:   "docker running containers",
+			format: "Couldn't list containers: %v",
+			args: []any{
+				err,
+			},
+		})
 	}
 
-	printHeader(output, "Latest Wings Logs")
+	diagnosticFields = append(diagnosticFields, diagnosticField{
+		name:   "latest wings logs header",
+		format: printHeader("Latest Wings Logs"),
+	})
 	if diagnosticsArgs.IncludeLogs {
 		p := "/var/log/pelican/wings.log"
 		if cfg != nil {
 			p = path.Join(cfg.System.LogDirectory, "wings.log")
 		}
 		if c, err := exec.Command("tail", "-n", strconv.Itoa(diagnosticsArgs.LogLines), p).Output(); err != nil {
-			fmt.Fprintln(output, "No logs found or an error occurred.")
+			diagnosticFields = append(diagnosticFields, diagnosticField{
+				name:   "no logs",
+				format: "No logs found or an error occurred.",
+			})
 		} else {
-			fmt.Fprintf(output, "%s\n", string(c))
+			diagnosticFields = append(diagnosticFields, diagnosticField{
+				name:   "logs",
+				format: "%v",
+				args: []any{
+					string(c),
+				},
+			})
 		}
 	} else {
-		fmt.Fprintln(output, "Logs redacted.")
+		diagnosticFields = append(diagnosticFields, diagnosticField{
+			name:   "logs redacted",
+			format: "Logs redacted.",
+		})
+	}
+
+	for _, f := range diagnosticFields {
+		_, err := fmt.Fprintf(output, f.format+"\n", f.args...)
+		if err != nil {
+			log.WithError(err).Warnf("failed to write diagnostic field '%v'", f.name)
+		}
 	}
 
 	if !diagnosticsArgs.IncludeEndpoints {
@@ -264,7 +519,9 @@ func redact(s string) string {
 	return s
 }
 
-func printHeader(w io.Writer, title string) {
-	fmt.Fprintln(w, "\n|\n|", title)
-	fmt.Fprintln(w, "| ------------------------------")
+func printHeader(title string) string {
+	output := ""
+	output += fmt.Sprintln("\n|\n|", title)
+	output += fmt.Sprint("| ------------------------------")
+	return output
 }

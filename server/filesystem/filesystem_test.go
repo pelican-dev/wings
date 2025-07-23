@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	. "github.com/franela/goblin"
@@ -17,7 +18,7 @@ import (
 	"github.com/pelican-dev/wings/config"
 )
 
-func NewFs() (*Filesystem, *rootFs) {
+func NewFs() (*Filesystem, *RootFs) {
 	config.Set(&config.Configuration{
 		AuthenticationToken: "abc",
 		System: config.SystemConfiguration{
@@ -32,7 +33,7 @@ func NewFs() (*Filesystem, *rootFs) {
 		return nil, nil
 	}
 
-	rfs := rootFs{root: tmpDir}
+	rfs := RootFs{root: tmpDir}
 
 	p := filepath.Join(tmpDir, "server")
 	if err := os.Mkdir(p, 0o755); err != nil {
@@ -50,7 +51,7 @@ func NewFs() (*Filesystem, *rootFs) {
 	return fs, &rfs
 }
 
-type rootFs struct {
+type RootFs struct {
 	root string
 }
 
@@ -62,7 +63,7 @@ func getFileContent(file ufs.File) string {
 	return w.String()
 }
 
-func (rfs *rootFs) CreateServerFile(p string, c []byte) error {
+func (rfs *RootFs) CreateServerFile(p string, c []byte) error {
 	f, err := os.Create(filepath.Join(rfs.root, "server", p))
 
 	if err == nil {
@@ -73,11 +74,11 @@ func (rfs *rootFs) CreateServerFile(p string, c []byte) error {
 	return err
 }
 
-func (rfs *rootFs) CreateServerFileFromString(p string, c string) error {
+func (rfs *RootFs) CreateServerFileFromString(p string, c string) error {
 	return rfs.CreateServerFile(p, []byte(c))
 }
 
-func (rfs *rootFs) StatServerFile(p string) (os.FileInfo, error) {
+func (rfs *RootFs) StatServerFile(p string) (os.FileInfo, error) {
 	return os.Stat(filepath.Join(rfs.root, "server", p))
 }
 
@@ -114,7 +115,10 @@ func TestFilesystem_Openfile(t *testing.T) {
 func TestFilesystem_Writefile(t *testing.T) {
 	g := Goblin(t)
 	fs, _ := NewFs()
-
+	closeFileWithErrorChecking := func(f ufs.File, g *G) {
+		err := f.Close()
+		g.Assert(err).IsNil()
+	}
 	g.Describe("Open and WriteFile", func() {
 		buf := &bytes.Buffer{}
 
@@ -130,7 +134,7 @@ func TestFilesystem_Writefile(t *testing.T) {
 
 			f, _, err := fs.File("test.txt")
 			g.Assert(err).IsNil()
-			defer f.Close()
+			defer closeFileWithErrorChecking(f, g)
 			g.Assert(getFileContent(f)).Equal("test file content")
 			g.Assert(fs.CachedUsage()).Equal(r.Size())
 		})
@@ -143,7 +147,7 @@ func TestFilesystem_Writefile(t *testing.T) {
 
 			f, _, err := fs.File("/some/nested/test.txt")
 			g.Assert(err).IsNil()
-			defer f.Close()
+			defer closeFileWithErrorChecking(f, g)
 			g.Assert(getFileContent(f)).Equal("test file content")
 		})
 
@@ -155,7 +159,7 @@ func TestFilesystem_Writefile(t *testing.T) {
 
 			f, _, err := fs.File("foo/bar/test.txt")
 			g.Assert(err).IsNil()
-			defer f.Close()
+			defer closeFileWithErrorChecking(f, g)
 			g.Assert(getFileContent(f)).Equal("test file content")
 		})
 
@@ -171,7 +175,8 @@ func TestFilesystem_Writefile(t *testing.T) {
 			fs.SetDiskLimit(1024)
 
 			b := make([]byte, 1025)
-			_, err := rand.Read(b)
+			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+			_, err := rng.Read(b)
 			g.Assert(err).IsNil()
 			g.Assert(len(b)).Equal(1025)
 
@@ -192,7 +197,7 @@ func TestFilesystem_Writefile(t *testing.T) {
 
 			f, _, err := fs.File("test.txt")
 			g.Assert(err).IsNil()
-			defer f.Close()
+			defer closeFileWithErrorChecking(f, g)
 			g.Assert(getFileContent(f)).Equal("new data")
 		})
 
@@ -556,7 +561,7 @@ func TestFilesystem_Delete(t *testing.T) {
 			err = os.Symlink(filepath.Join(rfs.root, "source.txt"), filepath.Join(rfs.root, "/server/symlink.txt"))
 			g.Assert(err).IsNil()
 
-			// Delete the symlink. (This should pass as we will delete the symlink itself, not it's target)
+			// Delete the symlink. (This should pass as we will delete the symlink itself, not its target)
 			err = fs.Delete("symlink.txt")
 			g.Assert(err).IsNil()
 

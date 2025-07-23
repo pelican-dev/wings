@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"github.com/apex/log"
 	"io"
 	"math"
 	"time"
@@ -44,7 +45,12 @@ func (e *Environment) pollResources(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer stats.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.WithError(err).Error("failed to close Docker container stats body")
+		}
+	}(stats.Body)
 
 	uptime, err := e.Uptime(ctx)
 	if err != nil {

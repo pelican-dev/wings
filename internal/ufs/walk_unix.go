@@ -9,6 +9,7 @@ package ufs
 import (
 	"bytes"
 	"fmt"
+	"github.com/apex/log"
 	iofs "io/fs"
 	"os"
 	"path"
@@ -45,7 +46,12 @@ func (fs *UnixFS) walkDir(b []byte, parentfd int, name, relative string, d DirEn
 
 	dirfd, err := fs.openat(parentfd, name, O_DIRECTORY|O_RDONLY, 0)
 	if dirfd != 0 {
-		defer unix.Close(dirfd)
+		defer func(fd int) {
+			err := unix.Close(fd)
+			if err != nil {
+				log.WithError(err).Error("failed to close directory")
+			}
+		}(dirfd)
 	}
 	if err != nil {
 		return err
@@ -101,7 +107,12 @@ func ReadDirMap[T any](fs *UnixFS, path string, fn func(DirEntry) (T, error)) ([
 	if err != nil {
 		return nil, err
 	}
-	defer unix.Close(fd)
+	defer func(fd int) {
+		err := unix.Close(fd)
+		if err != nil {
+			log.WithError(err).Error("failed to close directory")
+		}
+	}(fd)
 
 	entries, err := fs.readDir(fd, ".", path, nil)
 	if err != nil {
