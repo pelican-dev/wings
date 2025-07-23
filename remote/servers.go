@@ -3,6 +3,7 @@ package remote
 import (
 	"context"
 	"fmt"
+	"github.com/pelican-dev/wings/utils"
 	"strconv"
 	"sync"
 
@@ -74,7 +75,7 @@ func (c *client) GetServerConfiguration(ctx context.Context, uuid string) (Serve
 	if err != nil {
 		return config, err
 	}
-	defer res.Body.Close()
+	defer utils.CloseResponseBodyWithErrorHandling(res.Body)
 
 	err = res.BindJSON(&config)
 	return config, err
@@ -85,7 +86,7 @@ func (c *client) GetInstallationScript(ctx context.Context, uuid string) (Instal
 	if err != nil {
 		return InstallationScript{}, err
 	}
-	defer res.Body.Close()
+	defer utils.CloseResponseBodyWithErrorHandling(res.Body)
 
 	var config InstallationScript
 	err = res.BindJSON(&config)
@@ -138,7 +139,7 @@ func (c *client) ValidateSftpCredentials(ctx context.Context, request SftpAuthRe
 		}
 		return auth, err
 	}
-	defer res.Body.Close()
+	defer utils.CloseResponseBodyWithErrorHandling(res.Body)
 
 	if err := res.BindJSON(&auth); err != nil {
 		return auth, err
@@ -152,7 +153,7 @@ func (c *client) GetBackupRemoteUploadURLs(ctx context.Context, backup string, s
 	if err != nil {
 		return data, err
 	}
-	defer res.Body.Close()
+	defer utils.CloseResponseBodyWithErrorHandling(res.Body)
 	if err := res.BindJSON(&data); err != nil {
 		return data, err
 	}
@@ -205,7 +206,7 @@ func (c *client) getServersPaged(ctx context.Context, page, limit int) ([]RawSer
 	if err != nil {
 		return nil, r.Meta, err
 	}
-	defer res.Body.Close()
+	defer utils.CloseResponseBodyWithErrorHandling(res.Body)
 	if err := res.BindJSON(&r); err != nil {
 		return nil, r.Meta, err
 	}

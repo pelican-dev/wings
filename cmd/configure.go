@@ -3,6 +3,7 @@ package cmd
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/pelican-dev/wings/utils"
 	"io"
 	"log"
 	"net/http"
@@ -134,7 +135,7 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 		fmt.Println("Failed to fetch configuration from the panel.\n", err.Error())
 		os.Exit(1)
 	}
-	defer res.Body.Close()
+	defer utils.CloseResponseBodyWithErrorHandling(res.Body)
 
 	if res.StatusCode == http.StatusForbidden || res.StatusCode == http.StatusUnauthorized {
 		fmt.Println("The authentication credentials provided were not valid.")

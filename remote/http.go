@@ -154,7 +154,12 @@ func (c *client) request(ctx context.Context, method, path string, body *bytes.B
 		res = r
 		if r.HasError() {
 			// Close the request body after returning the error to free up resources.
-			defer r.Body.Close()
+			defer func(Body io.ReadCloser) {
+				err := Body.Close()
+				if err != nil {
+					log.WithError(err).Error("http: failed to close response body")
+				}
+			}(r.Body)
 			// Don't keep attempting to access this endpoint if the response is a 4XX
 			// level error which indicates a client mistake. Only retry when the error
 			// is due to a server issue (5XX error).

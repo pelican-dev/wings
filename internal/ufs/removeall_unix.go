@@ -12,6 +12,7 @@ package ufs
 
 import (
 	"errors"
+	"github.com/apex/log"
 	"io"
 	"os"
 
@@ -59,7 +60,12 @@ func removeAll(fs unixFS, path string) error {
 		// If parent does not exist, base cannot exist. Fail silently
 		return nil
 	}
-	defer parent.Close()
+	defer func(parent File) {
+		err := parent.Close()
+		if err != nil {
+			log.WithError(err).Error("failed to close parent")
+		}
+	}(parent)
 
 	if err := removeAllFrom(fs, parent, base); err != nil {
 		if pathErr, ok := err.(*PathError); ok {
@@ -96,7 +102,12 @@ func removeContents(fs unixFS, path string) error {
 		// If parent does not exist, base cannot exist. Fail silently
 		return nil
 	}
-	defer parent.Close()
+	defer func(parent File) {
+		err := parent.Close()
+		if err != nil {
+			log.WithError(err).Error("failed to close parent")
+		}
+	}(parent)
 
 	if err := removeContentsFrom(fs, parent, base); err != nil {
 		if pathErr, ok := err.(*PathError); ok {

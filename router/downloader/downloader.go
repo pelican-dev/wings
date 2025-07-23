@@ -3,6 +3,7 @@ package downloader
 import (
 	"context"
 	"fmt"
+	"github.com/pelican-dev/wings/utils"
 	"io"
 	"mime"
 	"net"
@@ -194,7 +195,7 @@ func (dl *Download) Execute() error {
 	if err != nil {
 		return ErrDownloadFailed
 	}
-	defer res.Body.Close()
+	defer utils.CloseResponseBodyWithErrorHandling(res.Body)
 	if res.StatusCode != http.StatusOK {
 		return errors.New("downloader: got bad response status from endpoint: " + res.Status)
 	}

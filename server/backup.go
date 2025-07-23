@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/pelican-dev/wings/internal/ufs"
 	"io"
 	"io/fs"
 	"os"
@@ -42,7 +43,12 @@ func (s *Server) getServerwideIgnoredFiles() (string, error) {
 		}
 		return "", err
 	}
-	defer f.Close()
+	defer func(f ufs.File) {
+		err := f.Close()
+		if err != nil {
+			log.WithError(err).Error("failed to close .pelicanignore file")
+		}
+	}(f)
 	if st.Mode()&os.ModeSymlink != 0 || st.Size() > 32*1024 {
 		// Don't read a symlinked ignore file, or a file larger than 32KiB in size.
 		return "", nil
@@ -152,7 +158,12 @@ func (s *Server) RestoreBackup(b backup.BackupInterface, reader io.ReadCloser) (
 	// in the file one at a time and writing them to the disk.
 	s.Log().Debug("starting file writing process for backup restoration")
 	err = b.Restore(s.Context(), reader, func(file string, info fs.FileInfo, r io.ReadCloser) error {
-		defer r.Close()
+		defer func(r io.ReadCloser) {
+			err := r.Close()
+			if err != nil {
+				log.WithError(err).Error("failed to close restore callback reader")
+			}
+		}(r)
 		s.Events().Publish(DaemonMessageEvent, "(restoring): "+file)
 		// TODO: since this will be called a lot, it may be worth adding an optimized
 		// Write with Chtimes method to the UnixFS that is able to re-use the

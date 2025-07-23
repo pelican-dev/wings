@@ -3,7 +3,9 @@ package backup
 import (
 	"context"
 	"fmt"
+	"github.com/apex/log"
 	"io"
+	iofs "io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -51,7 +53,12 @@ func (s *S3Backup) WithLogContext(c map[string]interface{}) {
 // Generate creates a new backup on the disk, moves it into the S3 bucket via
 // the provided presigned URL, and then deletes the backup from the disk.
 func (s *S3Backup) Generate(ctx context.Context, fsys *filesystem.Filesystem, ignore string) (*ArchiveDetails, error) {
-	defer s.Remove()
+	defer func(s *S3Backup) {
+		err := s.Remove()
+		if err != nil {
+			log.WithError(err).WithField("path", s.Path()).Error("failed to remove backup from disk")
+		}
+	}(s)
 
 	a := &filesystem.Archive{
 		Filesystem: fsys,
@@ -74,7 +81,12 @@ func (s *S3Backup) Generate(ctx context.Context, fsys *filesystem.Filesystem, ig
 	if err != nil {
 		return nil, errors.Wrap(err, "backup: could not read archive from disk")
 	}
-	defer rc.Close()
+	defer func(rc *os.File) {
+		err := rc.Close()
+		if err != nil {
+			log.WithError(err).Error("failed to close backup file")
+		}
+	}(rc)
 
 	parts, err := s.generateRemoteRequest(ctx, rc)
 	if err != nil {
@@ -106,7 +118,12 @@ func (s *S3Backup) Restore(ctx context.Context, r io.Reader, callback RestoreCal
 		if err != nil {
 			return err
 		}
-		defer r.Close()
+		defer func(r iofs.File) {
+			err := r.Close()
+			if err != nil {
+				log.WithError(err).Error("failed to close file during restore")
+			}
+		}(r)
 
 		return callback(f.NameInArchive, f.FileInfo, r)
 	}); err != nil {
@@ -117,7 +134,12 @@ func (s *S3Backup) Restore(ctx context.Context, r io.Reader, callback RestoreCal
 
 // Generates the remote S3 request and begins the upload.
 func (s *S3Backup) generateRemoteRequest(ctx context.Context, rc io.ReadCloser) ([]remote.BackupPart, error) {
-	defer rc.Close()
+	defer func(rc io.ReadCloser) {
+		err := rc.Close()
+		if err != nil {
+			log.WithError(err).Error("failed to close local backup")
+		}
+	}(rc)
 
 	s.log().Debug("attempting to get size of backup...")
 	size, err := s.Backup.Size()
