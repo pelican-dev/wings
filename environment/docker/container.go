@@ -336,7 +336,12 @@ func (e *Environment) Readlog(lines int) ([]string, error) {
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	defer r.Close()
+	defer func(r io.ReadCloser) {
+		err := r.Close()
+		if err != nil {
+			log.WithError(err).Error("failed to close container logs reader")
+		}
+	}(r)
 
 	var out []string
 	scanner := bufio.NewScanner(r)
@@ -423,7 +428,12 @@ func (e *Environment) ensureImageExists(image string) error {
 
 		return errors.Wrapf(err, "environment/docker: failed to pull \"%s\" image for server", image)
 	}
-	defer out.Close()
+	defer func(out io.ReadCloser) {
+		err := out.Close()
+		if err != nil {
+			log.WithError(err).Error("failed to close image pull reader")
+		}
+	}(out)
 
 	log.WithField("image", image).Debug("pulling docker image... this could take a bit of time")
 

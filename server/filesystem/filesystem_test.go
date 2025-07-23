@@ -115,7 +115,10 @@ func TestFilesystem_Openfile(t *testing.T) {
 func TestFilesystem_Writefile(t *testing.T) {
 	g := Goblin(t)
 	fs, _ := NewFs()
-
+	closeFileWithErrorChecking := func(f ufs.File, g *G) {
+		err := f.Close()
+		g.Assert(err).IsNil()
+	}
 	g.Describe("Open and WriteFile", func() {
 		buf := &bytes.Buffer{}
 
@@ -131,7 +134,7 @@ func TestFilesystem_Writefile(t *testing.T) {
 
 			f, _, err := fs.File("test.txt")
 			g.Assert(err).IsNil()
-			defer f.Close()
+			defer closeFileWithErrorChecking(f, g)
 			g.Assert(getFileContent(f)).Equal("test file content")
 			g.Assert(fs.CachedUsage()).Equal(r.Size())
 		})
@@ -144,7 +147,7 @@ func TestFilesystem_Writefile(t *testing.T) {
 
 			f, _, err := fs.File("/some/nested/test.txt")
 			g.Assert(err).IsNil()
-			defer f.Close()
+			defer closeFileWithErrorChecking(f, g)
 			g.Assert(getFileContent(f)).Equal("test file content")
 		})
 
@@ -156,7 +159,7 @@ func TestFilesystem_Writefile(t *testing.T) {
 
 			f, _, err := fs.File("foo/bar/test.txt")
 			g.Assert(err).IsNil()
-			defer f.Close()
+			defer closeFileWithErrorChecking(f, g)
 			g.Assert(getFileContent(f)).Equal("test file content")
 		})
 
@@ -194,7 +197,7 @@ func TestFilesystem_Writefile(t *testing.T) {
 
 			f, _, err := fs.File("test.txt")
 			g.Assert(err).IsNil()
-			defer f.Close()
+			defer closeFileWithErrorChecking(f, g)
 			g.Assert(getFileContent(f)).Equal("new data")
 		})
 
@@ -558,7 +561,7 @@ func TestFilesystem_Delete(t *testing.T) {
 			err = os.Symlink(filepath.Join(rfs.root, "source.txt"), filepath.Join(rfs.root, "/server/symlink.txt"))
 			g.Assert(err).IsNil()
 
-			// Delete the symlink. (This should pass as we will delete the symlink itself, not it's target)
+			// Delete the symlink. (This should pass as we will delete the symlink itself, not its target)
 			err = fs.Delete("symlink.txt")
 			g.Assert(err).IsNil()
 
