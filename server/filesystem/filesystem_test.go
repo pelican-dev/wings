@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	. "github.com/franela/goblin"
@@ -171,7 +172,8 @@ func TestFilesystem_Writefile(t *testing.T) {
 			fs.SetDiskLimit(1024)
 
 			b := make([]byte, 1025)
-			_, err := rand.Read(b)
+			rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+			_, err := rng.Read(b)
 			g.Assert(err).IsNil()
 			g.Assert(len(b)).Equal(1025)
 
