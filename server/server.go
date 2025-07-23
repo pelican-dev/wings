@@ -75,9 +75,6 @@ type Server struct {
 	wsBagLocker sync.Mutex
 
 	sinks map[system.SinkName]*system.SinkPool
-
-	logSink     *system.SinkPool
-	installSink *system.SinkPool
 }
 
 // New returns a new server instance with a context and all of the default
@@ -165,7 +162,6 @@ func DetermineServerTimezone(envvars map[string]interface{}, defaultTimezone str
 	// Return the defaultTimezone if SERVER_TIMEZONE is not set, empty, or invalid
 	return defaultTimezone
 }
-
 
 // parseInvocation parses the start command in the same way we already do in the entrypoint
 // We can use this to set the container command with all variables replaced.
