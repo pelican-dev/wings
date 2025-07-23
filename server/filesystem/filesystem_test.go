@@ -18,7 +18,7 @@ import (
 	"github.com/pelican-dev/wings/config"
 )
 
-func NewFs() (*Filesystem, *rootFs) {
+func NewFs() (*Filesystem, *RootFs) {
 	config.Set(&config.Configuration{
 		AuthenticationToken: "abc",
 		System: config.SystemConfiguration{
@@ -33,7 +33,7 @@ func NewFs() (*Filesystem, *rootFs) {
 		return nil, nil
 	}
 
-	rfs := rootFs{root: tmpDir}
+	rfs := RootFs{root: tmpDir}
 
 	p := filepath.Join(tmpDir, "server")
 	if err := os.Mkdir(p, 0o755); err != nil {
@@ -51,7 +51,7 @@ func NewFs() (*Filesystem, *rootFs) {
 	return fs, &rfs
 }
 
-type rootFs struct {
+type RootFs struct {
 	root string
 }
 
@@ -63,7 +63,7 @@ func getFileContent(file ufs.File) string {
 	return w.String()
 }
 
-func (rfs *rootFs) CreateServerFile(p string, c []byte) error {
+func (rfs *RootFs) CreateServerFile(p string, c []byte) error {
 	f, err := os.Create(filepath.Join(rfs.root, "server", p))
 
 	if err == nil {
@@ -74,11 +74,11 @@ func (rfs *rootFs) CreateServerFile(p string, c []byte) error {
 	return err
 }
 
-func (rfs *rootFs) CreateServerFileFromString(p string, c string) error {
+func (rfs *RootFs) CreateServerFileFromString(p string, c string) error {
 	return rfs.CreateServerFile(p, []byte(c))
 }
 
-func (rfs *rootFs) StatServerFile(p string) (os.FileInfo, error) {
+func (rfs *RootFs) StatServerFile(p string) (os.FileInfo, error) {
 	return os.Stat(filepath.Join(rfs.root, "server", p))
 }
 
