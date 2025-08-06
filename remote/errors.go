@@ -16,6 +16,7 @@ type RequestError struct {
 	Code     string `json:"code"`
 	Status   string `json:"status"`
 	Detail   string `json:"detail"`
+	Body     string `json:"-"` // Raw response body for debugging
 }
 
 // IsRequestError checks if the given error is of the RequestError type.
@@ -49,7 +50,14 @@ func (re *RequestError) Error() string {
 		c = re.response.StatusCode
 	}
 
-	return fmt.Sprintf("Error response from Panel: %s: %s (HTTP/%d)", re.Code, re.Detail, c)
+	errorMsg := fmt.Sprintf("Error response from Panel: %s: %s (HTTP/%d)", re.Code, re.Detail, c)
+	
+	// Include response body if available for debugging
+	if re.Body != "" {
+		errorMsg += fmt.Sprintf(" [Response Body: %s]", re.Body)
+	}
+	
+	return errorMsg
 }
 
 // StatusCode returns the status code of the response.

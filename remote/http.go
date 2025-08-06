@@ -119,6 +119,14 @@ func (c *client) requestOnce(ctx context.Context, method, path string, body io.R
 	debugLogRequest(req)
 
 	res, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	bodyBytes, _ := io.ReadAll(res.Body)
+	res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	debugLogResponse(res, bodyBytes)
+
 	return &Response{res}, err
 }
 
@@ -265,16 +273,24 @@ func (r *Response) Error() error {
 		return nil
 	}
 
+	// Read the response body to include in error message
+	bodyBytes, _ := r.Read()
+	bodyStr := string(bodyBytes)
+
 	var errs RequestErrors
 	_ = r.BindJSON(&errs)
 
 	e := &RequestError{
 		Code:   "_MissingResponseCode",
 		Status: strconv.Itoa(r.StatusCode),
-		Detail: "No error response returned from API endpoint.",
+		Detail: fmt.Sprintf("No error response returned from API endpoint. Response body: %s", bodyStr),
+		Body:   bodyStr,
 	}
 	if len(errs.Errors) > 0 {
 		e = &errs.Errors[0]
+		// Include the full response body in the detail for debugging
+		e.Detail = fmt.Sprintf("%s (Full response: %s)", e.Detail, bodyStr)
+		e.Body = bodyStr
 	}
 
 	e.response = r.Response
@@ -303,4 +319,23 @@ func debugLogRequest(req *http.Request) {
 		"endpoint": req.URL.String(),
 		"headers":  headers,
 	}).Debug("making request to external HTTP endpoint")
+}
+
+// debugLogResponse logs the response details including status and body for debugging.
+func debugLogResponse(res *http.Response, body []byte) {
+	if l, ok := log.Log.(*log.Logger); ok && l.Level != log.DebugLevel {
+		return
+	}
+
+	// Truncate body if it's too long for logging
+	bodyStr := string(body)
+	if len(bodyStr) > 1000 {
+		bodyStr = bodyStr[:1000] + "... (truncated)"
+	}
+
+	log.WithFields(log.Fields{
+		"status_code": res.StatusCode,
+		"status":      res.Status,
+		"body":        bodyStr,
+	}).Debug("received response from external HTTP endpoint")
 }
