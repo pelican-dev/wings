@@ -366,8 +366,10 @@ func (r ResticBackup) create(ctx context.Context, info ResticCommand) (*exec.Cmd
 
 	r.log().Debugf("Created restic command with args: %s", strings.Join(args, " "))
 
-	cmd := exec.Command("restic", args...)
-	cmd.Env = append(os.Environ(), "RESTIC_PASSWORD="+details.Password)
+	cmd := exec.Command("/restic", args...)
+	if details.Password != "" {
+		cmd.Env = append(env, "RESTIC_PASSWORD="+details.Password)
+	}
 
 	return cmd, nil
 }

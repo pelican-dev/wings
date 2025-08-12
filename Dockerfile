@@ -20,8 +20,8 @@ RUN go install github.com/restic/restic/cmd/restic@latest
 RUN echo "ID=\"distroless\"" > /etc/os-release
 
 # Stage 2 (Final)
-FROM gcr.io/distroless/static:nonroot
-COPY --from=builder /go/bin/restic /usr/bin/restic
+FROM gcr.io/distroless/static:latest
+COPY --from=builder /go/bin/restic /restic
 COPY --from=builder /etc/os-release /etc/os-release
 
 COPY --from=builder /app/wings /usr/bin/
