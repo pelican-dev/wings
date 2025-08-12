@@ -11,12 +11,10 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/AlecAivazis/survey/v2"
-	"github.com/AlecAivazis/survey/v2/terminal"
+	"github.com/charmbracelet/huh"
 	"github.com/goccy/go-json"
-	"github.com/spf13/cobra"
-
 	"github.com/pelican-dev/wings/config"
+	"github.com/spf13/cobra"
 )
 
 var configureArgs struct {
@@ -53,7 +51,10 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 	}
 
 	if _, err := os.Stat(configureArgs.ConfigPath); err == nil && !configureArgs.Override {
-		survey.AskOne(&survey.Confirm{Message: "Override existing configuration file"}, &configureArgs.Override)
+		huh.NewConfirm().
+			Title("Override existing configuration file?").
+			Value(&configureArgs.Override).
+			Run()
 		if !configureArgs.Override {
 			fmt.Println("Aborting process; a configuration file already exists for this node.")
 			os.Exit(1)
@@ -61,54 +62,45 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 	} else if err != nil && !os.IsNotExist(err) {
 		panic(err)
 	}
-
-	var questions []*survey.Question
+	var fields []huh.Field
 	if configureArgs.PanelURL == "" {
-		questions = append(questions, &survey.Question{
-			Name:   "PanelURL",
-			Prompt: &survey.Input{Message: "Panel URL: "},
-			Validate: func(ans interface{}) error {
-				if str, ok := ans.(string); ok {
-					_, err := url.ParseRequestURI(str)
-					return err
-				}
-				return nil
-			},
-		})
+		fields = append(fields, huh.NewInput().
+			Title("Panel URL: ").
+			Validate(func(str string) error {
+				_, err := url.ParseRequestURI(str)
+				return err
+			}).
+			Value(&configureArgs.PanelURL),
+		)
 	}
 
 	if configureArgs.Token == "" {
-		questions = append(questions, &survey.Question{
-			Name:   "Token",
-			Prompt: &survey.Input{Message: "API Token: "},
-			Validate: func(ans interface{}) error {
-				if str, ok := ans.(string); ok {
-					if len(str) == 0 {
-						return fmt.Errorf("please provide a valid authentication token")
-					}
+		fields = append(fields, huh.NewInput().
+			Title("API Token: ").
+			Validate(func(str string) error {
+				if len(str) == 0 {
+					return fmt.Errorf("please provide a valid authentication token")
 				}
 				return nil
-			},
-		})
+			}).
+			Value(&configureArgs.Token),
+		)
 	}
 
 	if configureArgs.Node == "" {
-		questions = append(questions, &survey.Question{
-			Name:   "Node",
-			Prompt: &survey.Input{Message: "Node ID: "},
-			Validate: func(ans interface{}) error {
-				if str, ok := ans.(string); ok {
-					if !nodeIdRegex.Match([]byte(str)) {
-						return fmt.Errorf("please provide a valid authentication token")
-					}
+		fields = append(fields, huh.NewInput().
+			Title("Node ID: ").
+			Validate(func(str string) error {
+				if !nodeIdRegex.Match([]byte(str)) {
+					return fmt.Errorf("please providde a valid node ID")
 				}
 				return nil
-			},
-		})
+			}).
+			Value(&configureArgs.Node),
+		)
 	}
-
-	if err := survey.Ask(questions, &configureArgs); err != nil {
-		if err == terminal.InterruptErr {
+	if err := huh.NewForm(huh.NewGroup(fields...)).Run(); err != nil {
+		if err == huh.ErrUserAborted {
 			return
 		}
 
@@ -154,7 +146,7 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 	if err := json.Unmarshal(b, cfg); err != nil {
 		panic(err)
 	}
-	
+
 	// Manually specify the Panel URL as it won't be decoded from JSON.
 	cfg.PanelLocation = configureArgs.PanelURL
 
