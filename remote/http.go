@@ -123,7 +123,11 @@ func (c *client) requestOnce(ctx context.Context, method, path string, body io.R
 		return nil, err
 	}
 
-	bodyBytes, _ := io.ReadAll(res.Body)
+	bodyBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		log.WithError(err).Warn("failed to read response body for debugging")
+		bodyBytes = []byte{}
+	}
 	res.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	debugLogResponse(res, bodyBytes)
 
