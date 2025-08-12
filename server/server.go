@@ -166,7 +166,6 @@ func DetermineServerTimezone(envvars map[string]interface{}, defaultTimezone str
 	return defaultTimezone
 }
 
-
 // parseInvocation parses the start command in the same way we already do in the entrypoint
 // We can use this to set the container command with all variables replaced.
 func parseInvocation(invocation string, envvars map[string]interface{}, memory int64, port int, ip string) (parsed string) {
@@ -435,6 +434,7 @@ func (s *Server) ToAPIResponse() APIResponse {
 	}
 }
 
+// RemoveAllServerBackups TODO-IThundxr: Abstract this so it can support restic backups as well
 func (s *Server) RemoveAllServerBackups() error {
 	sp := path.Join(config.Get().System.BackupDirectory, s.ID())
 	// This should never be possible, but we'll check it anyway.

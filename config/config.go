@@ -245,7 +245,7 @@ type Backups struct {
 	// backup drivers as the archiver must first write the file to the disk in order to
 	// upload it to any external storage provider.
 	//
-	// If the value is less than 1, the write speed is unlimited,
+	// If the value is 0, the write speed is unlimited,
 	// if the value is greater than 0, the write speed is the value in MiB/s.
 	//
 	// Defaults to 0 (unlimited)

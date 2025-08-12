@@ -2,18 +2,18 @@ package backup
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"strconv"
 	"strings"
 
 	"emperror.dev/errors"
-	"github.com/apex/log"
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 	"github.com/pelican-dev/wings/config"
@@ -43,6 +43,16 @@ func NewRestic(client remote.Client, uuid string, suuid string, ignore string) *
 	}
 }
 
+// WithLogContext attaches additional context to the log output for this backup.
+func (r ResticBackup) WithLogContext(c map[string]interface{}) {
+	r.logContext = c
+
+	// Add the restic snapshotId to the log context if we know what it is
+	if r.SnapshotId != "unknown" {
+		r.logContext["snapshotId"] = r.SnapshotId
+	}
+}
+
 // LocateRestic finds the backup for a server and returns the restic info. This
 // will obviously only work if the backup was created as a restic backup.
 func LocateRestic(ctx context.Context, client remote.Client, uuid string, suuid string) (*ResticBackup, error) {
@@ -56,23 +66,17 @@ func LocateRestic(ctx context.Context, client remote.Client, uuid string, suuid 
 			"--tag", uuid,
 		},
 	}
-	cmd, err := r.create(ctx, command)
+	cmd, err := r.createCmd(ctx, command)
 	if err != nil {
-		return nil, errors.WrapIf(err, "backup: failed to create restic snapshots command")
+		return nil, errors.WrapIf(err, "backup: failed to createCmd restic snapshots command")
 	}
 
-	log.Infof("started restic snapshots command: %s", cmd.String())
+	r.log().Infof("started restic snapshots command: %s", cmd.String())
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("restic snapshots failed: %w, stderr: %s", err, stderr.String())
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("restic snapshots failed: %w, output: %s", err, output)
 	}
-
-	log.Debugf("restic stdout: %s", stdout.String())
-	log.Debugf("restic stderr: %s", stderr.String())
 
 	var snapshots []struct {
 		ID      string `json:"id"`
@@ -80,8 +84,8 @@ func LocateRestic(ctx context.Context, client remote.Client, uuid string, suuid 
 			TotalBytesProcessed int64 `json:"total_bytes_processed"`
 		} `json:"summary"`
 	}
-	if err := json.Unmarshal(stdout.Bytes(), &snapshots); err != nil {
-		log.Errorf("failed to parse restic output: %v", err)
+	if err := json.Unmarshal(output, &snapshots); err != nil {
+		r.log().Errorf("failed to parse restic output: %v", err)
 	}
 
 	if len(snapshots) == 0 {
@@ -91,12 +95,9 @@ func LocateRestic(ctx context.Context, client remote.Client, uuid string, suuid 
 	r.SnapshotId = snapshots[0].ID
 	r.SnapshotSizeBytes = snapshots[0].Summary.TotalBytesProcessed
 
-	return r, nil
-}
+	r.log().Debugf("Found restic snapshot for backup: id=%s, size=%d bytes", r.SnapshotId, r.SnapshotSizeBytes)
 
-// WithLogContext attaches additional context to the log output for this backup.
-func (r ResticBackup) WithLogContext(c map[string]interface{}) {
-	r.logContext = c
+	return r, nil
 }
 
 func (r ResticBackup) Generate(ctx context.Context, filesystem *filesystem.Filesystem, ignore string) (*ArchiveDetails, error) {
@@ -121,9 +122,9 @@ func (r ResticBackup) Generate(ctx context.Context, filesystem *filesystem.Files
 		OutputJson:     true,
 		Args:           args,
 	}
-	cmd, err := r.create(ctx, command)
+	cmd, err := r.createCmd(ctx, command)
 	if err != nil {
-		return nil, errors.WrapIf(err, "backup: failed to create restic backup command")
+		return nil, errors.WrapIf(err, "backup: failed to createCmd restic backup command")
 	}
 
 	stdout, err := cmd.StdoutPipe()
@@ -163,10 +164,6 @@ func (r ResticBackup) Generate(ctx context.Context, filesystem *filesystem.Files
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading restic output: %w", err)
-	}
-
 	errOutput, _ := io.ReadAll(stderr)
 	if err := cmd.Wait(); err != nil {
 		return nil, fmt.Errorf(
@@ -192,8 +189,8 @@ func (r ResticBackup) ResticRestore(ctx context.Context, path string) error {
 	r.log().Debugf("Restoring to filesystem: %s", path)
 
 	command := ResticCommand{
-		Command:        "forget",
-		PositionalArgs: []string{r.SnapshotId},
+		Command:        "restore",
+		PositionalArgs: []string{r.restorePath()},
 		OutputJson:     true,
 		NoLock:         true,
 		Args: []string{
@@ -201,9 +198,9 @@ func (r ResticBackup) ResticRestore(ctx context.Context, path string) error {
 			"--limit-download", strconv.Itoa(config.Get().System.Backups.WriteLimit * 1024 * 1024),
 		},
 	}
-	cmd, err := r.create(ctx, command)
+	cmd, err := r.createCmd(ctx, command)
 	if err != nil {
-		return errors.WrapIf(err, "backup: failed to create restic restore command")
+		return errors.WrapIf(err, "backup: failed to createCmd restic restore command")
 	}
 
 	stderr, err := cmd.StderrPipe()
@@ -238,9 +235,9 @@ func (r ResticBackup) Remove(ctx context.Context) error {
 			"--prune",
 		},
 	}
-	cmd, err := r.create(ctx, command)
+	cmd, err := r.createCmd(ctx, command)
 	if err != nil {
-		return errors.WrapIf(err, "backup: failed to create restic forget command")
+		return errors.WrapIf(err, "backup: failed to createCmd restic forget command")
 	}
 
 	stderr, err := cmd.StderrPipe()
@@ -268,13 +265,13 @@ func (r ResticBackup) Remove(ctx context.Context) error {
 func (r ResticBackup) Download(c *gin.Context) error {
 	command := ResticCommand{
 		Command:        "dump",
-		PositionalArgs: []string{r.SnapshotId + ":" + config.Get().System.Data + "/" + r.ServerUuid, "/"},
+		PositionalArgs: []string{r.restorePath(), "/"},
 		NoLock:         true,
 		Args:           []string{"--archive", "tar"},
 	}
-	cmd, err := r.create(c, command)
+	cmd, err := r.createCmd(c, command)
 	if err != nil {
-		return errors.WrapIf(err, "backup: failed to create restic dump command")
+		return errors.WrapIf(err, "backup: failed to createCmd restic dump command")
 	}
 
 	stdout, err := cmd.StdoutPipe()
@@ -291,13 +288,6 @@ func (r ResticBackup) Download(c *gin.Context) error {
 	}
 	r.log().Infof("started restic dump command: %s", cmd.String())
 
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			log.Debugf("restic dump stderr: %s", scanner.Text())
-		}
-	}()
-
 	c.Header("Content-Type", "application/gzip")
 	c.Header("Content-Disposition", `attachment; filename="snapshot-`+r.SnapshotId+`.tar.gz"`)
 
@@ -308,18 +298,19 @@ func (r ResticBackup) Download(c *gin.Context) error {
 		return errors.WrapIf(err, "backup: failed to stream gzip compressed dump output")
 	}
 
-	if err := gz.Close(); err != nil {
-		return errors.WrapIf(err, "backup: failed to close gzip writer")
-	}
-
+	errOutput, _ := io.ReadAll(stderr)
 	if err := cmd.Wait(); err != nil {
-		return errors.WrapIf(err, "backup: restic dump command failed")
+		return fmt.Errorf(
+			"restic dump failed: %v, stderr: %s",
+			err,
+			strings.TrimSpace(string(errOutput)),
+		)
 	}
 
 	return nil
 }
 
-func (r ResticBackup) create(ctx context.Context, info ResticCommand) (*exec.Cmd, error) {
+func (r ResticBackup) createCmd(ctx context.Context, info ResticCommand) (*exec.Cmd, error) {
 	r.log().Debug("Fetching restic details")
 	details, err := r.client.GetResticDetails(ctx, r.Backup.Uuid)
 	if err != nil {
@@ -329,7 +320,7 @@ func (r ResticBackup) create(ctx context.Context, info ResticCommand) (*exec.Cmd
 
 	var env []string
 	var s3SpecificArgs []string
-	repo := func() string {
+	repo, err := func() (string, error) {
 		if details.UseS3 {
 			s3 := details.S3Details
 
@@ -339,12 +330,23 @@ func (r ResticBackup) create(ctx context.Context, info ResticCommand) (*exec.Cmd
 			env = append(env, "AWS_ACCESS_KEY_ID="+s3.AccessKeyID)
 			env = append(env, "AWS_SECRET_ACCESS_KEY="+s3.AccessKey)
 
+			parsed, err := url.Parse(s3.Endpoint)
+			if err != nil {
+				return "", fmt.Errorf("invalid s3 url was passed: %w", err)
+			}
+
+			// This should handle removing any extra slashes
+			parsed.Path = path.Join(parsed.Path, s3.Bucket)
+
 			// s3:https://s3.amazonaws.com/restic-demo
-			return fmt.Sprintf("s3:%s/%s", s3.Endpoint, s3.Bucket)
+			return "s3:" + parsed.String(), nil
 		} else {
-			return details.Repository
+			return details.Repository, nil
 		}
 	}()
+	if err != nil {
+		return nil, errors.WrapIf(err, "backup: failed to get restic repository path/url")
+	}
 
 	args := []string{info.Command}
 	args = append(args, info.PositionalArgs...)
@@ -372,6 +374,10 @@ func (r ResticBackup) create(ctx context.Context, info ResticCommand) (*exec.Cmd
 	}
 
 	return cmd, nil
+}
+
+func (r ResticBackup) restorePath() string {
+	return r.SnapshotId + ":" + config.Get().System.Data + "/" + r.ServerUuid
 }
 
 // Path Override the default Path method to return an error, as Restic backups do not have a traditional path.
