@@ -13,11 +13,15 @@ RUN CGO_ENABLED=0 go build \
     -trimpath \
     -o wings \
     wings.go
+
+# Install restic for backups
+RUN go install github.com/restic/restic/cmd/restic@latest
+
 RUN echo "ID=\"distroless\"" > /etc/os-release
 
-# TODO-IThundxr: Bundle restic rather then using debian here
 # Stage 2 (Final)
-FROM debian:bookworm-slim
+FROM gcr.io/distroless/static:nonroot
+COPY --from=builder /go/bin/restic /usr/bin/restic
 COPY --from=builder /etc/os-release /etc/os-release
 
 COPY --from=builder /app/wings /usr/bin/
