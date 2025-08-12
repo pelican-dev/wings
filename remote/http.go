@@ -278,7 +278,11 @@ func (r *Response) Error() error {
 	}
 
 	// Read the response body to include in error message
-	bodyBytes, _ := r.Read()
+	bodyBytes, err := r.Read()
+	if err != nil {
+		log.WithError(err).Debug("failed to read response body for error message")
+		bodyBytes = []byte{}
+	}
 	bodyStr := string(bodyBytes)
 
 	var errs RequestErrors
