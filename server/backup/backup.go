@@ -11,6 +11,7 @@ import (
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
+	"github.com/gin-gonic/gin"
 	"github.com/mholt/archives"
 	"golang.org/x/sync/errgroup"
 
@@ -28,8 +29,9 @@ var format = archives.CompressedArchive{
 type AdapterType string
 
 const (
-	LocalBackupAdapter AdapterType = "wings"
-	S3BackupAdapter    AdapterType = "s3"
+	LocalBackupAdapter   AdapterType = "wings"
+	S3BackupAdapter      AdapterType = "s3"
+	ResticBackupAdapater AdapterType = "restic"
 )
 
 // RestoreCallback is a generic restoration callback that exists for both local
@@ -64,7 +66,9 @@ type BackupInterface interface {
 	// Details returns details about the archive.
 	Details(context.Context, []remote.BackupPart) (*ArchiveDetails, error)
 	// Remove removes a backup file.
-	Remove() error
+	Remove(context.Context) error
+	// Download streams the backup to the caller.
+	Download(*gin.Context) error
 	// Restore is called when a backup is ready to be restored to the disk from
 	// the given source. Not every backup implementation will support this nor
 	// will every implementation require a reader be provided.
@@ -173,6 +177,24 @@ func (b *Backup) log() *log.Entry {
 		l = l.WithField(k, v)
 	}
 	return l
+}
+
+func Locate(adapter AdapterType, ctx context.Context, client remote.Client, uuid string, suuid string) (BackupInterface, error) {
+	switch adapter {
+	case LocalBackupAdapter:
+		return LocateLocal(client, uuid, suuid)
+	case ResticBackupAdapater:
+		return LocateRestic(ctx, client, uuid, suuid)
+	default:
+		return nil, errors.New("provided adapter type is not valid: " + string(adapter))
+	}
+}
+
+//goland:noinspection GoNameStartsWithPackageName
+type BackupDetails struct {
+	BackupInterface
+	Size     int64
+	FileName string
 }
 
 type ArchiveDetails struct {

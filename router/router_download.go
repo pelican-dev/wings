@@ -42,8 +42,10 @@ func getDownloadBackup(c *gin.Context) {
 		return
 	}
 
-	// Locate the backup on the local disk.
-	b, st, err := backup.LocateLocal(client, token.BackupUuid, token.ServerUuid)
+	adapter := backup.AdapterType(token.Disk)
+
+	// Locate the backup
+	b, err := backup.Locate(adapter, c, client, token.BackupUuid, token.ServerUuid)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
@@ -56,20 +58,11 @@ func getDownloadBackup(c *gin.Context) {
 		return
 	}
 
-	// The use of `os` here is safe as backups are not stored within server
-	// accessible directories.
-	f, err := os.Open(b.Path())
+	err = b.Download(c)
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
 		return
 	}
-	defer f.Close()
-
-	c.Header("Content-Length", strconv.Itoa(int(st.Size())))
-	c.Header("Content-Disposition", "attachment; filename="+strconv.Quote(st.Name()))
-	c.Header("Content-Type", "application/octet-stream")
-
-	_, _ = bufio.NewReader(f).WriteTo(c.Writer)
 }
 
 // Handles downloading a specific file for a server.

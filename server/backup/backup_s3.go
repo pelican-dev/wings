@@ -12,6 +12,7 @@ import (
 
 	"emperror.dev/errors"
 	"github.com/cenkalti/backoff/v4"
+	"github.com/gin-gonic/gin"
 	"github.com/juju/ratelimit"
 	"github.com/mholt/archives"
 
@@ -39,7 +40,7 @@ func NewS3(client remote.Client, uuid string, suuid string, ignore string) *S3Ba
 }
 
 // Remove removes a backup from the system.
-func (s *S3Backup) Remove() error {
+func (s *S3Backup) Remove(_ context.Context) error {
 	return os.Remove(s.Path())
 }
 
@@ -51,7 +52,7 @@ func (s *S3Backup) WithLogContext(c map[string]interface{}) {
 // Generate creates a new backup on the disk, moves it into the S3 bucket via
 // the provided presigned URL, and then deletes the backup from the disk.
 func (s *S3Backup) Generate(ctx context.Context, fsys *filesystem.Filesystem, ignore string) (*ArchiveDetails, error) {
-	defer s.Remove()
+	defer s.Remove(ctx)
 
 	a := &filesystem.Archive{
 		Filesystem: fsys,
@@ -247,6 +248,11 @@ func (fu *s3FileUploader) uploadPart(ctx context.Context, part string, size int6
 		return "", err
 	}
 	return etag, nil
+}
+
+// Download streams the backup to the caller. This is not supported for S3
+func (s *S3Backup) Download(_ *gin.Context) error {
+	return errors.New("Download is not supported for S3 backups")
 }
 
 // Reader provides a wrapper around an existing io.Reader

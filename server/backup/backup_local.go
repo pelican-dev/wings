@@ -1,12 +1,15 @@
 package backup
 
 import (
+	"bufio"
 	"context"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"emperror.dev/errors"
+	"github.com/gin-gonic/gin"
 	"github.com/juju/ratelimit"
 	"github.com/mholt/archives"
 
@@ -35,22 +38,22 @@ func NewLocal(client remote.Client, uuid string, suuid string, ignore string) *L
 
 // LocateLocal finds the backup for a server and returns the local path. This
 // will obviously only work if the backup was created as a local backup.
-func LocateLocal(client remote.Client, uuid string, suuid string) (*LocalBackup, os.FileInfo, error) {
+func LocateLocal(client remote.Client, uuid string, suuid string) (*LocalBackup, error) {
 	b := NewLocal(client, uuid, suuid, "")
 	st, err := os.Stat(b.Path())
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	if st.IsDir() {
-		return nil, nil, errors.New("invalid archive, is directory")
+		return nil, errors.New("invalid archive, is directory")
 	}
 
-	return b, st, nil
+	return b, nil
 }
 
 // Remove removes a backup from the system.
-func (b *LocalBackup) Remove() error {
+func (b *LocalBackup) Remove(_ context.Context) error {
 	err := os.Remove(b.Path())
 	if err != nil {
 		return err
@@ -126,5 +129,27 @@ func (b *LocalBackup) Restore(ctx context.Context, _ io.Reader, callback Restore
 	}); err != nil {
 		return err
 	}
+	return nil
+}
+
+// Download streams the backup to the caller
+func (b *LocalBackup) Download(c *gin.Context) error {
+	f, err := os.Open(b.Path())
+	if err != nil {
+		return errors.WrapIf(err, "backup: could not read archive from disk")
+	}
+	defer f.Close()
+
+	st, err := f.Stat()
+	if err != nil {
+		return errors.WrapIf(err, "backup: could not read archive from disk")
+	}
+
+	c.Header("Content-Length", strconv.Itoa(int(st.Size())))
+	c.Header("Content-Disposition", "attachment; filename="+strconv.Quote(st.Name()))
+	c.Header("Content-Type", "application/octet-stream")
+
+	_, _ = bufio.NewReader(f).WriteTo(c.Writer)
+
 	return nil
 }

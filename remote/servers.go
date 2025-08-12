@@ -159,6 +159,19 @@ func (c *client) GetBackupRemoteUploadURLs(ctx context.Context, backup string, s
 	return data, nil
 }
 
+func (c *client) GetResticDetails(ctx context.Context, backup string) (ResticBackupDetails, error) {
+	var data ResticBackupDetails
+	res, err := c.Get(ctx, fmt.Sprintf("/backups/%s/restic", backup), nil)
+	if err != nil {
+		return data, err
+	}
+	defer res.Body.Close()
+	if err := res.BindJSON(&data); err != nil {
+		return data, err
+	}
+	return data, nil
+}
+
 func (c *client) SetBackupStatus(ctx context.Context, backup string, data BackupRequest) error {
 	resp, err := c.Post(ctx, fmt.Sprintf("/backups/%s", backup), data)
 	if err != nil {

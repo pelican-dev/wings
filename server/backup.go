@@ -92,7 +92,7 @@ func (s *Server) Backup(b backup.BackupInterface) error {
 	// Try to notify the panel about the status of this backup. If for some reason this request
 	// fails, delete the archive from the daemon and return that error up the chain to the caller.
 	if notifyError := s.notifyPanelOfBackup(b.Identifier(), ad, true); notifyError != nil {
-		_ = b.Remove()
+		_ = b.Remove(s.Context())
 
 		s.Log().WithField("error", notifyError).Info("failed to notify panel of successful backup state")
 		return err
@@ -148,12 +148,21 @@ func (s *Server) RestoreBackup(b backup.BackupInterface, reader io.ReadCloser) (
 		}
 	}
 
+	// If this is a restic backup, we need to handle it differently since the
+	// restore process is not the same as a standard tarball extraction.
+	if rb, ok := b.(*backup.ResticBackup); ok {
+		err = rb.ResticRestore(s.Context(), s.Filesystem().Path())
+		s.Events().Publish(DaemonMessageEvent, "restored "+rb.SnapshotId+" from backup")
+		return err
+	}
+
 	// Attempt to restore the backup to the server by running through each entry
 	// in the file one at a time and writing them to the disk.
 	s.Log().Debug("starting file writing process for backup restoration")
 	err = b.Restore(s.Context(), reader, func(file string, info fs.FileInfo, r io.ReadCloser) error {
 		defer r.Close()
 		s.Events().Publish(DaemonMessageEvent, "(restoring): "+file)
+
 		// TODO: since this will be called a lot, it may be worth adding an optimized
 		// Write with Chtimes method to the UnixFS that is able to re-use the
 		// same dirfd and file name.

@@ -228,7 +228,7 @@ func ExtractApiClient(c *gin.Context) remote.Client {
 	if v, ok := c.Get("api_client"); ok {
 		return v.(remote.Client)
 	}
-	panic("middleware/middlware: cannot extract api clinet: not present in context")
+	panic("middleware/middlware: cannot extract api client: not present in context")
 }
 
 // ExtractManager returns the server manager instance set on the request context.

@@ -157,6 +157,20 @@ type BackupRemoteUploadResponse struct {
 	PartSize int64    `json:"part_size"`
 }
 
+type ResticBackupDetails struct {
+	UseS3            bool   `json:"use_s3"`
+	Repository       string `json:"repository"`
+	Password         string `json:"password"`
+	RetryLockSeconds int    `json:"retry_lock_seconds"`
+	S3Details        struct {
+		Region      string `json:"region"`
+		AccessKeyID string `json:"access_key_id"`
+		AccessKey   string `json:"access_key"`
+		Bucket      string `json:"bucket"`
+		Endpoint    string `json:"endpoint"`
+	} `json:"s3,omitempty"`
+}
+
 type BackupPart struct {
 	ETag       string `json:"etag"`
 	PartNumber int    `json:"part_number"`

@@ -114,7 +114,7 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 		{
 			backup.POST("", postServerBackup)
 			backup.POST("/:backup/restore", postServerRestoreBackup)
-			backup.DELETE("/:backup", deleteServerBackup)
+			backup.DELETE("/:backup/:disk", deleteServerBackup)
 		}
 	}
 

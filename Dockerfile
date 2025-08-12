@@ -15,8 +15,9 @@ RUN CGO_ENABLED=0 go build \
     wings.go
 RUN echo "ID=\"distroless\"" > /etc/os-release
 
+# TODO-IThundxr: Bundle restic rather then using debian here
 # Stage 2 (Final)
-FROM gcr.io/distroless/static:latest
+FROM debian:bookworm-slim
 COPY --from=builder /etc/os-release /etc/os-release
 
 COPY --from=builder /app/wings /usr/bin/

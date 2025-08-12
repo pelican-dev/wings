@@ -10,6 +10,7 @@ type BackupPayload struct {
 	ServerUuid string `json:"server_uuid"`
 	BackupUuid string `json:"backup_uuid"`
 	UniqueId   string `json:"unique_id"`
+	Disk       string `json:"disk"`
 }
 
 // Returns the JWT payload.
