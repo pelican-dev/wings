@@ -25,6 +25,8 @@ COPY --from=builder /go/bin/restic /restic
 COPY --from=builder /etc/os-release /etc/os-release
 
 COPY --from=builder /app/wings /usr/bin/
+ENV RUNNING_IN_CONTAINER=true
+VOLUME /cache
 CMD [ "/usr/bin/wings", "--config", "/etc/pelican/config.yml" ]
 
 EXPOSE 8080

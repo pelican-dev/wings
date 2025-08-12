@@ -397,6 +397,11 @@ func (r ResticBackup) createCmd(ctx context.Context, info ResticCommand) (*exec.
 		args = append(args, "--retry-lock", strconv.Itoa(details.RetryLockSeconds)+"s")
 	}
 
+	// Only set the cache directory if the docker image is being used, otherwise just let restic figure it out
+	if os.Getenv("RUNNING_IN_CONTAINER") != "" {
+		args = append(args, "--cache-dir", "/cache/restic")
+	}
+
 	args = append(args, info.Args...)
 
 	r.log().Debugf("Created restic command with args: %s", strings.Join(args, " "))
