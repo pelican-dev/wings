@@ -68,7 +68,7 @@ func LocateRestic(ctx context.Context, client remote.Client, uuid string, suuid 
 	}
 	cmd, err := r.createCmd(ctx, command)
 	if err != nil {
-		return nil, errors.WrapIf(err, "backup: failed to createCmd restic snapshots command")
+		return nil, errors.WrapIf(err, "backup: failed to create restic snapshots command")
 	}
 
 	r.log().Infof("started restic snapshots command: %s", cmd.String())
@@ -124,7 +124,7 @@ func (r ResticBackup) Generate(ctx context.Context, filesystem *filesystem.Files
 	}
 	cmd, err := r.createCmd(ctx, command)
 	if err != nil {
-		return nil, errors.WrapIf(err, "backup: failed to createCmd restic backup command")
+		return nil, errors.WrapIf(err, "backup: failed to create restic backup command")
 	}
 
 	stdout, err := cmd.StdoutPipe()
@@ -141,35 +141,68 @@ func (r ResticBackup) Generate(ctx context.Context, filesystem *filesystem.Files
 	}
 	r.log().Infof("started restic backup command: %s", cmd.String())
 
-	scanner := bufio.NewScanner(stdout)
+	// collect stderr output async
+	errChan := make(chan error, 1)
+	var stderrBuffer strings.Builder
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.Contains(line, "tls: failed to verify certificate") {
+				r.log().Error("restic failed to verify tls certificates")
+				errChan <- fmt.Errorf("restic TLS certificate verification failed")
+				return
+			}
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		r.log().Debugf("restic output: %s", line)
+			r.log().Errorf("restic stderr: %s", line)
+			stderrBuffer.WriteString(line)
+			stderrBuffer.WriteByte('\n')
+		}
+		errChan <- nil
+	}()
 
-		var message struct {
-			MessageType         string `json:"message_type"`
-			TotalBytesProcessed int64  `json:"total_bytes_processed,omitempty"`
-			SnapshotId          string `json:"snapshot_id,omitempty"`
-		}
-		if err := json.Unmarshal([]byte(line), &message); err != nil {
-			r.log().Errorf("failed to parse restic output, invalid json line: %v", err)
-			continue
-		}
+	doneChan := make(chan struct{})
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			r.log().Debugf("restic output: %s", line)
 
-		// Will either be status, error or summary, but we only care about summary for now.
-		if message.MessageType == "summary" {
-			r.SnapshotSizeBytes = message.TotalBytesProcessed
-			r.SnapshotId = message.SnapshotId
+			var message struct {
+				MessageType         string `json:"message_type"`
+				TotalBytesProcessed int64  `json:"total_bytes_processed,omitempty"`
+				SnapshotId          string `json:"snapshot_id,omitempty"`
+			}
+			if err := json.Unmarshal([]byte(line), &message); err != nil {
+				r.log().Errorf("failed to parse restic output, invalid json line: %v", err)
+				continue
+			}
+
+			// Will either be status, error or summary, but we only care about summary for now.
+			if message.MessageType == "summary" {
+				r.SnapshotSizeBytes = message.TotalBytesProcessed
+				r.SnapshotId = message.SnapshotId
+			}
 		}
+		close(doneChan)
+	}()
+
+	select {
+	case err := <-errChan:
+		// If restic fails to verify TLS certificates it'll keep retrying so we will need to just kill it ourselves.
+		if killErr := cmd.Process.Kill(); killErr != nil {
+			r.log().Errorf("failed to kill restic process after TLS error: %v", killErr)
+		}
+		return nil, err
+	case <-doneChan:
+		// It exited normally, so we can go ahead and do other stuff
 	}
 
-	errOutput, _ := io.ReadAll(stderr)
 	if err := cmd.Wait(); err != nil {
 		return nil, fmt.Errorf(
 			"restic backup failed: %v, stderr: %s",
 			err,
-			strings.TrimSpace(string(errOutput)),
+			strings.TrimSpace(stderrBuffer.String()),
 		)
 	}
 
@@ -200,7 +233,7 @@ func (r ResticBackup) ResticRestore(ctx context.Context, path string) error {
 	}
 	cmd, err := r.createCmd(ctx, command)
 	if err != nil {
-		return errors.WrapIf(err, "backup: failed to createCmd restic restore command")
+		return errors.WrapIf(err, "backup: failed to create restic restore command")
 	}
 
 	stderr, err := cmd.StderrPipe()
@@ -237,7 +270,7 @@ func (r ResticBackup) Remove(ctx context.Context) error {
 	}
 	cmd, err := r.createCmd(ctx, command)
 	if err != nil {
-		return errors.WrapIf(err, "backup: failed to createCmd restic forget command")
+		return errors.WrapIf(err, "backup: failed to create restic forget command")
 	}
 
 	stderr, err := cmd.StderrPipe()
@@ -271,7 +304,7 @@ func (r ResticBackup) Download(c *gin.Context) error {
 	}
 	cmd, err := r.createCmd(c, command)
 	if err != nil {
-		return errors.WrapIf(err, "backup: failed to createCmd restic dump command")
+		return errors.WrapIf(err, "backup: failed to create restic dump command")
 	}
 
 	stdout, err := cmd.StdoutPipe()
