@@ -106,7 +106,6 @@ func (r ResticBackup) Generate(ctx context.Context, filesystem *filesystem.Files
 
 	args := []string{
 		"--tag", r.Uuid,
-		"--tag", r.ServerUuid,
 		"--group-by", "tags",
 	}
 
