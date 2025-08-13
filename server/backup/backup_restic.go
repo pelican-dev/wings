@@ -106,6 +106,7 @@ func (r ResticBackup) Generate(ctx context.Context, filesystem *filesystem.Files
 
 	args := []string{
 		"--tag", r.Uuid,
+		"--tag", r.ServerUuid,
 		"--group-by", "tags",
 	}
 
@@ -231,31 +232,7 @@ func (r ResticBackup) ResticRestore(ctx context.Context, path string) error {
 			"--limit-download", strconv.Itoa(config.Get().System.Backups.WriteLimit * 1024 * 1024),
 		},
 	}
-	cmd, err := r.createCmd(ctx, command)
-	if err != nil {
-		return errors.WrapIf(err, "backup: failed to create restic restore command")
-	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("failed to get stderr: %w", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start restic restore: %w", err)
-	}
-	r.log().Infof("started restic restore command: %s", cmd.String())
-
-	errOutput, _ := io.ReadAll(stderr)
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf(
-			"restic restore failed: %v, stderr: %s",
-			err,
-			strings.TrimSpace(string(errOutput)),
-		)
-	}
-
-	return nil
+	return r.createCmdAndHandleErrors(ctx, command)
 }
 
 func (r ResticBackup) Remove(ctx context.Context) error {
@@ -263,36 +240,11 @@ func (r ResticBackup) Remove(ctx context.Context) error {
 		Command:        "forget",
 		PositionalArgs: []string{r.SnapshotId},
 		Args: []string{
-			"--tag", r.ServerUuid,
-			"--group-by", "tags",
+			"--tag", r.Uuid,
 			"--prune",
 		},
 	}
-	cmd, err := r.createCmd(ctx, command)
-	if err != nil {
-		return errors.WrapIf(err, "backup: failed to create restic forget command")
-	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return fmt.Errorf("failed to get stderr: %w", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start restic forget: %w", err)
-	}
-	r.log().Infof("started restic forget command: %s", cmd.String())
-
-	errOutput, _ := io.ReadAll(stderr)
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf(
-			"restic backup failed: %v, stderr: %s",
-			err,
-			strings.TrimSpace(string(errOutput)),
-		)
-	}
-
-	return nil
+	return r.createCmdAndHandleErrors(ctx, command)
 }
 
 func (r ResticBackup) Download(c *gin.Context) error {
@@ -412,6 +364,35 @@ func (r ResticBackup) createCmd(ctx context.Context, info ResticCommand) (*exec.
 	}
 
 	return cmd, nil
+}
+
+func (r ResticBackup) createCmdAndHandleErrors(ctx context.Context, info ResticCommand) error {
+	cmd, err := r.createCmd(ctx, info)
+	if err != nil {
+		return errors.WrapIf(err, "backup: failed to create restic "+info.Command+" command")
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to get stderr: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start restic %s: %w", info.Command, err)
+	}
+	r.log().Infof("started restic %s command: %s", info.Command, cmd.String())
+
+	errOutput, _ := io.ReadAll(stderr)
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf(
+			"restic %s failed: %v, stderr: %s",
+			info.Command,
+			err,
+			strings.TrimSpace(string(errOutput)),
+		)
+	}
+
+	return nil
 }
 
 func (r ResticBackup) restorePath() string {
