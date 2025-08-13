@@ -75,7 +75,6 @@ func getServerInstallLogs(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": output})
 }
 
-
 // Handles a request to control the power state of a server. If the action being passed
 // through is invalid a 404 is returned. Otherwise, a HTTP/202 Accepted response is returned
 // and the actual power action is run asynchronously so that we don't have to block the
@@ -250,7 +249,7 @@ func deleteServer(c *gin.Context) {
 	// Remove the install log from this server
 	filename := filepath.Join(config.Get().System.LogDirectory, "install", ID+".log")
 	err := os.Remove(filename)
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		log.WithFields(log.Fields{"server_id": ID, "error": err}).Warn("failed to remove server install log during deletion process")
 	}
 
