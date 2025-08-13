@@ -434,7 +434,6 @@ func (s *Server) ToAPIResponse() APIResponse {
 	}
 }
 
-// RemoveAllServerBackups TODO-IThundxr: Abstract this so it can support restic backups as well
 func (s *Server) RemoveAllServerBackups() error {
 	sp := path.Join(config.Get().System.BackupDirectory, s.ID())
 	// This should never be possible, but we'll check it anyway.
