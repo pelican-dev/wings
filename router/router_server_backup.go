@@ -35,7 +35,7 @@ func postServerBackup(c *gin.Context) {
 		adapter = backup.NewLocal(client, data.Uuid, s.ID(), data.Ignore)
 	case backup.S3BackupAdapter:
 		adapter = backup.NewS3(client, data.Uuid, s.ID(), data.Ignore)
-	case backup.ResticBackupAdapater:
+	case backup.ResticBackupAdapter:
 		adapter = backup.NewRestic(client, data.Uuid, s.ID(), data.Ignore)
 	default:
 		middleware.CaptureAndAbort(c, errors.New("router/backups: provided adapter is not valid: "+string(data.Adapter)))
@@ -108,7 +108,7 @@ func postServerRestoreBackup(c *gin.Context) {
 
 	// Now that we've cleaned up the data directory if necessary, grab the backup file
 	// and attempt to restore it into the server directory.
-	if data.Adapter == backup.LocalBackupAdapter || data.Adapter == backup.ResticBackupAdapater {
+	if data.Adapter == backup.LocalBackupAdapter || data.Adapter == backup.ResticBackupAdapter {
 		b, err := backup.Locate(data.Adapter, c, client, c.Param("backup"), s.ID())
 		if err != nil {
 			middleware.CaptureAndAbort(c, err)

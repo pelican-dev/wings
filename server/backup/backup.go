@@ -29,9 +29,9 @@ var format = archives.CompressedArchive{
 type AdapterType string
 
 const (
-	LocalBackupAdapter   AdapterType = "wings"
-	S3BackupAdapter      AdapterType = "s3"
-	ResticBackupAdapater AdapterType = "restic"
+	LocalBackupAdapter  AdapterType = "wings"
+	S3BackupAdapter     AdapterType = "s3"
+	ResticBackupAdapter AdapterType = "restic"
 )
 
 // RestoreCallback is a generic restoration callback that exists for both local
@@ -183,7 +183,7 @@ func Locate(adapter AdapterType, ctx context.Context, client remote.Client, uuid
 	switch adapter {
 	case LocalBackupAdapter:
 		return LocateLocal(client, uuid, suuid)
-	case ResticBackupAdapater:
+	case ResticBackupAdapter:
 		return LocateRestic(ctx, client, uuid, suuid)
 	default:
 		return nil, errors.New("provided adapter type is not valid: " + string(adapter))

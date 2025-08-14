@@ -36,7 +36,7 @@ func NewRestic(client remote.Client, uuid string, suuid string, ignore string) *
 			Uuid:       uuid,
 			ServerUuid: suuid,
 			Ignore:     ignore,
-			adapter:    ResticBackupAdapater,
+			adapter:    ResticBackupAdapter,
 		},
 		SnapshotId:        "unknown",
 		SnapshotSizeBytes: 0,
@@ -44,7 +44,7 @@ func NewRestic(client remote.Client, uuid string, suuid string, ignore string) *
 }
 
 // WithLogContext attaches additional context to the log output for this backup.
-func (r ResticBackup) WithLogContext(c map[string]interface{}) {
+func (r *ResticBackup) WithLogContext(c map[string]interface{}) {
 	r.logContext = c
 
 	// Add the restic snapshotId to the log context if we know what it is
@@ -100,7 +100,7 @@ func LocateRestic(ctx context.Context, client remote.Client, uuid string, suuid 
 	return r, nil
 }
 
-func (r ResticBackup) Generate(ctx context.Context, filesystem *filesystem.Filesystem, ignore string) (*ArchiveDetails, error) {
+func (r *ResticBackup) Generate(ctx context.Context, filesystem *filesystem.Filesystem, ignore string) (*ArchiveDetails, error) {
 	r.log().Debugf("Backing up filesystem: %s", filesystem.Path())
 	r.log().Debugf("Ignore patterns: %s", ignore)
 
@@ -214,11 +214,11 @@ func (r ResticBackup) Generate(ctx context.Context, filesystem *filesystem.Files
 	return ad, nil
 }
 
-func (r ResticBackup) Restore(_ context.Context, _ io.Reader, _ RestoreCallback) error {
+func (r *ResticBackup) Restore(_ context.Context, _ io.Reader, _ RestoreCallback) error {
 	return errors.New("restic backups do not support Restore with a callback, use ResticRestore instead")
 }
 
-func (r ResticBackup) ResticRestore(ctx context.Context, path string) error {
+func (r *ResticBackup) ResticRestore(ctx context.Context, path string) error {
 	r.log().Debugf("Restoring to filesystem: %s", path)
 
 	command := ResticCommand{
@@ -234,7 +234,7 @@ func (r ResticBackup) ResticRestore(ctx context.Context, path string) error {
 	return r.createCmdAndHandleErrors(ctx, command)
 }
 
-func (r ResticBackup) Remove(ctx context.Context) error {
+func (r *ResticBackup) Remove(ctx context.Context) error {
 	command := ResticCommand{
 		Command:        "forget",
 		PositionalArgs: []string{r.SnapshotId},
@@ -246,7 +246,7 @@ func (r ResticBackup) Remove(ctx context.Context) error {
 	return r.createCmdAndHandleErrors(ctx, command)
 }
 
-func (r ResticBackup) Download(c *gin.Context) error {
+func (r *ResticBackup) Download(c *gin.Context) error {
 	command := ResticCommand{
 		Command:        "dump",
 		PositionalArgs: []string{r.restorePath(), "/"},
@@ -294,7 +294,7 @@ func (r ResticBackup) Download(c *gin.Context) error {
 	return nil
 }
 
-func (r ResticBackup) createCmd(ctx context.Context, info ResticCommand) (*exec.Cmd, error) {
+func (r *ResticBackup) createCmd(ctx context.Context, info ResticCommand) (*exec.Cmd, error) {
 	r.log().Debug("Fetching restic details")
 	details, err := r.client.GetResticDetails(ctx, r.Backup.Uuid)
 	if err != nil {
@@ -365,7 +365,7 @@ func (r ResticBackup) createCmd(ctx context.Context, info ResticCommand) (*exec.
 	return cmd, nil
 }
 
-func (r ResticBackup) createCmdAndHandleErrors(ctx context.Context, info ResticCommand) error {
+func (r *ResticBackup) createCmdAndHandleErrors(ctx context.Context, info ResticCommand) error {
 	cmd, err := r.createCmd(ctx, info)
 	if err != nil {
 		return errors.WrapIf(err, "backup: failed to create restic "+info.Command+" command")
@@ -394,32 +394,33 @@ func (r ResticBackup) createCmdAndHandleErrors(ctx context.Context, info ResticC
 	return nil
 }
 
-func (r ResticBackup) restorePath() string {
+func (r *ResticBackup) restorePath() string {
 	return r.SnapshotId + ":" + config.Get().System.Data + "/" + r.ServerUuid
 }
 
 // Path Override the default Path method to return an error, as Restic backups do not have a traditional path.
-func (r ResticBackup) Path() string {
-	return fmt.Errorf("restic backups do not have a path like other backups, they are stored in the restic repository").Error()
+func (r *ResticBackup) Path() string {
+	r.log().Error("restic backups do not have a path like other backups, they are stored in the restic repository")
+	return ""
 }
 
 // Size returns the size of the generated backup.
-func (r ResticBackup) Size() (int64, error) {
+func (r *ResticBackup) Size() (int64, error) {
 	r.log().Warn("Restic backups should not use Backup.Size(), check ResticBackup.SnapshotSizeBytes instead.")
 	return r.SnapshotSizeBytes, nil
 }
 
 // Checksum returns the SHA256 snapshotId of a backup.
-func (r ResticBackup) Checksum() ([]byte, error) {
+func (r *ResticBackup) Checksum() ([]byte, error) {
 	r.log().Warn("Restic backups should not use Backup.Checksum(), check ResticBackup.SnapshotId instead.")
 	return []byte(r.SnapshotId), nil
 }
 
 // Details returns both the snapshotId and size of the archive currently stored in
 // the repo to the caller.
-func (r ResticBackup) Details(_ context.Context, parts []remote.BackupPart) (*ArchiveDetails, error) {
+func (r *ResticBackup) Details(_ context.Context, parts []remote.BackupPart) (*ArchiveDetails, error) {
 	return &ArchiveDetails{
-		ChecksumType: string(ResticBackupAdapater),
+		ChecksumType: string(ResticBackupAdapter),
 		Parts:        parts,
 		Checksum:     r.SnapshotId,
 		Size:         r.SnapshotSizeBytes,
