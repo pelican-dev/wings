@@ -159,9 +159,9 @@ func (c *client) GetBackupRemoteUploadURLs(ctx context.Context, backup string, s
 	return data, nil
 }
 
-func (c *client) GetResticDetails(ctx context.Context, backup string) (ResticBackupDetails, error) {
+func (c *client) GetResticDetails(ctx context.Context) (ResticBackupDetails, error) {
 	var data ResticBackupDetails
-	res, err := c.Get(ctx, fmt.Sprintf("/backups/%s/restic", backup), nil)
+	res, err := c.Get(ctx, fmt.Sprintf("/backups/0/restic"), nil)
 	if err != nil {
 		return data, err
 	}

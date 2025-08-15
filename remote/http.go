@@ -22,7 +22,7 @@ import (
 
 type Client interface {
 	GetBackupRemoteUploadURLs(ctx context.Context, backup string, size int64) (BackupRemoteUploadResponse, error)
-	GetResticDetails(ctx context.Context, backup string) (ResticBackupDetails, error)
+	GetResticDetails(ctx context.Context) (ResticBackupDetails, error)
 	GetInstallationScript(ctx context.Context, uuid string) (InstallationScript, error)
 	GetServerConfiguration(ctx context.Context, uuid string) (ServerConfigurationResponse, error)
 	GetServers(context context.Context, perPage int) ([]RawServerData, error)

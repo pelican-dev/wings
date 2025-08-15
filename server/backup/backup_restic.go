@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"emperror.dev/errors"
+	"github.com/apex/log"
 	"github.com/gin-gonic/gin"
 	"github.com/goccy/go-json"
 	"github.com/pelican-dev/wings/config"
@@ -66,7 +67,7 @@ func LocateRestic(ctx context.Context, client remote.Client, uuid string, suuid 
 			"--tag", uuid,
 		},
 	}
-	cmd, err := r.createCmd(ctx, command)
+	cmd, err := createCmd(r.client, ctx, command)
 	if err != nil {
 		return nil, errors.WrapIf(err, "backup: failed to create restic snapshots command")
 	}
@@ -106,6 +107,7 @@ func (r *ResticBackup) Generate(ctx context.Context, filesystem *filesystem.File
 
 	args := []string{
 		"--tag", r.Uuid,
+		"--tag", r.ServerUuid,
 		"--group-by", "tags",
 	}
 
@@ -122,7 +124,7 @@ func (r *ResticBackup) Generate(ctx context.Context, filesystem *filesystem.File
 		OutputJson:     true,
 		Args:           args,
 	}
-	cmd, err := r.createCmd(ctx, command)
+	cmd, err := createCmd(r.client, ctx, command)
 	if err != nil {
 		return nil, errors.WrapIf(err, "backup: failed to create restic backup command")
 	}
@@ -231,7 +233,7 @@ func (r *ResticBackup) ResticRestore(ctx context.Context, path string) error {
 			"--limit-download", strconv.Itoa(config.Get().System.Backups.WriteLimit * 1024 * 1024),
 		},
 	}
-	return r.createCmdAndHandleErrors(ctx, command)
+	return createCmdAndHandleErrors(r.client, ctx, command)
 }
 
 func (r *ResticBackup) Remove(ctx context.Context) error {
@@ -243,7 +245,19 @@ func (r *ResticBackup) Remove(ctx context.Context) error {
 			"--prune",
 		},
 	}
-	return r.createCmdAndHandleErrors(ctx, command)
+	return createCmdAndHandleErrors(r.client, ctx, command)
+}
+
+func ResticRemoveAll(client remote.Client, ctx context.Context, serverUuid string) error {
+	command := ResticCommand{
+		Command: "forget",
+		Args: []string{
+			"--tag", serverUuid,
+			"--unsafe-allow-remove-all",
+			"--prune",
+		},
+	}
+	return createCmdAndHandleErrors(client, ctx, command)
 }
 
 func (r *ResticBackup) Download(c *gin.Context) error {
@@ -253,7 +267,7 @@ func (r *ResticBackup) Download(c *gin.Context) error {
 		NoLock:         true,
 		Args:           []string{"--archive", "tar"},
 	}
-	cmd, err := r.createCmd(c, command)
+	cmd, err := createCmd(r.client, c, command)
 	if err != nil {
 		return errors.WrapIf(err, "backup: failed to create restic dump command")
 	}
@@ -294,13 +308,13 @@ func (r *ResticBackup) Download(c *gin.Context) error {
 	return nil
 }
 
-func (r *ResticBackup) createCmd(ctx context.Context, info ResticCommand) (*exec.Cmd, error) {
-	r.log().Debug("Fetching restic details")
-	details, err := r.client.GetResticDetails(ctx, r.Backup.Uuid)
+func createCmd(client remote.Client, ctx context.Context, info ResticCommand) (*exec.Cmd, error) {
+	log.Debug("Fetching restic details")
+	details, err := client.GetResticDetails(ctx)
 	if err != nil {
 		return nil, err
 	}
-	r.log().Debug("Fetched restic details")
+	log.Debug("Fetched restic details")
 
 	var env []string
 	var s3SpecificArgs []string
@@ -355,7 +369,7 @@ func (r *ResticBackup) createCmd(ctx context.Context, info ResticCommand) (*exec
 
 	args = append(args, info.Args...)
 
-	r.log().Debugf("Created restic command with args: %s", strings.Join(args, " "))
+	log.Debugf("Created restic command with args: %s", strings.Join(args, " "))
 
 	cmd := exec.Command("/restic", args...)
 	if details.Password != "" {
@@ -365,8 +379,8 @@ func (r *ResticBackup) createCmd(ctx context.Context, info ResticCommand) (*exec
 	return cmd, nil
 }
 
-func (r *ResticBackup) createCmdAndHandleErrors(ctx context.Context, info ResticCommand) error {
-	cmd, err := r.createCmd(ctx, info)
+func createCmdAndHandleErrors(client remote.Client, ctx context.Context, info ResticCommand) error {
+	cmd, err := createCmd(client, ctx, info)
 	if err != nil {
 		return errors.WrapIf(err, "backup: failed to create restic "+info.Command+" command")
 	}
@@ -379,7 +393,7 @@ func (r *ResticBackup) createCmdAndHandleErrors(ctx context.Context, info Restic
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start restic %s: %w", info.Command, err)
 	}
-	r.log().Infof("started restic %s command: %s", info.Command, cmd.String())
+	log.Infof("started restic %s command: %s", info.Command, cmd.String())
 
 	errOutput, _ := io.ReadAll(stderr)
 	if err := cmd.Wait(); err != nil {

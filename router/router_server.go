@@ -255,7 +255,7 @@ func deleteServer(c *gin.Context) {
 
 	// Remove all server backups unless config setting is specified
 	if config.Get().System.Backups.RemoveBackupsOnServerDelete == true {
-		if err := s.RemoveAllServerBackups(); err != nil {
+		if err := s.RemoveAllServerBackups(c); err != nil {
 			middleware.CaptureAndAbort(c, err)
 			return
 		}
@@ -313,7 +313,7 @@ func postServerDenyWSTokens(c *gin.Context) {
 func deleteAllServerBackups(c *gin.Context) {
 	s := ExtractServer(c)
 
-	if err := s.RemoveAllServerBackups(); err != nil {
+	if err := s.RemoveAllServerBackups(c); err != nil {
 		middleware.CaptureAndAbort(c, err)
 	} else {
 		c.Status(http.StatusNoContent)
