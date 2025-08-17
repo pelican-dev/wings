@@ -84,7 +84,7 @@ func diagnosticsCmdRun(*cobra.Command, []string) {
 				Accessor(defaultTrueConfirmAccessor()).
 				Value(&diagnosticsArgs.IncludeLogs),
 			huh.NewConfirm().
-				Title("Do you want to review the collected data before uploading to "+diagnosticsArgs.HastebinURL+"?").
+				Title(fmt.Sprintf("Do you want to review the collected data before uploading to %s ?", diagnosticsArgs.HastebinURL)).
 				Description("The data, especially the logs, might contain sensitive information, so you should review it. You will be asked again if you want to upload.").
 				Accessor(defaultTrueConfirmAccessor()).
 				Value(&diagnosticsArgs.ReviewBeforeUpload),
