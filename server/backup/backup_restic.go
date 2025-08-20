@@ -12,6 +12,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
@@ -143,6 +144,10 @@ func (r *ResticBackup) Generate(ctx context.Context, filesystem *filesystem.File
 		return nil, fmt.Errorf("failed to start restic backup: %w", err)
 	}
 	r.log().Infof("started restic backup command: %s", cmd.String())
+
+	if err := syscall.Setpriority(syscall.PRIO_PROCESS, cmd.Process.Pid, 19); err != nil {
+		r.log().Errorf("failed to set priority: %v", err)
+	}
 
 	// collect stderr output async
 	errChan := make(chan error, 1)
@@ -287,6 +292,10 @@ func (r *ResticBackup) Download(c *gin.Context) error {
 	}
 	r.log().Infof("started restic dump command: %s", cmd.String())
 
+	if err := syscall.Setpriority(syscall.PRIO_PROCESS, cmd.Process.Pid, 19); err != nil {
+		r.log().Errorf("failed to set priority: %v", err)
+	}
+
 	c.Header("Content-Type", "application/gzip")
 	c.Header("Content-Disposition", `attachment; filename="snapshot-`+r.SnapshotId+`.tar.gz"`)
 
@@ -395,6 +404,10 @@ func createCmdAndHandleErrors(client remote.Client, ctx context.Context, info Re
 		return fmt.Errorf("failed to start restic %s: %w", info.Command, err)
 	}
 	log.Infof("started restic %s command: %s", info.Command, cmd.String())
+
+	if err := syscall.Setpriority(syscall.PRIO_PROCESS, cmd.Process.Pid, 19); err != nil {
+		log.Errorf("failed to set priority: %v", err)
+	}
 
 	errOutput, _ := io.ReadAll(stderr)
 	if err := cmd.Wait(); err != nil {
