@@ -116,6 +116,9 @@ func (r *ResticBackup) Generate(ctx context.Context, filesystem *filesystem.File
 	trimmed := strings.TrimSpace(ignore)
 	if trimmed != "" {
 		for _, pattern := range strings.Split(trimmed, "\n") {
+			if strings.ContainsAny(pattern, ";|&$`") {
+				return nil, fmt.Errorf("invalid exclude pattern: %q", pattern)
+			}
 			args = append(args, "--exclude", pattern)
 		}
 	}
