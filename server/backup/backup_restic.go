@@ -115,9 +115,9 @@ func (r *ResticBackup) Generate(ctx context.Context, filesystem *filesystem.File
 
 	trimmed := strings.TrimSpace(ignore)
 	if trimmed != "" {
-		exclude := []string{"--exclude"}
-		exclude = append(exclude, strings.Split(trimmed, "\n")...)
-		args = append(args, exclude...)
+		for _, pattern := range strings.Split(trimmed, "\n") {
+			args = append(args, "--exclude", pattern)
+		}
 	}
 
 	command := ResticCommand{
