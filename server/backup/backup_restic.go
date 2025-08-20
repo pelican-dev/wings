@@ -108,6 +108,7 @@ func (r *ResticBackup) Generate(ctx context.Context, filesystem *filesystem.File
 	args := []string{
 		"--tag", r.Uuid,
 		"--tag", r.ServerUuid,
+		"--limit-download", strconv.Itoa(config.Get().System.Backups.WriteLimit * 1024 * 1024),
 		"--group-by", "tags",
 	}
 
