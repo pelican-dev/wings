@@ -106,28 +106,24 @@ func (r *ResticBackup) Generate(ctx context.Context, filesystem *filesystem.File
 	r.log().Debugf("Backing up filesystem: %s", filesystem.Path())
 	r.log().Debugf("Ignore patterns: %s", ignore)
 
-	args := []string{
-		"--tag", r.Uuid,
-		"--tag", r.ServerUuid,
-		"--limit-download", strconv.Itoa(config.Get().System.Backups.WriteLimit * 1024 * 1024),
-		"--group-by", "tags",
+	ignoreFile, err := os.CreateTemp("", "restic-ignore-*.txt")
+	if err != nil {
+		return nil, errors.WrapIf(err, "failed to create restic ignore file")
 	}
-
-	trimmed := strings.TrimSpace(ignore)
-	if trimmed != "" {
-		for _, pattern := range strings.Split(trimmed, "\n") {
-			if strings.ContainsAny(pattern, ";|&$`") {
-				return nil, fmt.Errorf("invalid exclude pattern: %q", pattern)
-			}
-			args = append(args, "--exclude", pattern)
-		}
-	}
+	defer os.Remove(ignoreFile.Name())
+	defer ignoreFile.Close()
 
 	command := ResticCommand{
 		Command:        "backup",
 		PositionalArgs: []string{filesystem.Path()},
 		OutputJson:     true,
-		Args:           args,
+		Args: []string{
+			"--tag", r.Uuid,
+			"--tag", r.ServerUuid,
+			"--limit-download", strconv.Itoa(config.Get().System.Backups.WriteLimit * 1024 * 1024),
+			"--exclude-file", ignoreFile.Name(),
+			"--group-by", "tags",
+		},
 	}
 	cmd, err := createCmd(r.client, ctx, command)
 	if err != nil {
