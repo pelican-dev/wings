@@ -3,12 +3,15 @@ package router
 import (
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
 	"github.com/gin-gonic/gin"
 
+	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/router/middleware"
 	"github.com/pelican-dev/wings/server"
 	"github.com/pelican-dev/wings/server/backup"
@@ -196,4 +199,58 @@ func deleteServerBackup(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+// getServerBackups lists local backups for the specified server by inspecting the
+// server's backup directory on disk and returning metadata for any .tar.gz files.
+func getServerBackups(c *gin.Context) {
+	s := middleware.ExtractServer(c)
+
+	// Path: <BackupDirectory>/<server_id>
+	base := filepath.Join(config.Get().System.BackupDirectory, s.ID())
+
+	// If the dir does not exist, return empty list
+	if st, err := os.Stat(base); err != nil {
+		if os.IsNotExist(err) {
+			c.JSON(http.StatusOK, gin.H{"data": []gin.H{}})
+			return
+		}
+		middleware.CaptureAndAbort(c, err)
+		return
+	} else if !st.IsDir() {
+		c.JSON(http.StatusOK, gin.H{"data": []gin.H{}})
+		return
+	}
+
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	out := make([]gin.H, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".tar.gz") {
+			continue
+		}
+		// Extract UUID by trimming extension
+		uuid := strings.TrimSuffix(name, ".tar.gz")
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		out = append(out, gin.H{
+			"uuid":       uuid,
+			"name":       name,
+			"size":       info.Size(),
+			"created_at": info.ModTime().Format(time.RFC3339),
+			"path":       filepath.Join(base, name),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": out})
 }
