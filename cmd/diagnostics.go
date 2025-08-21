@@ -66,7 +66,22 @@ func newDiagnosticsCommand() *cobra.Command {
 // - relevant parts of daemon configuration
 // - the docker debug output
 // - running docker containers
-// - logs
+// diagnosticsCmdRun runs the interactive "diagnostics" flow: it collects system, Docker and Wings
+// configuration data, optionally includes recent Wings logs and endpoints, redacts sensitive
+// fields when requested, prints a formatted diagnostics report to stdout, and can upload the
+// report to a configured Hastebin URL.
+//
+// The command prompts the operator for three confirmations (include endpoints, include logs, and
+// whether to review before upload). If the user aborts the prompts the function returns early;
+// other prompt errors will cause a panic. Collected data includes Wings version, kernel/OS info,
+// loaded Wings config, Docker info and running containers, and tailing the Wings log file when
+// enabled. Sensitive fields (panel location, API host, SSL cert/key paths, SFTP address) are
+// replaced with "{redacted}" when endpoints are excluded.
+//
+// Side effects:
+// - Prints the full report and status messages to stdout.
+// - Executes external commands ("docker ps" and "tail") to collect runtime information.
+// - May attempt an HTTP upload to the configured Hastebin URL and print the resulting public URL.
 func diagnosticsCmdRun(*cobra.Command, []string) {
 	// To set default to true
 	defaultTrueConfirmAccessor := func() huh.Accessor[bool] {
@@ -84,7 +99,7 @@ func diagnosticsCmdRun(*cobra.Command, []string) {
 				Accessor(defaultTrueConfirmAccessor()).
 				Value(&diagnosticsArgs.IncludeLogs),
 			huh.NewConfirm().
-				Title("Do you want to review the collected data before uploading to "+diagnosticsArgs.HastebinURL+"?").
+				Title(fmt.Sprintf("Do you want to review the collected data before uploading to %s ?", diagnosticsArgs.HastebinURL)).
 				Description("The data, especially the logs, might contain sensitive information, so you should review it. You will be asked again if you want to upload.").
 				Accessor(defaultTrueConfirmAccessor()).
 				Value(&diagnosticsArgs.ReviewBeforeUpload),
