@@ -378,7 +378,8 @@ func createCmd(client remote.Client, ctx context.Context, info ResticCommand) (*
 	}
 
 	// Only set the cache directory if the docker image is being used, otherwise just let restic figure it out
-	if os.Getenv("RUNNING_IN_CONTAINER") != "" {
+	runningInContainer := os.Getenv("RUNNING_IN_CONTAINER") != ""
+	if runningInContainer {
 		args = append(args, "--cache-dir", "/cache/restic")
 	}
 
@@ -386,7 +387,16 @@ func createCmd(client remote.Client, ctx context.Context, info ResticCommand) (*
 
 	log.Debugf("Created restic command with args: %s", strings.Join(args, " "))
 
-	cmd := exec.Command("/restic", args...)
+	var resticBinary string
+	if runningInContainer {
+		// In the docker image we place it at /restic and have to refer to it directly since
+		// distroless has no shell
+		resticBinary = "/restic"
+	} else {
+		resticBinary = "restic"
+	}
+
+	cmd := exec.Command(resticBinary, args...)
 	if details.Password != "" {
 		cmd.Env = append(env, "RESTIC_PASSWORD="+details.Password)
 	}
