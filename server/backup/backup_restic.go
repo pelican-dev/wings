@@ -201,10 +201,12 @@ func (r *ResticBackup) Generate(ctx context.Context, filesystem *filesystem.File
 	select {
 	case err := <-errChan:
 		// If restic fails to verify TLS certificates it'll keep retrying so we will need to just kill it ourselves.
-		if killErr := cmd.Process.Kill(); killErr != nil {
-			r.log().Errorf("failed to kill restic process after TLS error: %v", killErr)
+		if err != nil {
+			if killErr := cmd.Process.Kill(); killErr != nil {
+				r.log().Errorf("failed to kill restic process after TLS error: %v", killErr)
+			}
+			return nil, err
 		}
-		return nil, err
 	case <-doneChan:
 		// It exited normally, so we can go ahead and do other stuff
 	}
