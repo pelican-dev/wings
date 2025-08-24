@@ -393,9 +393,7 @@ func createCmd(client remote.Client, ctx context.Context, info ResticCommand) (*
 	}
 
 	cmd := exec.Command(resticBinary, args...)
-	if details.Password != "" {
-		cmd.Env = append(env, "RESTIC_PASSWORD="+details.Password)
-	}
+	cmd.Env = append(env, "RESTIC_PASSWORD="+details.Password)
 
 	return cmd, nil
 }
