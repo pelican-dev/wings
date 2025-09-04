@@ -183,7 +183,7 @@ func validateField(name string, str string) error {
 			return fmt.Errorf("please provide a valid panel URL")
 		}
 	case "token":
-		if !regexp.MustCompile(`^peli_(\w{43})$`).Match([]byte(str)) && !regexp.MustCompile(`^papp_(\w{43})$`).Match([]byte(str)) {
+		if !regexp.MustCompile(`^(peli|papp)_(\w{43})$`).Match([]byte(str)) {
 			return fmt.Errorf("please provide a valid authentication token")
 		}
 	case "node":
