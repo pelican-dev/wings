@@ -22,29 +22,18 @@ type EggConfiguration struct {
 }
 
 func (egg *EggConfiguration) UnmarshalJSON(b []byte) (err error) {
-	var eggConfiguration struct {
-		// The internal UUID of the Egg on the Panel.
-		ID string `json:"id"`
-
-		// Maintains a list of files that are blacklisted for opening/editing/downloading
-		// or basically any type of access on the server by any user. This is NOT the same
-		// as a per-user denylist, this is defined at the Egg level.
-		FileDenylist []string `json:"file_denylist"`
-
-		// Features is a map of feature identifiers to a list of console output strings
-		// that should trigger a match (e.g., for things like EULA prompts).
-		Features map[string][]string `json:"features"`
-	}
+	type Alias EggConfiguration
+	var AliasEggConfiguration Alias
 
 	// try unmarshalling first
-	if err := json.Unmarshal(b, &eggConfiguration); err != nil {
+	if err := json.Unmarshal(b, &AliasEggConfiguration); err != nil {
 		egg.Features = nil
 	} else {
-		egg.Features = eggConfiguration.Features
+		egg.Features = AliasEggConfiguration.Features
 	}
 
-	egg.ID = eggConfiguration.ID
-	egg.FileDenylist = eggConfiguration.FileDenylist
+	egg.ID = AliasEggConfiguration.ID
+	egg.FileDenylist = AliasEggConfiguration.FileDenylist
 
 	return nil
 }
