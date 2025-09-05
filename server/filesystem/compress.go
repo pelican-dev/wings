@@ -53,7 +53,7 @@ func (fs *Filesystem) CompressFiles(dir string, name string, paths []string, ext
 		mimetype = "application/zip"
 	case "tar.gz", "tgz":
 		ext = ".tar.gz"
-		mimetype = "application/tar+gzip"
+		mimetype = "application/gzip"
 	case "tar.bz2", "tbz2":
 		ext = ".tar.bz2"
 		mimetype = "application/x-bzip2"
@@ -63,7 +63,7 @@ func (fs *Filesystem) CompressFiles(dir string, name string, paths []string, ext
 	default:
 		// fallback to tar.gz
 		ext = ".tar.gz"
-		mimetype = "application/tar+gzip"
+		mimetype = "application/gzip"
 	}
 
 	if name == "" {
@@ -83,14 +83,18 @@ func (fs *Filesystem) CompressFiles(dir string, name string, paths []string, ext
 
 	destPath := path.Join(dir, name)
 
-	// Resolve to absolute disk paths
-	baseDir := fs.Path() // root folder for the server's files
-	absDir := path.Join(baseDir, dir)
-
 	filesMap := make(map[string]string)
 	for _, file := range validPaths {
-		src := path.Join(absDir, file)
-		filesMap[src] = file
+		_, p, closeFd, err := fs.unixFS.SafePath(path.Join(dir, file))
+		if closeFd != nil { defer closeFd() }
+		if err != nil {
+			return nil, "", err
+		}
+		
+		// SafePath returns paths relative to the sandbox root, so we need to
+		// make them absolute by joining with the filesystem root path
+		absolutePath := filepath.Join(fs.Path(), p)
+		filesMap[absolutePath] = file
 	}
 
 	ctx := context.Background()

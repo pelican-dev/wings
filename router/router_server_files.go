@@ -437,7 +437,7 @@ func postServerCompressFiles(c *gin.Context) {
 		RootPath  string   `json:"root"`
 		Files     []string `json:"files"`
 		Name      string   `json:"name"`
-		Extention string   `json:"extention"`
+		Extension string   `json:"extension"`
 	}
 
 	if err := c.BindJSON(&data); err != nil {
@@ -461,7 +461,7 @@ func postServerCompressFiles(c *gin.Context) {
 	// The extention comes from the panel
 	// Supported are: zip, tar.gz, tar.bz2, tar.xz
 	// No need to check if it is empty or wrong as if data.Extention is wrong the function falls back to tar.gz
-	f, mimetype, err := s.Filesystem().CompressFiles(data.RootPath, data.Name, data.Files, data.Extention)
+	f, mimetype, err := s.Filesystem().CompressFiles(data.RootPath, data.Name, data.Files, data.Extension)
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
 		return
