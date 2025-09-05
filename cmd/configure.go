@@ -26,8 +26,6 @@ var configureArgs struct {
 	AllowInsecure bool
 }
 
-var nodeIdRegex = regexp.MustCompile(`^(\d+)$`)
-
 var configureCmd = &cobra.Command{
 	Use:   "configure",
 	Short: "Use a token to configure wings automatically",
@@ -51,10 +49,16 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 	}
 
 	if _, err := os.Stat(configureArgs.ConfigPath); err == nil && !configureArgs.Override {
-		huh.NewConfirm().
+		err := huh.NewConfirm().
 			Title("Override existing configuration file?").
 			Value(&configureArgs.Override).
 			Run()
+		if err != nil {
+			if err == huh.ErrUserAborted {
+				return
+			}
+			panic(err)
+		}
 		if !configureArgs.Override {
 			fmt.Println("Aborting process; a configuration file already exists for this node.")
 			os.Exit(1)
@@ -63,48 +67,43 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 		panic(err)
 	}
 	var fields []huh.Field
-	if configureArgs.PanelURL == "" {
+
+	if err := validateField("url", configureArgs.PanelURL); err != nil {
 		fields = append(fields, huh.NewInput().
 			Title("Panel URL: ").
 			Validate(func(str string) error {
-				_, err := url.ParseRequestURI(str)
-				return err
+				return validateField("url", str)
 			}).
 			Value(&configureArgs.PanelURL),
 		)
 	}
 
-	if configureArgs.Token == "" {
+	if err := validateField("token", configureArgs.Token); err != nil {
 		fields = append(fields, huh.NewInput().
 			Title("API Token: ").
 			Validate(func(str string) error {
-				if len(str) == 0 {
-					return fmt.Errorf("please provide a valid authentication token")
-				}
-				return nil
+				return validateField("token", str)
 			}).
 			Value(&configureArgs.Token),
 		)
 	}
 
-	if configureArgs.Node == "" {
+	if err := validateField("node", configureArgs.Node); err != nil {
 		fields = append(fields, huh.NewInput().
 			Title("Node ID: ").
 			Validate(func(str string) error {
-				if !nodeIdRegex.Match([]byte(str)) {
-					return fmt.Errorf("please providde a valid node ID")
-				}
-				return nil
+				return validateField("node", str)
 			}).
 			Value(&configureArgs.Node),
 		)
 	}
-	if err := huh.NewForm(huh.NewGroup(fields...)).Run(); err != nil {
-		if err == huh.ErrUserAborted {
-			return
+	if len(fields) > 0 {
+		if err := huh.NewForm(huh.NewGroup(fields...)).Run(); err != nil {
+			if err == huh.ErrUserAborted {
+				return
+			}
+			panic(err)
 		}
-
-		panic(err)
 	}
 
 	c := &http.Client{
@@ -116,8 +115,7 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 		panic(err)
 	}
 
-	fmt.Printf("%+v", req.Header)
-	fmt.Printf(req.URL.String())
+	fmt.Printf("%+v %s\n", req.Header, req.URL.String())
 
 	res, err := c.Do(req)
 	if err != nil {
@@ -175,4 +173,23 @@ func getRequest() (*http.Request, error) {
 	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", configureArgs.Token))
 
 	return r, nil
+}
+
+func validateField(name string, str string) error {
+	switch name {
+	case "url":
+		u, err := url.Parse(str)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.Path != "" {
+			return fmt.Errorf("please provide a valid panel URL")
+		}
+	case "token":
+		if !regexp.MustCompile(`^(peli|papp)_(\w{43})$`).Match([]byte(str)) {
+			return fmt.Errorf("please provide a valid authentication token")
+		}
+	case "node":
+		if !regexp.MustCompile(`^(\d+)$`).Match([]byte(str)) {
+			return fmt.Errorf("please provide a valid numeric node ID")
+		}
+	}
+	return nil
 }
