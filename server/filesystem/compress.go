@@ -35,7 +35,7 @@ func (fs *Filesystem) CompressFiles(dir string, name string, paths []string, ext
 			validPaths = append(validPaths, file)
 		}
 	}
-	
+
 	// If there are no valid paths, return an error
 	if len(validPaths) == 0 {
 		return nil, "", fmt.Errorf("no valid files to compress")
@@ -150,7 +150,6 @@ func (fs *Filesystem) CompressFiles(dir string, name string, paths []string, ext
 	info, err := f.Stat()
 	return info, mimetype, err
 }
-
 
 func (fs *Filesystem) archiverFileSystem(ctx context.Context, p string) (iofs.FS, error) {
 	f, err := fs.unixFS.Open(p)
