@@ -67,9 +67,16 @@ func postTransfers(c *gin.Context) {
 			StartOnCompletion: false,
 		})
 		if err != nil {
-			if err := manager.Client().SetTransferStatus(context.Background(), trnsfr.Server.ID(), false); err != nil {
-				trnsfr.Log().WithField("status", false).WithError(err).Error("failed to set transfer status")
+			if trnsfr.Server != nil {
+				if err := manager.Client().SetTransferStatus(context.Background(), trnsfr.Server.ID(), false); err != nil {
+					trnsfr.Log().WithField("status", false).WithError(err).Error("failed to set transfer status")
+				}
+			} else {
+				// No server instance yet, so just log the failure without trying to update status
+				// Else this will cause: invalid memory address or nil pointer dereference
+				trnsfr.Log().WithError(err).Error("failed to initialize transfer; no server instance created")
 			}
+
 			middleware.CaptureAndAbort(c, err)
 			return
 		}
