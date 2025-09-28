@@ -25,7 +25,9 @@ import (
 	"github.com/pelican-dev/wings/server/transfer"
 )
 
-// postTransfers .
+// postTransfers handles an incoming server transfer request and applies the uploaded filesystem archive to the target server.
+//
+// It authenticates a Bearer transfer token, establishes or reuses an incoming transfer for the token's server UUID, and registers a server installer with the manager if needed. The request body must be multipart/form-data containing an "archive" part (the filesystem archive) followed by a "checksum" part (hex-encoded SHA-256 of the archive); the checksum is verified against the uploaded data. On success the server environment is created and the transfer is marked successful; on failure the transfer is aborted, the server is unregistered, and the panel is notified of the failure. The handler also sets appropriate HTTP error responses for missing/invalid authorization, invalid content type, transfer initialization failures, checksum mismatches, and other processing errors.
 func postTransfers(c *gin.Context) {
 	auth := strings.SplitN(c.GetHeader("Authorization"), " ", 2)
 	if len(auth) != 2 || auth[0] != "Bearer" {
