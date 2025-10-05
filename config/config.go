@@ -367,12 +367,6 @@ type SearchRecursion struct {
 // This function does not modify the currently stored global configuration.
 func NewAtPath(path string) (*Configuration, error) {
 	var c Configuration
-	// Configures the default values for many of the configuration options present
-	// in the structs. Values set in the configuration file take priority over the
-	// default values.
-	if err := defaults.Set(&c); err != nil {
-		return nil, err
-	}
 	// Track the location where we created this configuration.
 	c.path = path
 	return &c, nil
@@ -551,6 +545,13 @@ func FromFile(path string) error {
 
 	if err := yaml.Unmarshal(b, c); err != nil {
 		return err
+	}
+
+	// Configures the default values for many of the configuration options present
+	// in the structs. Values set in the configuration file will not be overridden by the
+	// default values.
+	if err := defaults.Set(&c); err != nil {
+		return nil, err
 	}
 
 	c.Token = Token{
