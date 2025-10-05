@@ -550,8 +550,8 @@ func FromFile(path string) error {
 	// Configures the default values for many of the configuration options present
 	// in the structs. Values set in the configuration file will not be overridden by the
 	// default values.
-	if err := defaults.Set(&c); err != nil {
-		return nil, err
+	if err := defaults.Set(c); err != nil {
+		return err
 	}
 
 	c.Token = Token{
