@@ -38,12 +38,12 @@ func appendMatchedEntry(matchedEntries *[]filesystem.Stat, fileInfo ufs.FileInfo
 // todo make this config value work as now it cause a panic
 //var blacklist = config.Get().SearchRecursion.BlacklistedDirs
 
-var blacklist = []string{"node_modules", ".wine", "appcache", "depotcache", "vendor"}
+var blacklist = []string{"node_modules", ".wine", ".git", "appcache", "depotcache", "vendor"}
 
 // Helper function to check if a directory name is in the blacklist
 func isBlacklisted(dirName string) bool {
 	for _, blacklisted := range blacklist {
-		if strings.Contains(dirName, strings.ToLower(blacklisted)) {
+		if strings.EqualFold(dirName, strings.ToLower(blacklisted)) {
 			return true
 		}
 	}

@@ -15,15 +15,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AlecAivazis/survey/v2"
-	"github.com/AlecAivazis/survey/v2/terminal"
 	"github.com/apex/log"
+	"github.com/charmbracelet/huh"
 	"github.com/docker/docker/api/types"
+	dockerSystem "github.com/docker/docker/api/types/system" // Alias the correct system package
 	"github.com/docker/docker/pkg/parsers/kernel"
 	"github.com/docker/docker/pkg/parsers/operatingsystem"
 	"github.com/goccy/go-json"
 	"github.com/spf13/cobra"
-	dockerSystem "github.com/docker/docker/api/types/system" // Alias the correct system package
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
@@ -69,26 +68,30 @@ func newDiagnosticsCommand() *cobra.Command {
 // - running docker containers
 // - logs
 func diagnosticsCmdRun(*cobra.Command, []string) {
-	questions := []*survey.Question{
-		{
-			Name:   "IncludeEndpoints",
-			Prompt: &survey.Confirm{Message: "Do you want to include endpoints (i.e. the FQDN/IP of your panel)?", Default: false},
-		},
-		{
-			Name:   "IncludeLogs",
-			Prompt: &survey.Confirm{Message: "Do you want to include the latest logs?", Default: true},
-		},
-		{
-			Name: "ReviewBeforeUpload",
-			Prompt: &survey.Confirm{
-				Message: "Do you want to review the collected data before uploading to " + diagnosticsArgs.HastebinURL + "?",
-				Help:    "The data, especially the logs, might contain sensitive information, so you should review it. You will be asked again if you want to upload.",
-				Default: true,
-			},
-		},
+	// To set default to true
+	defaultTrueConfirmAccessor := func() huh.Accessor[bool] {
+		accessor := huh.EmbeddedAccessor[bool]{}
+		accessor.Set(true)
+		return &accessor
 	}
-	if err := survey.Ask(questions, &diagnosticsArgs); err != nil {
-		if err == terminal.InterruptErr {
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Do you want to include endpoints (i.e. the FQDN/IP of your panel)?").
+				Value(&diagnosticsArgs.IncludeEndpoints),
+			huh.NewConfirm().
+				Title("Do you want to include the latest logs?").
+				Accessor(defaultTrueConfirmAccessor()).
+				Value(&diagnosticsArgs.IncludeLogs),
+			huh.NewConfirm().
+				Title(fmt.Sprintf("Do you want to review the collected data before uploading to %s ?", diagnosticsArgs.HastebinURL)).
+				Description("The data, especially the logs, might contain sensitive information, so you should review it. You will be asked again if you want to upload.").
+				Accessor(defaultTrueConfirmAccessor()).
+				Value(&diagnosticsArgs.ReviewBeforeUpload),
+		),
+	)
+	if err := form.Run(); err != nil {
+		if err == huh.ErrUserAborted {
 			return
 		}
 		panic(err)
@@ -199,7 +202,10 @@ func diagnosticsCmdRun(*cobra.Command, []string) {
 
 	upload := !diagnosticsArgs.ReviewBeforeUpload
 	if !upload {
-		survey.AskOne(&survey.Confirm{Message: "Upload to " + diagnosticsArgs.HastebinURL + "?", Default: false}, &upload)
+		huh.NewConfirm().
+			Title("Upload to " + diagnosticsArgs.HastebinURL + "?").
+			Value(&upload).
+			Run()
 	}
 	if upload {
 		u, err := uploadToHastebin(diagnosticsArgs.HastebinURL, output.String())

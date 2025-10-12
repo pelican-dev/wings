@@ -11,12 +11,10 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/AlecAivazis/survey/v2"
-	"github.com/AlecAivazis/survey/v2/terminal"
+	"github.com/charmbracelet/huh"
 	"github.com/goccy/go-json"
-	"github.com/spf13/cobra"
-
 	"github.com/pelican-dev/wings/config"
+	"github.com/spf13/cobra"
 )
 
 var configureArgs struct {
@@ -27,8 +25,6 @@ var configureArgs struct {
 	Override      bool
 	AllowInsecure bool
 }
-
-var nodeIdRegex = regexp.MustCompile(`^(\d+)$`)
 
 var configureCmd = &cobra.Command{
 	Use:   "configure",
@@ -53,7 +49,16 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 	}
 
 	if _, err := os.Stat(configureArgs.ConfigPath); err == nil && !configureArgs.Override {
-		survey.AskOne(&survey.Confirm{Message: "Override existing configuration file"}, &configureArgs.Override)
+		err := huh.NewConfirm().
+			Title("Override existing configuration file?").
+			Value(&configureArgs.Override).
+			Run()
+		if err != nil {
+			if err == huh.ErrUserAborted {
+				return
+			}
+			panic(err)
+		}
 		if !configureArgs.Override {
 			fmt.Println("Aborting process; a configuration file already exists for this node.")
 			os.Exit(1)
@@ -61,58 +66,44 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 	} else if err != nil && !os.IsNotExist(err) {
 		panic(err)
 	}
+	var fields []huh.Field
 
-	var questions []*survey.Question
-	if configureArgs.PanelURL == "" {
-		questions = append(questions, &survey.Question{
-			Name:   "PanelURL",
-			Prompt: &survey.Input{Message: "Panel URL: "},
-			Validate: func(ans interface{}) error {
-				if str, ok := ans.(string); ok {
-					_, err := url.ParseRequestURI(str)
-					return err
-				}
-				return nil
-			},
-		})
+	if err := validateField("url", configureArgs.PanelURL); err != nil {
+		fields = append(fields, huh.NewInput().
+			Title("Panel URL: ").
+			Validate(func(str string) error {
+				return validateField("url", str)
+			}).
+			Value(&configureArgs.PanelURL),
+		)
 	}
 
-	if configureArgs.Token == "" {
-		questions = append(questions, &survey.Question{
-			Name:   "Token",
-			Prompt: &survey.Input{Message: "API Token: "},
-			Validate: func(ans interface{}) error {
-				if str, ok := ans.(string); ok {
-					if len(str) == 0 {
-						return fmt.Errorf("please provide a valid authentication token")
-					}
-				}
-				return nil
-			},
-		})
+	if err := validateField("token", configureArgs.Token); err != nil {
+		fields = append(fields, huh.NewInput().
+			Title("API Token: ").
+			Validate(func(str string) error {
+				return validateField("token", str)
+			}).
+			Value(&configureArgs.Token),
+		)
 	}
 
-	if configureArgs.Node == "" {
-		questions = append(questions, &survey.Question{
-			Name:   "Node",
-			Prompt: &survey.Input{Message: "Node ID: "},
-			Validate: func(ans interface{}) error {
-				if str, ok := ans.(string); ok {
-					if !nodeIdRegex.Match([]byte(str)) {
-						return fmt.Errorf("please provide a valid authentication token")
-					}
-				}
-				return nil
-			},
-		})
+	if err := validateField("node", configureArgs.Node); err != nil {
+		fields = append(fields, huh.NewInput().
+			Title("Node ID: ").
+			Validate(func(str string) error {
+				return validateField("node", str)
+			}).
+			Value(&configureArgs.Node),
+		)
 	}
-
-	if err := survey.Ask(questions, &configureArgs); err != nil {
-		if err == terminal.InterruptErr {
-			return
+	if len(fields) > 0 {
+		if err := huh.NewForm(huh.NewGroup(fields...)).Run(); err != nil {
+			if err == huh.ErrUserAborted {
+				return
+			}
+			panic(err)
 		}
-
-		panic(err)
 	}
 
 	c := &http.Client{
@@ -124,8 +115,7 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 		panic(err)
 	}
 
-	fmt.Printf("%+v", req.Header)
-	fmt.Printf(req.URL.String())
+	fmt.Printf("%+v %s\n", req.Header, req.URL.String())
 
 	res, err := c.Do(req)
 	if err != nil {
@@ -154,7 +144,7 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 	if err := json.Unmarshal(b, cfg); err != nil {
 		panic(err)
 	}
-	
+
 	// Manually specify the Panel URL as it won't be decoded from JSON.
 	cfg.PanelLocation = configureArgs.PanelURL
 
@@ -183,4 +173,23 @@ func getRequest() (*http.Request, error) {
 	r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", configureArgs.Token))
 
 	return r, nil
+}
+
+func validateField(name string, str string) error {
+	switch name {
+	case "url":
+		u, err := url.Parse(str)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.Path != "" {
+			return fmt.Errorf("please provide a valid panel URL")
+		}
+	case "token":
+		if !regexp.MustCompile(`^(peli|papp)_(\w{43})$`).Match([]byte(str)) {
+			return fmt.Errorf("please provide a valid authentication token")
+		}
+	case "node":
+		if !regexp.MustCompile(`^(\d+)$`).Match([]byte(str)) {
+			return fmt.Errorf("please provide a valid numeric node ID")
+		}
+	}
+	return nil
 }
