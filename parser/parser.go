@@ -3,6 +3,7 @@ package parser
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"io"
 	"strconv"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"github.com/apex/log"
 	"github.com/beevik/etree"
 	"github.com/buger/jsonparser"
-	"github.com/goccy/go-json"
 	"github.com/icza/dyno"
 	"github.com/magiconair/properties"
 	"gopkg.in/ini.v1"
@@ -318,6 +318,8 @@ func (f *ConfigurationFile) parseIniFile(file ufs.File) error {
 		return err
 	}
 
+	ini.PrettyFormat = false
+
 	for _, replacement := range f.Replace {
 		var (
 			path         []string
@@ -393,16 +395,19 @@ func (f *ConfigurationFile) parseIniFile(file ufs.File) error {
 // value is set regardless in the file. See the commentary in parseYamlFile for more details
 // about what is happening during this process.
 func (f *ConfigurationFile) parseJsonFile(file ufs.File) error {
+	// Read the entire JSON file into memory
 	b, err := io.ReadAll(file)
 	if err != nil {
 		return err
 	}
 
-	data, err := f.IterateOverJson(b)
+	// Modify the JSON content directly while preserving order and comments
+	modified, err := f.IterateOverJson(b)
 	if err != nil {
 		return err
 	}
 
+	// Rewind and overwrite the file with the modified JSON
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
@@ -410,10 +415,10 @@ func (f *ConfigurationFile) parseJsonFile(file ufs.File) error {
 		return err
 	}
 
-	// Write the data to the file.
-	if _, err := io.Copy(file, bytes.NewReader(data.BytesIndent("", "    "))); err != nil {
-		return errors.Wrap(err, "parser: failed to write properties file to disk")
+	if _, err := io.Copy(file, bytes.NewReader(modified)); err != nil {
+		return errors.Wrap(err, "parser: failed to write JSON file to disk")
 	}
+
 	return nil
 }
 
@@ -430,23 +435,24 @@ func (f *ConfigurationFile) parseYamlFile(file ufs.File) error {
 		return err
 	}
 
-	// Unmarshal the yaml data into a JSON interface such that we can work with
-	// any arbitrary data structure. If we don't do this, I can't use gabs which
-	// makes working with unknown JSON significantly easier.
 	jsonBytes, err := json.Marshal(dyno.ConvertMapI2MapS(i))
 	if err != nil {
 		return err
 	}
 
-	// Now that the data is converted, treat it just like JSON and pass it to the
-	// iterator function to update values as necessary.
+	// Now treat it like JSON and apply replacements.
 	data, err := f.IterateOverJson(jsonBytes)
 	if err != nil {
 		return err
 	}
 
-	// Remarshal the JSON into YAML format before saving it back to the disk.
-	marshaled, err := yaml.Marshal(data.Data())
+	// Unmarshal the modified JSON bytes back into an interface{}
+	var updated interface{}
+	if err := json.Unmarshal(data, &updated); err != nil {
+		return err
+	}
+
+	marshaled, err := yaml.Marshal(updated)
 	if err != nil {
 		return err
 	}
@@ -458,9 +464,8 @@ func (f *ConfigurationFile) parseYamlFile(file ufs.File) error {
 		return err
 	}
 
-	// Write the data to the file.
 	if _, err := io.Copy(file, bytes.NewReader(marshaled)); err != nil {
-		return errors.Wrap(err, "parser: failed to write properties file to disk")
+		return errors.Wrap(err, "parser: failed to write YAML file to disk")
 	}
 	return nil
 }

@@ -11,6 +11,8 @@ import (
 	"github.com/apex/log"
 	"github.com/buger/jsonparser"
 	"github.com/iancoleman/strcase"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 // Regex to match anything that has a value matching the format of {{ config.$1 }} which
@@ -62,48 +64,85 @@ func (cfr *ConfigurationFileReplacement) getKeyValue(value string) interface{} {
 // This does not currently support nested wildcard matches. For example, foo.*.bar
 // will work, however foo.*.bar.*.baz will not, since we'll only be splitting at the
 // first wildcard, and not subsequent ones.
-func (f *ConfigurationFile) IterateOverJson(data []byte) (*gabs.Container, error) {
-	parsed, err := gabs.ParseJSON(data)
-	if err != nil {
-		return nil, err
-	}
+func (f *ConfigurationFile) IterateOverJson(data []byte) ([]byte, error) {
+	modified := data
 
 	for _, v := range f.Replace {
-		value, err := f.LookupConfigurationValue(v)
+		val, err := f.LookupConfigurationValue(v)
 		if err != nil {
 			return nil, err
 		}
+		var value interface{} = val
 
-		// Check for a wildcard character, and if found split the key on that value to
-		// begin doing a search and replace in the data.
-		if strings.Contains(v.Match, ".*") {
-			parts := strings.SplitN(v.Match, ".*", 2)
+		// 🔧 Auto-convert string values if they represent numbers or booleans
+		value = autoType(value)
 
-			// Iterate over each matched child and set the remaining path to the value
-			// that is passed through in the loop.
-			//
-			// If the child is a null value, nothing will happen. Seems reasonable as of the
-			// time this code is being written.
-			for _, child := range parsed.Path(strings.Trim(parts[0], ".")).Children() {
-				if err := v.SetAtPathway(child, strings.Trim(parts[1], "."), value); err != nil {
-					if errors.Is(err, gabs.ErrNotFound) {
-						continue
-					}
-					return nil, errors.WithMessage(err, "failed to set config value of array child")
-				}
-			}
-			continue
+		paths, err := expandJsonWildcardPaths(modified, v.Match)
+		if err != nil {
+			return nil, err
+		}
+		if len(paths) == 0 {
+			paths = []string{v.Match}
 		}
 
-		if err := v.SetAtPathway(parsed, v.Match, value); err != nil {
-			if errors.Is(err, gabs.ErrNotFound) {
-				continue
+		for _, path := range paths {
+			modified, err = sjson.SetBytesOptions(modified, path, value, &sjson.Options{
+				Optimistic:     true,
+				ReplaceInPlace: true,
+			})
+			if err != nil {
+				return nil, errors.WithMessage(err, "unable to set JSON value at pathway: "+path)
 			}
-			return nil, errors.WithMessage(err, "unable to set config value at pathway: "+v.Match)
 		}
 	}
 
-	return parsed, nil
+	return modified, nil
+}
+
+// expandJsonWildcardPaths expands a JSON path containing a single wildcard (e.g. users.*.name)
+// into concrete paths like users.0.name, users.1.name, etc.
+func expandJsonWildcardPaths(data []byte, path string) ([]string, error) {
+	if !strings.Contains(path, ".*") {
+		return nil, nil // no wildcards
+	}
+
+	parts := strings.SplitN(path, ".*", 2)
+	prefix := strings.Trim(parts[0], ".")
+	suffix := strings.Trim(parts[1], ".")
+
+	result := gjson.GetBytes(data, prefix)
+	if !result.Exists() {
+		return nil, nil
+	}
+
+	var paths []string
+	result.ForEach(func(_, child gjson.Result) bool {
+		if child.Index >= 0 {
+			p := prefix + "." + strconv.Itoa(child.Index)
+			if suffix != "" {
+				p += "." + suffix
+			}
+			paths = append(paths, p)
+		}
+		return true
+	})
+
+	return paths, nil
+}
+
+func autoType(v interface{}) interface{} {
+	if s, ok := v.(string); ok {
+		if i, e := strconv.Atoi(s); e == nil {
+			return i
+		}
+		if f, e := strconv.ParseFloat(s, 64); e == nil {
+			return f
+		}
+		if b, e := strconv.ParseBool(s); e == nil {
+			return b
+		}
+	}
+	return v
 }
 
 // Regex used to check if there is an array element present in the given pathway by looking for something
