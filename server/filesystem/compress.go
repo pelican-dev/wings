@@ -28,7 +28,7 @@ import (
 // All paths are relative to the dir that is passed in as the first argument,
 // and the compressed file will be placed at that location named
 // `archive-{date}.tar.gz`.
-func (fs *Filesystem) CompressFiles(dir string, name string, paths []string) (ufs.FileInfo, error) {
+func (fs *Filesystem) CompressFiles(dir string, name string, paths []string, extension string) (ufs.FileInfo, string, error) {
 	var validPaths []string
 	for _, file := range paths {
 		if err := fs.IsIgnored(path.Join(dir, file)); err == nil {
@@ -38,46 +38,121 @@ func (fs *Filesystem) CompressFiles(dir string, name string, paths []string) (uf
 
 	// If there are no valid paths, return an error
 	if len(validPaths) == 0 {
-		return nil, fmt.Errorf("no valid files to compress")
+		return nil, "", fmt.Errorf("no valid files to compress")
 	}
 
-	d := path.Join(dir, name)
-	extension := ".tar.gz"
-	a := &Archive{Filesystem: fs, BaseDirectory: dir, Files: validPaths}
+	// Normalize extension & assign MIME type
+	extension = strings.ToLower(strings.TrimPrefix(extension, "."))
+	var (
+		ext      string
+		mimetype string
+	)
+	switch extension {
+	case "zip":
+		ext = ".zip"
+		mimetype = "application/zip"
+	case "tar.gz", "tgz":
+		ext = ".tar.gz"
+		mimetype = "application/gzip"
+	case "tar.bz2", "tbz2":
+		ext = ".tar.bz2"
+		mimetype = "application/x-bzip2"
+	case "tar.xz", "txz":
+		ext = ".tar.xz"
+		mimetype = "application/x-xz"
+	default:
+		// fallback to tar.gz
+		ext = ".tar.gz"
+		mimetype = "application/gzip"
+	}
+
 	if name == "" {
-		name = fmt.Sprintf("archive-%s%s", strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", ""), extension)
+		name = fmt.Sprintf("archive-%s%s", strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", ""), ext)
 	} else {
-		dirfd, _, closeFd, err := fs.unixFS.SafePath(d + extension)
+		dirfd, _, closeFd, err := fs.unixFS.SafePath(path.Join(dir, name)+ext)
 		defer closeFd()
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 
-		name, err = fs.findCopySuffix(dirfd, name, extension)
+		name, err = fs.findCopySuffix(dirfd, name, ext)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
-	d = path.Join(dir, name)
 
-	f, err := fs.unixFS.OpenFile(d, ufs.O_WRONLY|ufs.O_CREATE, 0o644)
+	destPath := path.Join(dir, name)
+
+	filesMap := make(map[string]string)
+	for _, file := range validPaths {
+		_, p, closeFd, err := fs.unixFS.SafePath(path.Join(dir, file))
+		if closeFd != nil { defer closeFd() }
+		if err != nil {
+			return nil, "", err
+		}
+		
+		// SafePath returns paths relative to the sandbox root, so we need to
+		// make them absolute by joining with the filesystem root path
+		absolutePath := filepath.Join(fs.Path(), p)
+		filesMap[absolutePath] = file
+	}
+
+	ctx := context.Background()
+
+	files, err := archives.FilesFromDisk(ctx, nil, filesMap)
 	if err != nil {
-		return nil, err
+		return nil, "", err
+	}
+
+	f, err := fs.unixFS.OpenFile(destPath, ufs.O_WRONLY|ufs.O_CREATE, 0o644)
+	if err != nil {
+		return nil, "", err
 	}
 	defer f.Close()
 
 	cw := ufs.NewCountedWriter(f)
-	if err := a.Stream(context.Background(), cw); err != nil {
-		return nil, err
+
+	// Call the correct archiver
+	switch extension {
+	case "zip":
+		zipper := archives.Zip{}
+		if err := zipper.Archive(ctx, cw, files); err != nil {
+			return nil, "", err
+		}
+	case "tar.bz2", "tbz2":
+		format := archives.CompressedArchive{
+			Compression: archives.Bz2{},
+			Archival:    archives.Tar{},
+		}
+		if err := format.Archive(ctx, cw, files); err != nil {
+			return nil, "", err
+		}
+	case "tar.xz", "txz":
+		format := archives.CompressedArchive{
+			Compression: archives.Xz{},
+			Archival:    archives.Tar{},
+		}
+		if err := format.Archive(ctx, cw, files); err != nil {
+			return nil, "", err
+		}
+	default: // tar.gz and fallback
+		format := archives.CompressedArchive{
+			Compression: archives.Gz{},
+			Archival:    archives.Tar{},
+		}
+		if err := format.Archive(ctx, cw, files); err != nil {
+			return nil, "", err
+		}
 	}
 
 	if !fs.unixFS.CanFit(cw.BytesWritten()) {
-		_ = fs.unixFS.Remove(d)
-		return nil, newFilesystemError(ErrCodeDiskSpace, nil)
+		_ = fs.unixFS.Remove(destPath)
+		return nil, "", newFilesystemError(ErrCodeDiskSpace, nil)
 	}
 
 	fs.unixFS.Add(cw.BytesWritten())
-	return f.Stat()
+	info, err := f.Stat()
+	return info, mimetype, err
 }
 
 func (fs *Filesystem) archiverFileSystem(ctx context.Context, p string) (iofs.FS, error) {

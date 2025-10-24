@@ -434,9 +434,10 @@ func postServerCompressFiles(c *gin.Context) {
 	s := ExtractServer(c)
 
 	var data struct {
-		RootPath string   `json:"root"`
-		Files    []string `json:"files"`
-		Name     string   `json:"name"`
+		RootPath  string   `json:"root"`
+		Files     []string `json:"files"`
+		Name      string   `json:"name"`
+		Extension string   `json:"extension"`
 	}
 
 	if err := c.BindJSON(&data); err != nil {
@@ -457,7 +458,10 @@ func postServerCompressFiles(c *gin.Context) {
 		return
 	}
 
-	f, err := s.Filesystem().CompressFiles(data.RootPath, data.Name, data.Files)
+	// The extention comes from the panel
+	// Supported are: zip, tar.gz, tar.bz2, tar.xz
+	// No need to check if it is empty or wrong as if data.Extention is wrong the function falls back to tar.gz
+	f, mimetype, err := s.Filesystem().CompressFiles(data.RootPath, data.Name, data.Files, data.Extension)
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
 		return
@@ -465,7 +469,7 @@ func postServerCompressFiles(c *gin.Context) {
 
 	c.JSON(http.StatusOK, &filesystem.Stat{
 		FileInfo: f,
-		Mimetype: "application/tar+gzip",
+		Mimetype: mimetype,
 	})
 }
 
