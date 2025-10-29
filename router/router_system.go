@@ -56,13 +56,17 @@ func getDiagnostics(c *gin.Context) {
 	logLines := 200
 	if q := c.Query("log_lines"); q != "" {
 		if n, err := strconv.Atoi(q); err == nil {
-			logLines = n
+			if n > 500 {
+				logLines = 500
+			} else {
+				logLines = n
+			}
 		}
 	}
 
 	report, err := diagnostics.GenerateDiagnosticsReport(includeEndpoints, includeLogs, logLines)
 	if err != nil {
-		c.String(http.StatusInternalServerError, "Failed to generate diagnostics: %v", err)
+		middleware.CaptureAndAbort(c, err)
 		return
 	}
 
