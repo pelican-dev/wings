@@ -5,12 +5,14 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/apex/log"
 	"github.com/gin-gonic/gin"
 
 	"github.com/pelican-dev/wings/config"
+	"github.com/pelican-dev/wings/internal/diagnostics"
 	"github.com/pelican-dev/wings/router/middleware"
 	"github.com/pelican-dev/wings/server"
 	"github.com/pelican-dev/wings/server/installer"
@@ -43,6 +45,28 @@ func getSystemInformation(c *gin.Context) {
 		OS:            i.System.OSType,
 		Version:       i.Version,
 	})
+}
+
+func getDiagnostics(c *gin.Context) {
+	// Optional query params:
+	// ?include_endpoints=true&include_logs=true&log_lines=300
+	includeEndpoints := c.Query("include_endpoints") == "true"
+	includeLogs := c.Query("include_logs") == "true"
+
+	logLines := 200
+	if q := c.Query("log_lines"); q != "" {
+		if n, err := strconv.Atoi(q); err == nil {
+			logLines = n
+		}
+	}
+
+	report, err := diagnostics.GenerateDiagnosticsReport(includeEndpoints, includeLogs, logLines)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Failed to generate diagnostics: %v", err)
+		return
+	}
+
+	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(report))
 }
 
 // Returns list of host machine IP addresses
