@@ -70,9 +70,14 @@ func (fs *Filesystem) CompressFiles(dir string, name string, paths []string, ext
 		name = fmt.Sprintf("archive-%s%s", strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", ""), ext)
 	} else {
 		dirfd, _, closeFd, err := fs.unixFS.SafePath(path.Join(dir, name) + ext)
-		defer closeFd()
 		if err != nil {
+			if closeFd != nil {
+				closeFd()
+			}
 			return nil, "", err
+		}
+		if closeFd != nil {
+			defer closeFd()
 		}
 
 		name, err = fs.findCopySuffix(dirfd, name, ext)
