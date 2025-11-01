@@ -46,19 +46,32 @@ func getSystemInformation(c *gin.Context) {
 		Version:       i.Version,
 	})
 }
-
 func getDiagnostics(c *gin.Context) {
-	// Optional query params:
-	// ?include_endpoints=true&include_logs=true&log_lines=300
-	includeEndpoints := c.Query("include_endpoints") == "true"
-	includeLogs := c.Query("include_logs") == "true"
+	// Optional query params: ?include_endpoints=true&include_logs=true&log_lines=300
 
+	// Parse boolean query parameter with default
+	parseBoolQuery := func(param string, defaultVal bool) bool {
+		q := strings.ToLower(c.Query(param))
+		switch q {
+		case "true":
+			return true
+		case "false":
+			return false
+		default:
+			return defaultVal
+		}
+	}
+
+	includeEndpoints := parseBoolQuery("include_endpoints", false)
+	includeLogs := parseBoolQuery("include_logs", true)
+
+	// Parse log_lines query parameter with bounds
 	logLines := 200
 	if q := c.Query("log_lines"); q != "" {
 		if n, err := strconv.Atoi(q); err == nil {
 			if n > 500 {
 				logLines = 500
-			} else {
+			} else if n > 0 {
 				logLines = n
 			}
 		}
