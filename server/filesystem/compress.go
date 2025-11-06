@@ -69,10 +69,15 @@ func (fs *Filesystem) CompressFiles(dir string, name string, paths []string, ext
 	if name == "" {
 		name = fmt.Sprintf("archive-%s%s", strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", ""), ext)
 	} else {
-		dirfd, _, closeFd, err := fs.unixFS.SafePath(path.Join(dir, name)+ext)
-		defer closeFd()
+		dirfd, _, closeFd, err := fs.unixFS.SafePath(path.Join(dir, name) + ext)
 		if err != nil {
+			if closeFd != nil {
+				closeFd()
+			}
 			return nil, "", err
+		}
+		if closeFd != nil {
+			defer closeFd()
 		}
 
 		name, err = fs.findCopySuffix(dirfd, name, ext)
@@ -86,14 +91,16 @@ func (fs *Filesystem) CompressFiles(dir string, name string, paths []string, ext
 	filesMap := make(map[string]string)
 	for _, file := range validPaths {
 		_, p, closeFd, err := fs.unixFS.SafePath(path.Join(dir, file))
-		if closeFd != nil { defer closeFd() }
+		if closeFd != nil {
+			defer closeFd()
+		}
 		if err != nil {
 			return nil, "", err
 		}
-		
-		// SafePath returns paths relative to the sandbox root, so we need to
-		// make them absolute by joining with the filesystem root path
-		absolutePath := filepath.Join(fs.Path(), p)
+
+		// Construct the absolute path on disk for reading the file
+		absolutePath := filepath.Join(fs.Path(), dir, p)
+		// Only use the bare filename inside the archive
 		filesMap[absolutePath] = file
 	}
 
