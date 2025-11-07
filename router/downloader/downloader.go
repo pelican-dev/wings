@@ -208,10 +208,10 @@ func (dl *Download) Execute() error {
 		}
 
 		req.Header.Set("User-Agent", "Pelican Panel (https://pelican.dev)")
-		res, err = client.Do(req)
-		if err != nil {
-			return ErrDownloadFailed
-		}
+        res, err = client.Do(req)
+        if err != nil {
+            return errors.WrapIf(err, "downloader: failed to perform request")
+        }
 
 		if res.StatusCode >= http.StatusMultipleChoices && res.StatusCode < http.StatusBadRequest {
 			location := res.Header.Get("Location")
