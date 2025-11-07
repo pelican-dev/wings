@@ -101,6 +101,8 @@ const (
 	ErrDownloadFailed     = errors.Sentinel("downloader: download request failed")
 )
 
+const maxRedirects = 10
+
 type Counter struct {
 	total   int
 	onWrite func(total int)
@@ -184,17 +186,66 @@ func (dl *Download) Execute() error {
 	// At this point we have verified the destination is not within the local network, so we can
 	// now make a request to that URL and pull down the file, saving it to the server's data
 	// directory.
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dl.req.URL.String(), nil)
-	if err != nil {
-		return errors.WrapIf(err, "downloader: failed to create request")
+	currentURL := dl.req.URL
+	if currentURL == nil {
+		return errors.New("downloader: download request url is nil")
 	}
 
-	req.Header.Set("User-Agent", "Pelican Panel (https://pelican.dev)")
-	res, err := client.Do(req)
-	if err != nil {
-		return ErrDownloadFailed
+	visited := make(map[string]struct{})
+	var res *http.Response
+	var finalURL *url.URL
+
+	for redirects := 0; redirects <= maxRedirects; redirects++ {
+		urlStr := currentURL.String()
+		if _, seen := visited[urlStr]; seen {
+			return errors.New("downloader: detected redirect loop")
+		}
+		visited[urlStr] = struct{}{}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
+		if err != nil {
+			return errors.WrapIf(err, "downloader: failed to create request")
+		}
+
+		req.Header.Set("User-Agent", "Pelican Panel (https://pelican.dev)")
+		res, err = client.Do(req)
+		if err != nil {
+			return ErrDownloadFailed
+		}
+
+		if res.StatusCode >= http.StatusMultipleChoices && res.StatusCode < http.StatusBadRequest {
+			location := res.Header.Get("Location")
+			res.Body.Close()
+			if location == "" {
+				return errors.New("downloader: redirect response missing location header")
+			}
+
+			nextURL, err := currentURL.Parse(location)
+			if err != nil {
+				return errors.WrapIf(err, "downloader: invalid redirect location")
+			}
+			if nextURL.Scheme != "http" && nextURL.Scheme != "https" {
+				return errors.New("downloader: redirect to unsupported scheme")
+			}
+
+			currentURL = nextURL
+			finalURL = nextURL
+			continue
+		}
+
+		finalURL = currentURL
+		break
+	}
+
+	if res == nil {
+		return errors.New("downloader: exceeded maximum redirect attempts")
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode >= http.StatusMultipleChoices && res.StatusCode < http.StatusBadRequest {
+		return errors.New("downloader: exceeded maximum redirect attempts")
+	}
+
 	if res.StatusCode != http.StatusOK {
 		return errors.New("downloader: got bad response status from endpoint: " + res.Status)
 	}
@@ -219,7 +270,11 @@ func (dl *Download) Execute() error {
 		if dl.req.FileName != "" {
 			dl.path = dl.req.FileName
 		} else {
-			parts := strings.Split(dl.req.URL.Path, "/")
+			pathSource := dl.req.URL
+			if finalURL != nil {
+				pathSource = finalURL
+			}
+			parts := strings.Split(pathSource.Path, "/")
 			dl.path = parts[len(parts)-1]
 		}
 	}
