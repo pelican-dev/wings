@@ -58,6 +58,7 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 	protected := router.Use(middleware.RequireAuthorization())
 	protected.POST("/api/update", postUpdateConfiguration)
 	protected.GET("/api/system", getSystemInformation)
+	protected.GET("/api/diagnostics", getDiagnostics)
 	protected.GET("/api/system/docker/disk", getDockerDiskUsage)
 	protected.DELETE("/api/system/docker/image/prune", pruneDockerImages)
 	protected.GET("/api/system/ips", getSystemIps)
