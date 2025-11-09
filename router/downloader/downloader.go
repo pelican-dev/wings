@@ -197,7 +197,7 @@ func (dl *Download) Execute() error {
 	var finalURL *url.URL
 
 	maxRedirects := maxRedirectAttempts()
-	for redirects := 0; redirects <= maxRedirects; redirects++ {
+	for redirects := 0; redirects < maxRedirects; redirects++ {
 		urlStr := currentURL.String()
 		if _, seen := visited[urlStr]; seen {
 			return errors.New("downloader: detected redirect loop")
