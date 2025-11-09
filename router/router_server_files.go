@@ -237,12 +237,10 @@ func postServerDeleteFiles(c *gin.Context) {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
-				if err := s.Filesystem().IsIgnored(pi); err != nil {
-					return err
-				}
-				return s.Filesystem().Delete(pi)
+				return s.Filesystem().SafeDeleteRecursively(pi)
 			}
 		})
+		
 	}
 
 	if err := g.Wait(); err != nil {
