@@ -17,6 +17,7 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 
+	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/server"
 )
 
@@ -101,7 +102,7 @@ const (
 	ErrDownloadFailed     = errors.Sentinel("downloader: download request failed")
 )
 
-const maxRedirects = 10
+const defaultMaxRedirects = 10
 
 type Counter struct {
 	total   int
@@ -195,6 +196,7 @@ func (dl *Download) Execute() error {
 	var res *http.Response
 	var finalURL *url.URL
 
+	maxRedirects := maxRedirectAttempts()
 	for redirects := 0; redirects <= maxRedirects; redirects++ {
 		urlStr := currentURL.String()
 		if _, seen := visited[urlStr]; seen {
@@ -208,10 +210,10 @@ func (dl *Download) Execute() error {
 		}
 
 		req.Header.Set("User-Agent", "Pelican Panel (https://pelican.dev)")
-        res, err = client.Do(req)
-        if err != nil {
-            return errors.WrapIf(err, "downloader: failed to perform request")
-        }
+		res, err = client.Do(req)
+		if err != nil {
+			return errors.WrapIf(err, "downloader: failed to perform request")
+		}
 
 		if res.StatusCode >= http.StatusMultipleChoices && res.StatusCode < http.StatusBadRequest {
 			location := res.Header.Get("Location")
@@ -389,4 +391,14 @@ func mustParseCIDR(ip string) *net.IPNet {
 		panic(fmt.Errorf("downloader: failed to parse CIDR: %s", err))
 	}
 	return block
+}
+
+func maxRedirectAttempts() int {
+	cfg := config.Get()
+	if cfg != nil {
+		if v := cfg.Api.RemoteDownload.MaxRedirects; v > 0 {
+			return v
+		}
+	}
+	return defaultMaxRedirects
 }
