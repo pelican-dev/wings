@@ -406,7 +406,7 @@ func (fs *Filesystem) Delete(p string) error {
 // it recursively deletes all non-denylisted files and subdirectories. Empty directories
 // are removed automatically, but directories containing denylisted files are preserved.
 func (fs *Filesystem) SafeDeleteRecursively(p string) error {
-	info, err := fs.Stat(p)
+	info, err := fs.unixFS.Lstat(p)
 	if err != nil {
 		return err
 	}
@@ -436,7 +436,7 @@ func (fs *Filesystem) SafeDeleteRecursively(p string) error {
 				return err
 			}
 			// Check if the directory still exists after recursive deletion
-			if _, statErr := fs.Stat(child); statErr == nil {
+			if _, statErr := fs.unixFS.Lstat(child); statErr == nil {
 				hasRemainingFiles = true
 			}
 			continue
