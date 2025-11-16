@@ -250,7 +250,7 @@ func deleteServer(c *gin.Context) {
 	// Remove the install log from this server
 	filename := filepath.Join(config.Get().System.LogDirectory, "install", ID+".log")
 	err := os.Remove(filename)
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		log.WithFields(log.Fields{"server_id": ID, "error": err}).Warn("failed to remove server install log during deletion process")
 	}
 
