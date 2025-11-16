@@ -150,7 +150,8 @@ func postTransfers(c *gin.Context) {
 		hasArchive              bool
 		archiveChecksum         string
 		archiveChecksumReceived string
-		backupChecksums         = make(map[string]string)
+		backupChecksumsCalculated = make(map[string]string)
+		backupChecksumsReceived   = make(map[string]string)
 	)
 	// Process multipart form
 out:
@@ -280,7 +281,7 @@ out:
 				}
 
 				// Store the checksum for later verification
-				backupChecksums[backupName] = hex.EncodeToString(hasher.Sum(nil))
+				backupChecksumsCalculated[backupName] = hex.EncodeToString(hasher.Sum(nil))
 
 				trnsfr.Log().WithField("backup", backupName).Debug("backup streamed to disk successfully")
 
@@ -293,7 +294,7 @@ out:
 					middleware.CaptureAndAbort(c, err)
 					return
 				}
-				backupChecksums[backupName] = string(checksumData)
+				backupChecksumsReceived[backupName] = string(checksumData)
 			}
 		}
 	}
@@ -319,8 +320,8 @@ out:
 	}
 
 	// Verify backup checksums
-	for backupName, calculatedChecksum := range backupChecksums {
-		receivedChecksum, exists := backupChecksums[backupName]
+	for backupName, calculatedChecksum := range backupChecksumsCalculated {
+		receivedChecksum, exists := backupChecksumsReceived[backupName]
 		if !exists {
 			middleware.CaptureAndAbort(c, fmt.Errorf("checksum missing for backup %s", backupName))
 			return
