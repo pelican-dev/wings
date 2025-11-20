@@ -20,6 +20,7 @@ import (
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/internal/models"
+	"github.com/pelican-dev/wings/internal/ufs"
 	"github.com/pelican-dev/wings/router/downloader"
 	"github.com/pelican-dev/wings/router/middleware"
 	"github.com/pelican-dev/wings/router/tokens"
@@ -236,12 +237,10 @@ func postServerDeleteFiles(c *gin.Context) {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
-				if err := s.Filesystem().IsIgnored(pi); err != nil {
-					return err
-				}
-				return s.Filesystem().Delete(pi)
+				return s.Filesystem().SafeDeleteRecursively(pi)
 			}
 		})
+		
 	}
 
 	if err := g.Wait(); err != nil {
@@ -409,9 +408,15 @@ func postServerCreateDirectory(c *gin.Context) {
 	}
 
 	if err := s.Filesystem().CreateDirectory(data.Name, data.Path); err != nil {
-		if err.Error() == "not a directory" {
+		if errors.Is(err, ufs.ErrNotDirectory) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error": "Part of the path being created is not a directory (ENOTDIR).",
+			})
+			return
+		}
+		if errors.Is(err, os.ErrExist) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"error": "Cannot create directory, name conflicts with an existing file by the same name.",
 			})
 			return
 		}
@@ -427,9 +432,10 @@ func postServerCompressFiles(c *gin.Context) {
 	s := ExtractServer(c)
 
 	var data struct {
-		RootPath string   `json:"root"`
-		Files    []string `json:"files"`
-		Name     string   `json:"name"`
+		RootPath  string   `json:"root"`
+		Files     []string `json:"files"`
+		Name      string   `json:"name"`
+		Extension string   `json:"extension"`
 	}
 
 	if err := c.BindJSON(&data); err != nil {
@@ -450,7 +456,10 @@ func postServerCompressFiles(c *gin.Context) {
 		return
 	}
 
-	f, err := s.Filesystem().CompressFiles(data.RootPath, data.Name, data.Files)
+	// The extention comes from the panel
+	// Supported are: zip, tar.gz, tar.bz2, tar.xz
+	// No need to check if it is empty or wrong as if data.Extention is wrong the function falls back to tar.gz
+	f, mimetype, err := s.Filesystem().CompressFiles(data.RootPath, data.Name, data.Files, data.Extension)
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
 		return
@@ -458,7 +467,7 @@ func postServerCompressFiles(c *gin.Context) {
 
 	c.JSON(http.StatusOK, &filesystem.Stat{
 		FileInfo: f,
-		Mimetype: "application/tar+gzip",
+		Mimetype: mimetype,
 	})
 }
 

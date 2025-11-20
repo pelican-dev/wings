@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/apex/log"
 	"github.com/gin-gonic/gin"
 
 	"github.com/pelican-dev/wings/config"
+	"github.com/pelican-dev/wings/internal/diagnostics"
 	"github.com/pelican-dev/wings/router/middleware"
 	"github.com/pelican-dev/wings/server"
 	"github.com/pelican-dev/wings/server/installer"
@@ -43,15 +46,65 @@ func getSystemInformation(c *gin.Context) {
 		Version:       i.Version,
 	})
 }
+func getDiagnostics(c *gin.Context) {
+	// Optional query params: ?include_endpoints=true&include_logs=true&log_lines=300
 
-// Returns list of host machine IP addresses
-func getSystemIps(c *gin.Context) {
-	i, err := system.GetSystemIps()
+	// Parse boolean query parameter with default
+	parseBoolQuery := func(param string, defaultVal bool) bool {
+		q := strings.ToLower(c.Query(param))
+		switch q {
+		case "true":
+			return true
+		case "false":
+			return false
+		default:
+			return defaultVal
+		}
+	}
+
+	includeEndpoints := parseBoolQuery("include_endpoints", false)
+	includeLogs := parseBoolQuery("include_logs", true)
+
+	// Parse log_lines query parameter with bounds
+	logLines := 200
+	if q := c.Query("log_lines"); q != "" {
+		if n, err := strconv.Atoi(q); err == nil {
+			if n > 500 {
+				logLines = 500
+			} else if n > 0 {
+				logLines = n
+			}
+		}
+	}
+
+	report, err := diagnostics.GenerateDiagnosticsReport(includeEndpoints, includeLogs, logLines)
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, i)
+
+	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(report))
+}
+
+// Returns list of host machine IP addresses
+func getSystemIps(c *gin.Context) {
+	interfaces, err := system.GetSystemIps()
+	if err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	// Append config defined ips as well
+	for i := range config.Get().Docker.SystemIps {
+		targetIp := config.Get().Docker.SystemIps[i]
+		if slices.Contains(interfaces, targetIp) {
+			continue
+		}
+
+		interfaces = append(interfaces, targetIp)
+	}
+
+	c.JSON(http.StatusOK, &system.IpAddresses{IpAddresses: interfaces})
 }
 
 // Returns resource utilization info for the system wings is running on.

@@ -330,16 +330,8 @@ func (fs *Filesystem) Copy(p string) error {
 	}
 
 	base := info.Name()
-	extension := filepath.Ext(base)
+	extension := fs.Ext(base)
 	baseName := strings.TrimSuffix(base, extension)
-
-	// Ensure that ".tar" is also counted as apart of the file extension.
-	// There might be a better way to handle this for other double file extensions,
-	// but this is a good workaround for now.
-	if strings.HasSuffix(baseName, ".tar") {
-		extension = ".tar" + extension
-		baseName = strings.TrimSuffix(baseName, ".tar")
-	}
 
 	newName, err := fs.findCopySuffix(dirfd, baseName, extension)
 	if err != nil {
@@ -362,6 +354,21 @@ func (fs *Filesystem) Copy(p string) error {
 	}
 	// Return the error from io.Copy.
 	return err
+}
+
+func (fs *Filesystem) Ext(n string) string {
+
+	extension := filepath.Ext(n)
+	baseName := strings.TrimSuffix(n, extension)
+
+	// Ensure that ".tar" is also counted as apart of the file extension.
+	// There might be a better way to handle this for other double file extensions,
+	// but this is a good workaround for now.
+	if strings.HasSuffix(baseName, ".tar") {
+		extension = ".tar" + extension
+		baseName = strings.TrimSuffix(baseName, ".tar")
+	}
+	return extension
 }
 
 // TruncateRootDirectory removes _all_ files and directories from a server's
@@ -392,6 +399,66 @@ func (fs *Filesystem) TruncateRootDirectory() error {
 // accidentally (or maliciously) removing their root server data directory.
 func (fs *Filesystem) Delete(p string) error {
 	return fs.unixFS.RemoveAll(p)
+}
+
+// SafeDeleteRecursively deletes a file or directory while respecting the denylist.
+// For files, deletion is skipped if the file matches the denylist. For directories,
+// it recursively deletes all non-denylisted files and subdirectories. Empty directories
+// are removed automatically, but directories containing denylisted files are preserved.
+func (fs *Filesystem) SafeDeleteRecursively(p string) error {
+	info, err := fs.unixFS.Lstat(p)
+	if err != nil {
+		return err
+	}
+
+	// Check if this path (file or directory) is denylisted
+	if err := fs.IsIgnored(p); err != nil {
+		// Skip denylisted file or directory
+		return nil
+	}
+
+	if !info.IsDir() {
+		return fs.Delete(p)
+	}
+
+	entries, err := fs.ReadDir(p)
+	if err != nil {
+		return err
+	}
+
+	hasRemainingFiles := false
+
+	for _, e := range entries {
+		child := filepath.Join(p, e.Name())
+
+		if e.IsDir() {
+			if err := fs.SafeDeleteRecursively(child); err != nil {
+				return err
+			}
+			// Check if the directory still exists after recursive deletion
+			if _, statErr := fs.unixFS.Lstat(child); statErr == nil {
+				hasRemainingFiles = true
+			}
+			continue
+		}
+
+		// File handling - check if ignored
+		if err := fs.IsIgnored(child); err != nil {
+			hasRemainingFiles = true
+			continue // skip denylisted
+		}
+
+		if err := fs.Delete(child); err != nil {
+			return err
+		}
+	}
+
+	// Only remove directory if no files remain
+	if !hasRemainingFiles {
+		return fs.unixFS.Remove(p)
+	}
+
+	return nil
 }
 
 //type fileOpener struct {

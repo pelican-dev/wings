@@ -93,6 +93,12 @@ type ApiConfiguration struct {
 	// servers.
 	DisableRemoteDownload bool `json:"-" yaml:"disable_remote_download"`
 
+	// RemoteDownload contains configuration for server remote download functionality.
+	RemoteDownload struct {
+		// MaxRedirects controls how many HTTP redirects are followed when performing a remote download.
+		MaxRedirects int `default:"10" json:"max_redirects" yaml:"max_redirects"`
+	} `json:"remote_download" yaml:"remote_download"`
+
 	// The maximum size for files uploaded through the Panel in MiB.
 	UploadLimit int64 `default:"100" json:"upload_limit" yaml:"upload_limit"`
 
@@ -363,7 +369,7 @@ type Configuration struct {
 // SearchRecursion holds the configuration for directory search recursion settings.
 type SearchRecursion struct {
 	// BlacklistedDirs is a list of directory names that should be excluded from the recursion.
-	BlacklistedDirs []string `default:"[\"node_modules\", \".wine\", \"appcache\", \"depotcache\", \"vendor\"]" yaml:"blacklisted_dirs" json:"blacklisted_dirs"`
+	BlacklistedDirs []string `default:"[\"node_modules\", \".git\", \".wine\", \"appcache\", \"depotcache\", \"vendor\"]" yaml:"blacklisted_dirs" json:"blacklisted_dirs"`
 
 	// MaxRecursionDepth specifies the maximum depth for directory recursion.
 	MaxRecursionDepth int `default:"8" yaml:"max_recursion_depth" json:"max_recursion_depth"`

@@ -2,37 +2,24 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	"os/exec"
-	"path"
-	"strconv"
-	"strings"
-	"time"
 
-	"github.com/AlecAivazis/survey/v2"
-	"github.com/AlecAivazis/survey/v2/terminal"
 	"github.com/apex/log"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/pkg/parsers/kernel"
-	"github.com/docker/docker/pkg/parsers/operatingsystem"
+	"github.com/charmbracelet/huh"
 	"github.com/goccy/go-json"
 	"github.com/spf13/cobra"
-	dockerSystem "github.com/docker/docker/api/types/system" // Alias the correct system package
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
+	"github.com/pelican-dev/wings/internal/diagnostics"
 	"github.com/pelican-dev/wings/loggers/cli"
-	"github.com/pelican-dev/wings/system"
 )
 
 const (
-	DefaultHastebinUrl = "https://paste.pelistuff.com"
+	DefaultHastebinUrl = "https://logs.pelican.dev"
 	DefaultLogLines    = 200
 )
 
@@ -69,160 +56,61 @@ func newDiagnosticsCommand() *cobra.Command {
 // - running docker containers
 // - logs
 func diagnosticsCmdRun(*cobra.Command, []string) {
-	questions := []*survey.Question{
-		{
-			Name:   "IncludeEndpoints",
-			Prompt: &survey.Confirm{Message: "Do you want to include endpoints (i.e. the FQDN/IP of your panel)?", Default: false},
-		},
-		{
-			Name:   "IncludeLogs",
-			Prompt: &survey.Confirm{Message: "Do you want to include the latest logs?", Default: true},
-		},
-		{
-			Name: "ReviewBeforeUpload",
-			Prompt: &survey.Confirm{
-				Message: "Do you want to review the collected data before uploading to " + diagnosticsArgs.HastebinURL + "?",
-				Help:    "The data, especially the logs, might contain sensitive information, so you should review it. You will be asked again if you want to upload.",
-				Default: true,
-			},
-		},
+	// To set default to true
+	defaultTrueConfirmAccessor := func() huh.Accessor[bool] {
+		accessor := huh.EmbeddedAccessor[bool]{}
+		accessor.Set(true)
+		return &accessor
 	}
-	if err := survey.Ask(questions, &diagnosticsArgs); err != nil {
-		if err == terminal.InterruptErr {
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Do you want to include endpoints (i.e. the FQDN/IP of your panel)?").
+				Value(&diagnosticsArgs.IncludeEndpoints),
+			huh.NewConfirm().
+				Title("Do you want to include the latest logs?").
+				Accessor(defaultTrueConfirmAccessor()).
+				Value(&diagnosticsArgs.IncludeLogs),
+			huh.NewConfirm().
+				Title(fmt.Sprintf("Do you want to review the collected data before uploading to %s ?", diagnosticsArgs.HastebinURL)).
+				Description("The data, especially the logs, might contain sensitive information, so you should review it. You will be asked again if you want to upload.").
+				Accessor(defaultTrueConfirmAccessor()).
+				Value(&diagnosticsArgs.ReviewBeforeUpload),
+		),
+	)
+	if err := form.Run(); err != nil {
+		if err == huh.ErrUserAborted {
 			return
 		}
 		panic(err)
 	}
 
-	dockerVersion, dockerInfo, dockerErr := getDockerInfo()
-
-	output := &strings.Builder{}
-	fmt.Fprintln(output, "Pelican Wings - Diagnostics Report")
-	printHeader(output, "Versions")
-	fmt.Fprintln(output, "               Wings:", system.Version)
-	if dockerErr == nil {
-		fmt.Fprintln(output, "              Docker:", dockerVersion.Version)
-	}
-	if v, err := kernel.GetKernelVersion(); err == nil {
-		fmt.Fprintln(output, "              Kernel:", v)
-	}
-	if os, err := operatingsystem.GetOperatingSystem(); err == nil {
-		fmt.Fprintln(output, "                  OS:", os)
-	}
-
-	printHeader(output, "Wings Configuration")
-	if err := config.FromFile(config.DefaultLocation); err != nil {
-	}
-	cfg := config.Get()
-	fmt.Fprintln(output, "      Panel Location:", redact(cfg.PanelLocation))
-	fmt.Fprintln(output, "")
-	fmt.Fprintln(output, "  Internal Webserver:", redact(cfg.Api.Host), ":", cfg.Api.Port)
-	fmt.Fprintln(output, "         SSL Enabled:", cfg.Api.Ssl.Enabled)
-	fmt.Fprintln(output, "     SSL Certificate:", redact(cfg.Api.Ssl.CertificateFile))
-	fmt.Fprintln(output, "             SSL Key:", redact(cfg.Api.Ssl.KeyFile))
-	fmt.Fprintln(output, "")
-	fmt.Fprintln(output, "         SFTP Server:", redact(cfg.System.Sftp.Address), ":", cfg.System.Sftp.Port)
-	fmt.Fprintln(output, "      SFTP Read-Only:", cfg.System.Sftp.ReadOnly)
-	fmt.Fprintln(output, "")
-	fmt.Fprintln(output, "      Root Directory:", cfg.System.RootDirectory)
-	fmt.Fprintln(output, "      Logs Directory:", cfg.System.LogDirectory)
-	fmt.Fprintln(output, "      Data Directory:", cfg.System.Data)
-	fmt.Fprintln(output, "   Archive Directory:", cfg.System.ArchiveDirectory)
-	fmt.Fprintln(output, "    Backup Directory:", cfg.System.BackupDirectory)
-	fmt.Fprintln(output, "")
-	fmt.Fprintln(output, "            Username:", cfg.System.Username)
-	fmt.Fprintln(output, "         Server Time:", time.Now().Format(time.RFC1123Z))
-	fmt.Fprintln(output, "          Debug Mode:", cfg.Debug)
-
-	printHeader(output, "Docker: Info")
-	if dockerErr == nil {
-		fmt.Fprintln(output, "Server Version:", dockerInfo.ServerVersion)
-		fmt.Fprintln(output, "Storage Driver:", dockerInfo.Driver)
-		if dockerInfo.DriverStatus != nil {
-			for _, pair := range dockerInfo.DriverStatus {
-				fmt.Fprintf(output, "  %s: %s\n", pair[0], pair[1])
-			}
-		}
-		if dockerInfo.SystemStatus != nil {
-			for _, pair := range dockerInfo.SystemStatus {
-				fmt.Fprintf(output, " %s: %s\n", pair[0], pair[1])
-			}
-		}
-		fmt.Fprintln(output, "LoggingDriver:", dockerInfo.LoggingDriver)
-		fmt.Fprintln(output, " CgroupDriver:", dockerInfo.CgroupDriver)
-		if len(dockerInfo.Warnings) > 0 {
-			for _, w := range dockerInfo.Warnings {
-				fmt.Fprintln(output, w)
-			}
-		}
-	} else {
-		fmt.Fprintln(output, dockerErr.Error())
-	}
-
-	printHeader(output, "Docker: Running Containers")
-	c := exec.Command("docker", "ps")
-	if co, err := c.Output(); err == nil {
-		output.Write(co)
-	} else {
-		fmt.Fprint(output, "Couldn't list containers: ", err)
-	}
-
-	printHeader(output, "Latest Wings Logs")
-	if diagnosticsArgs.IncludeLogs {
-		p := "/var/log/pelican/wings.log"
-		if cfg != nil {
-			p = path.Join(cfg.System.LogDirectory, "wings.log")
-		}
-		if c, err := exec.Command("tail", "-n", strconv.Itoa(diagnosticsArgs.LogLines), p).Output(); err != nil {
-			fmt.Fprintln(output, "No logs found or an error occurred.")
-		} else {
-			fmt.Fprintf(output, "%s\n", string(c))
-		}
-	} else {
-		fmt.Fprintln(output, "Logs redacted.")
-	}
-
-	if !diagnosticsArgs.IncludeEndpoints {
-		s := output.String()
-		output.Reset()
-		s = strings.ReplaceAll(s, cfg.PanelLocation, "{redacted}")
-		s = strings.ReplaceAll(s, cfg.Api.Host, "{redacted}")
-		s = strings.ReplaceAll(s, cfg.Api.Ssl.CertificateFile, "{redacted}")
-		s = strings.ReplaceAll(s, cfg.Api.Ssl.KeyFile, "{redacted}")
-		s = strings.ReplaceAll(s, cfg.System.Sftp.Address, "{redacted}")
-		output.WriteString(s)
+	report, err := diagnostics.GenerateDiagnosticsReport(
+		diagnosticsArgs.IncludeEndpoints,
+		diagnosticsArgs.IncludeLogs,
+		diagnosticsArgs.LogLines,
+	)
+	if err != nil {
+		fmt.Println("Error generating report:", err)
+		return
 	}
 
 	fmt.Println("\n---------------  generated report  ---------------")
-	fmt.Println(output.String())
+	fmt.Println(report)
 	fmt.Print("---------------   end of report    ---------------\n\n")
 
-	upload := !diagnosticsArgs.ReviewBeforeUpload
-	if !upload {
-		survey.AskOne(&survey.Confirm{Message: "Upload to " + diagnosticsArgs.HastebinURL + "?", Default: false}, &upload)
-	}
-	if upload {
-		u, err := uploadToHastebin(diagnosticsArgs.HastebinURL, output.String())
-		if err == nil {
-			fmt.Println("Your report is available here: ", u)
+	if diagnosticsArgs.ReviewBeforeUpload {
+		upload := false
+		huh.NewConfirm().Title("Upload to " + diagnosticsArgs.HastebinURL + "?").Value(&upload).Run()
+		if !upload {
+			return
 		}
 	}
-}
 
-func getDockerInfo() (types.Version, dockerSystem.Info, error) {
-	client, err := environment.Docker()
-	if err != nil {
-		return types.Version{}, dockerSystem.Info{}, err
+	u, err := uploadToHastebin(diagnosticsArgs.HastebinURL, report)
+	if err == nil {
+		fmt.Println("Your report is available here: ", u)
 	}
-	dockerVersion, err := client.ServerVersion(context.Background())
-	if err != nil {
-		return types.Version{}, dockerSystem.Info{}, err
-	}
-	dockerInfo, err := client.Info(context.Background())
-	if err != nil {
-		return types.Version{}, dockerSystem.Info{}, err
-	}
-	return dockerVersion, dockerInfo, nil
 }
 
 func uploadToHastebin(hbUrl, content string) (string, error) {
@@ -255,16 +143,4 @@ func uploadToHastebin(hbUrl, content string) (string, error) {
 		return pasteUrl, nil
 	}
 	return "", errors.New("failed to find key in response")
-}
-
-func redact(s string) string {
-	if !diagnosticsArgs.IncludeEndpoints {
-		return "{redacted}"
-	}
-	return s
-}
-
-func printHeader(w io.Writer, title string) {
-	fmt.Fprintln(w, "\n|\n|", title)
-	fmt.Fprintln(w, "| ------------------------------")
 }
