@@ -119,9 +119,18 @@ func (c *client) requestOnce(ctx context.Context, method, path string, body io.R
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s.%s", c.tokenId, c.token))
 	
-	for cHeaderKey, cHeaderValue  := range c.customHeaders {
-		req.Header.Set(cHeaderKey, cHeaderValue)
-	} 
+	// Apply custom headers, but prevent overriding critical headers
+	criticalHeaders := map[string]bool{
+		"Authorization": true,
+		"User-Agent":    true,
+		"Accept":        true,
+		"Content-Type":  true,
+	}
+	for key, value := range c.customHeaders {
+		if !criticalHeaders[key] {
+			req.Header.Set(key, value)
+		}
+	}
 
 	// Call all opts functions to allow modifying the request
 	for _, o := range opts {
