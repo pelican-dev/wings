@@ -70,8 +70,8 @@ func WithCredentials(id, token string) ClientOption {
 	}
 }
 
-// WithCustomHeader sets custom headers to be used when making remote requests.
-func WithCustomHeader(headers map[string]string) ClientOption {
+// WithCustomHeaders sets custom headers to be used when making remote requests.
+func WithCustomHeaders(headers map[string]string) ClientOption {
 	return func(c *client) {
 		c.customHeaders = headers
 	}
