@@ -808,15 +808,38 @@ func UseOpenat2() bool {
 // IsKVMAvailable checks if KVM is available on the host system by checking
 // if /dev/kvm exists and is accessible.
 func IsKVMAvailable() bool {
+	// Check if /dev/kvm exists
 	if _, err := os.Stat("/dev/kvm"); err != nil {
+		if os.IsNotExist(err) {
+			log.Debug("/dev/kvm not found: KVM is not available on this system")
+			return false
+		}
+		// Other errors from Stat (e.g., permission issues checking the file)
+		log.WithError(err).Warn("/dev/kvm stat failed: unexpected error, assuming KVM not available")
 		return false
 	}
+
 	// Try to open the device to verify it's actually accessible
 	file, err := os.Open("/dev/kvm")
 	if err != nil {
+		if os.IsPermission(err) {
+			// KVM device exists but we don't have permission to access it
+			// Return true since KVM is present, just not accessible to this process
+			log.Info("/dev/kvm permission denied: KVM is present but not accessible to this process")
+			return true
+		}
+		if os.IsNotExist(err) {
+			// Shouldn't happen if Stat succeeded, but handle it anyway
+			log.Debug("/dev/kvm not found: KVM is not available on this system")
+			return false
+		}
+		// Other unexpected errors
+		log.WithError(err).Warn("/dev/kvm open failed: unexpected error, assuming KVM not available")
 		return false
 	}
-	file.Close()
+	defer file.Close()
+
+	log.Debug("/dev/kvm is available and accessible")
 	return true
 }
 
