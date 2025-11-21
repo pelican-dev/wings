@@ -99,8 +99,7 @@ type DockerConfiguration struct {
 
 	// EnableNativeKVM enables native KVM support for containers. This allows containers
 	// to access /dev/kvm for hardware-accelerated virtualization. Defaults to false.
-	// Must be explicitly enabled in the configuration file.
-	EnableNativeKVM bool `json:"enable_native_kvm" yaml:"enable_native_kvm"`
+	EnableNativeKVM bool `default:"false" json:"enable_native_kvm" yaml:"enable_native_kvm"`
 }
 
 func (c DockerConfiguration) ContainerLogConfig() container.LogConfig {
