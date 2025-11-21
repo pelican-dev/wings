@@ -133,6 +133,17 @@ func (l Limits) AsContainerResources() container.Resources {
 		resources.CpusetCpus = l.Threads
 	}
 
+	// Add KVM device mapping if native KVM support is enabled
+	if config.Get().Docker.EnableNativeKVM {
+		resources.Devices = []container.DeviceMapping{
+			{
+				PathOnHost:        "/dev/kvm",
+				PathInContainer:   "/dev/kvm",
+				CgroupPermissions: "rwm",
+			},
+		}
+	}
+
 	return resources
 }
 

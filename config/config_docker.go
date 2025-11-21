@@ -96,6 +96,11 @@ type DockerConfiguration struct {
 		Type   string            `default:"local" json:"type" yaml:"type"`
 		Config map[string]string `default:"{\"max-size\":\"5m\",\"max-file\":\"1\",\"compress\":\"false\",\"mode\":\"non-blocking\"}" json:"config" yaml:"config"`
 	} `json:"log_config" yaml:"log_config"`
+
+	// EnableNativeKVM enables native KVM support for containers. This allows containers
+	// to access /dev/kvm for hardware-accelerated virtualization. The default value is
+	// automatically set to true if KVM is available on the host system, otherwise false.
+	EnableNativeKVM bool `json:"enable_native_kvm" yaml:"enable_native_kvm"`
 }
 
 func (c DockerConfiguration) ContainerLogConfig() container.LogConfig {

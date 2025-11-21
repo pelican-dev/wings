@@ -555,6 +555,17 @@ func FromFile(path string) error {
 		return err
 	}
 
+	// Check if enable_native_kvm was explicitly set in the YAML
+	var rawConfig map[string]interface{}
+	explicitlySet := false
+	if err := yaml.Unmarshal(b, &rawConfig); err == nil {
+		if dockerConfig, ok := rawConfig["docker"].(map[interface{}]interface{}); ok {
+			if _, exists := dockerConfig["enable_native_kvm"]; exists {
+				explicitlySet = true
+			}
+		}
+	}
+
 	if err := yaml.Unmarshal(b, c); err != nil {
 		return err
 	}
@@ -577,6 +588,12 @@ func FromFile(path string) error {
 	c.Token.Token, err = Expand(c.Token.Token)
 	if err != nil {
 		return err
+	}
+
+	// Set default for EnableNativeKVM based on KVM availability if not explicitly set.
+	// Default is true if KVM is available on the host, otherwise false.
+	if !explicitlySet {
+		c.Docker.EnableNativeKVM = IsKVMAvailable()
 	}
 
 	// Store this configuration in the global state.
@@ -786,6 +803,21 @@ func UseOpenat2() bool {
 		openat2.Store(true)
 		return true
 	}
+}
+
+// IsKVMAvailable checks if KVM is available on the host system by checking
+// if /dev/kvm exists and is accessible.
+func IsKVMAvailable() bool {
+	if _, err := os.Stat("/dev/kvm"); err != nil {
+		return false
+	}
+	// Try to open the device to verify it's actually accessible
+	file, err := os.Open("/dev/kvm")
+	if err != nil {
+		return false
+	}
+	file.Close()
+	return true
 }
 
 // Expand expands an input string by calling [os.ExpandEnv] to expand all
