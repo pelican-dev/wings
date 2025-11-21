@@ -555,17 +555,6 @@ func FromFile(path string) error {
 		return err
 	}
 
-	// Check if enable_native_kvm was explicitly set in the YAML
-	var rawConfig map[string]interface{}
-	explicitlySet := false
-	if err := yaml.Unmarshal(b, &rawConfig); err == nil {
-		if dockerConfig, ok := rawConfig["docker"].(map[interface{}]interface{}); ok {
-			if _, exists := dockerConfig["enable_native_kvm"]; exists {
-				explicitlySet = true
-			}
-		}
-	}
-
 	if err := yaml.Unmarshal(b, c); err != nil {
 		return err
 	}
@@ -588,12 +577,6 @@ func FromFile(path string) error {
 	c.Token.Token, err = Expand(c.Token.Token)
 	if err != nil {
 		return err
-	}
-
-	// Set default for EnableNativeKVM based on KVM availability if not explicitly set.
-	// Default is true if KVM is available on the host, otherwise false.
-	if !explicitlySet {
-		c.Docker.EnableNativeKVM = IsKVMAvailable()
 	}
 
 	// Store this configuration in the global state.
