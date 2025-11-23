@@ -278,6 +278,12 @@ type Transfers struct {
 	//
 	// Defaults to 0 (unlimited)
 	DownloadLimit int `default:"0" yaml:"download_limit"`
+
+	// StoragePool acts as a per-node identifier to signal that this node shares a common data volume
+	// with other nodes in the cluster. When this value is set and matches the value on a target node,
+	// Wings will assume the server data already exists on the target and will skip copying and cleanup.
+	// When empty, transfers behave normally.
+	StoragePool string `yaml:"storage_pool"`
 }
 
 type ConsoleThrottles struct {

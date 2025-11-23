@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/router/middleware"
 	"github.com/pelican-dev/wings/router/tokens"
 	"github.com/pelican-dev/wings/server"
@@ -127,6 +128,20 @@ func postTransfers(c *gin.Context) {
 		trnsfr.Server.SetTransferring(false)
 		trnsfr.Server.Events().Publish(server.TransferStatusEvent, "success")
 	}(ctx, trnsfr)
+
+	{
+		remotePool := config.Get().System.Transfers.StoragePool
+		sourcePool := c.GetHeader("X-Storage-Pool")
+		if remotePool != "" && sourcePool != "" && strings.EqualFold(remotePool, sourcePool) {
+			if err := trnsfr.Server.CreateEnvironment(); err != nil {
+				middleware.CaptureAndAbort(c, err)
+				return
+			}
+			successful = true
+			c.Status(http.StatusOK)
+			return
+		}
+	}
 
 	mediaType, params, err := mime.ParseMediaType(c.GetHeader("Content-Type"))
 	if err != nil {
