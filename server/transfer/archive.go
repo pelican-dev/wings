@@ -35,6 +35,11 @@ func (t *Transfer) Archive() (*Archive, error) {
 }
 
 func (a *Archive) StreamBackups(ctx context.Context, mp *multipart.Writer) error {
+	if len(a.transfer.BackupUUIDs) == 0 {
+        a.transfer.Log().Debug("no backups specified for transfer")
+        return nil
+    }
+	
 	cfg := config.Get()
 	backupPath := filepath.Join(cfg.System.BackupDirectory, a.transfer.Server.ID())
 
@@ -49,24 +54,31 @@ func (a *Archive) StreamBackups(ctx context.Context, mp *multipart.Writer) error
 		return err
 	}
 
-	// Count backups first
-	var backupFiles []os.DirEntry
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".tar.gz") {
-			backupFiles = append(backupFiles, entry)
-		}
-	}
+    // Create a set of backup UUIDs for quick lookup
+    backupSet := make(map[string]bool)
+    for _, uuid := range a.transfer.BackupUUIDs {
+        backupSet[uuid+".tar.gz"] = true // Backup files are stored as UUID.tar.gz
+    }
 
-	totalBackups := len(backupFiles)
-	if totalBackups == 0 {
-		a.transfer.Log().Debug("no backups found to transfer")
-		return nil
-	}
+    var backupsToTransfer []os.DirEntry
+    for _, entry := range entries {
+        if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".tar.gz") {
+            if backupSet[entry.Name()] {
+                backupsToTransfer = append(backupsToTransfer, entry)
+            }
+        }
+    }
 
+    totalBackups := len(backupsToTransfer)
+    if totalBackups == 0 {
+        a.transfer.Log().Debug("no matching backup files found")
+        return nil
+    }
+	
 	a.transfer.Log().Infof("Starting transfer of %d backup files", totalBackups)
 	a.transfer.SendMessage(fmt.Sprintf("Starting transfer of %d backup files", totalBackups))
 
-	for _, entry := range backupFiles {
+	for _, entry := range backupsToTransfer {
 		backupFile := filepath.Join(backupPath, entry.Name())
 
 		a.transfer.Log().WithField("backup", entry.Name()).Debug("streaming backup file")

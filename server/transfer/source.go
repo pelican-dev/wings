@@ -124,11 +124,14 @@ func (t *Transfer) PushArchiveToTarget(url, token string) ([]byte, error) {
 			return
 		}
 
-		// Stream backups with individual checksums
-		t.SendMessage("Streaming backup files to destination...")
-		if err := a.StreamBackups(ctx, mp); err != nil {
-			errChan <- fmt.Errorf("failed to stream backups: %w", err)
-			return
+		if len(t.BackupUUIDs) > 0 {
+			t.SendMessage(fmt.Sprintf("Streaming %d backup files to destination...", len(t.BackupUUIDs)))
+			if err := a.StreamBackups(ctx, mp); err != nil {
+				errChan <- fmt.Errorf("failed to stream backups: %w", err)
+				return
+			}
+		} else {
+			t.Log().Debug("no backups specified for transfer")
 		}
 
 		cancel2()
