@@ -73,19 +73,22 @@ func ConfigureDocker(ctx context.Context) error {
 		}
 
 		// Update the interface configuration with the actual assigned values from Docker
-		if len(resource.IPAM.Config) > 0 {
-			if resource.IPAM.Config[0].Subnet != "" {
-				c.Docker.Network.Interfaces.V4.Subnet = resource.IPAM.Config[0].Subnet
+		for _, ipamCfg := range resource.IPAM.Config {
+			if ipamCfg.Subnet == "" {
+				continue
 			}
-			if resource.IPAM.Config[0].Gateway != "" {
-				c.Docker.Network.Interfaces.V4.Gateway = resource.IPAM.Config[0].Gateway
-				c.Docker.Network.Interface = resource.IPAM.Config[0].Gateway
-			}
-		}
-		if len(resource.IPAM.Config) > 1 && resource.IPAM.Config[1].Subnet != "" {
-			c.Docker.Network.Interfaces.V6.Subnet = resource.IPAM.Config[1].Subnet
-			if resource.IPAM.Config[1].Gateway != "" {
-				c.Docker.Network.Interfaces.V6.Gateway = resource.IPAM.Config[1].Gateway
+			// IPv6 subnets contain colons
+			if strings.Contains(ipamCfg.Subnet, ":") {
+				c.Docker.Network.Interfaces.V6.Subnet = ipamCfg.Subnet
+				if ipamCfg.Gateway != "" {
+					c.Docker.Network.Interfaces.V6.Gateway = ipamCfg.Gateway
+				}
+			} else {
+				c.Docker.Network.Interfaces.V4.Subnet = ipamCfg.Subnet
+				if ipamCfg.Gateway != "" {
+					c.Docker.Network.Interfaces.V4.Gateway = ipamCfg.Gateway
+					c.Docker.Network.Interface = ipamCfg.Gateway
+				}
 			}
 		}
 	})
