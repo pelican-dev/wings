@@ -10,8 +10,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"time"
-
-	"github.com/pelican-dev/wings/internal/progress"
 )
 
 // PushArchiveToTarget POSTs the archive to the target node and returns the
@@ -34,7 +32,7 @@ func (t *Transfer) PushArchiveToTarget(url, token string) ([]byte, error) {
 	// Send the upload progress to the websocket every 5 seconds.
 	ctx2, cancel2 := context.WithCancel(ctx)
 	defer cancel2()
-	go func(ctx context.Context, p *progress.Progress, tc *time.Ticker) {
+	go func(ctx context.Context, a *Archive, tc *time.Ticker) {
 		defer tc.Stop()
 
 		for {
@@ -42,10 +40,17 @@ func (t *Transfer) PushArchiveToTarget(url, token string) ([]byte, error) {
 			case <-ctx.Done():
 				return
 			case <-tc.C:
-				t.SendMessage("Uploading " + p.Progress(25))
+				progress := a.Progress()
+				if progress != nil {
+					message := "Uploading " + progress.Progress(25)
+					// We can't easily show backup count here without tracking totalBackups
+					// But we're already showing individual backup progress in StreamBackups
+					t.SendMessage(message)
+					t.Log().Info(message)
+				}
 			}
 		}
-	}(ctx2, a.Progress(), time.NewTicker(5*time.Second))
+	}(ctx2, a, time.NewTicker(5*time.Second))
 
 	// Create a new request using the pipe as the body.
 	body, writer := io.Pipe()
@@ -70,12 +75,13 @@ func (t *Transfer) PushArchiveToTarget(url, token string) ([]byte, error) {
 		defer writer.Close()
 		defer mp.Close()
 
+		// Stream server data with its own checksum
 		src, pw := io.Pipe()
 		defer src.Close()
 		defer pw.Close()
 
-		h := sha256.New()
-		tee := io.TeeReader(src, h)
+		mainHasher := sha256.New()
+		mainTee := io.TeeReader(src, mainHasher)
 
 		dest, err := mp.CreateFormFile("archive", "archive.tar.gz")
 		if err != nil {
@@ -87,37 +93,56 @@ func (t *Transfer) PushArchiveToTarget(url, token string) ([]byte, error) {
 		go func() {
 			defer close(ch)
 
-			if _, err := io.Copy(dest, tee); err != nil {
+			if _, err := io.Copy(dest, mainTee); err != nil {
 				ch <- fmt.Errorf("failed to stream archive to destination: %w", err)
 				return
 			}
 
-			t.Log().Debug("finished copying dest to tee")
+			t.Log().Debug("finished copying main archive to destination")
 		}()
 
+		// Stream server data
 		if err := a.Stream(ctx, pw); err != nil {
 			errChan <- errors.New("failed to stream archive to pipe")
 			return
 		}
 		t.Log().Debug("finished streaming archive to pipe")
 
-		// Close the pipe writer early to release resources and ensure that the data gets flushed.
+		// Close the pipe writer to ensure data gets flushed
 		_ = pw.Close()
 
-		// Wait for the copy to finish before we continue.
-		t.Log().Debug("waiting on copy to finish")
+		// Wait for the copy to finish
+		t.Log().Debug("waiting on main archive copy to finish")
 		if err := <-ch; err != nil {
 			errChan <- err
 			return
 		}
 
-		if err := mp.WriteField("checksum", hex.EncodeToString(h.Sum(nil))); err != nil {
-			errChan <- errors.New("failed to stream checksum")
+		// Write main archive checksum
+		if err := mp.WriteField("checksum_archive", hex.EncodeToString(mainHasher.Sum(nil))); err != nil {
+			errChan <- errors.New("failed to stream main archive checksum")
 			return
 		}
 
+		if len(t.BackupUUIDs) > 0 {
+			t.SendMessage(fmt.Sprintf("Streaming %d backup files to destination...", len(t.BackupUUIDs)))
+			if err := a.StreamBackups(ctx, mp); err != nil {
+				errChan <- fmt.Errorf("failed to stream backups: %w", err)
+				return
+			}
+		} else {
+			t.Log().Debug("no backups specified for transfer")
+		}
+
 		cancel2()
-		t.SendMessage("Finished streaming archive to destination.")
+		t.SendMessage("Finished streaming archive and backups to destination.")
+
+		// Stream install logs if they exist
+		if err := a.StreamInstallLogs(ctx, mp); err != nil {
+			errChan <- fmt.Errorf("failed to stream install logs: %w", err)
+			return
+		}
+		t.SendMessage("Finished streaming the install logs to destination.")
 
 		if err := mp.Close(); err != nil {
 			t.Log().WithError(err).Error("error while closing multipart writer")
