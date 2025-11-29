@@ -2,6 +2,9 @@ package config
 
 import "testing"
 
+// TestDockerNetworkConfiguration_IsContainerNetworkMode tests the IsContainerNetworkMode
+// method to ensure it correctly identifies when the network mode is set to share another
+// container's network namespace (i.e., "container:<name>" format).
 func TestDockerNetworkConfiguration_IsContainerNetworkMode(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -27,4 +30,3 @@ func TestDockerNetworkConfiguration_IsContainerNetworkMode(t *testing.T) {
 		})
 	}
 }
-
