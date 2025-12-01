@@ -73,21 +73,24 @@ func ConfigureDocker(ctx context.Context) error {
 		}
 
 		// Update the interface configuration with the actual assigned values from Docker
-		for _, ipamCfg := range resource.IPAM.Config {
-			if ipamCfg.Subnet == "" {
-				continue
-			}
-			// IPv6 subnets contain colons
-			if strings.Contains(ipamCfg.Subnet, ":") {
-				c.Docker.Network.Interfaces.V6.Subnet = ipamCfg.Subnet
-				if ipamCfg.Gateway != "" {
-					c.Docker.Network.Interfaces.V6.Gateway = ipamCfg.Gateway
+		// Skip IPAM processing for special drivers that don't have normal IPAM configs
+		if c.Docker.Network.Driver != "host" && c.Docker.Network.Driver != "overlay" && c.Docker.Network.Driver != "weavemesh" {
+			for _, ipamCfg := range resource.IPAM.Config {
+				if ipamCfg.Subnet == "" {
+					continue
 				}
-			} else {
-				c.Docker.Network.Interfaces.V4.Subnet = ipamCfg.Subnet
-				if ipamCfg.Gateway != "" {
-					c.Docker.Network.Interfaces.V4.Gateway = ipamCfg.Gateway
-					c.Docker.Network.Interface = ipamCfg.Gateway
+				// IPv6 subnets contain colons
+				if strings.Contains(ipamCfg.Subnet, ":") {
+					c.Docker.Network.Interfaces.V6.Subnet = ipamCfg.Subnet
+					if ipamCfg.Gateway != "" {
+						c.Docker.Network.Interfaces.V6.Gateway = ipamCfg.Gateway
+					}
+				} else {
+					c.Docker.Network.Interfaces.V4.Subnet = ipamCfg.Subnet
+					if ipamCfg.Gateway != "" {
+						c.Docker.Network.Interfaces.V4.Gateway = ipamCfg.Gateway
+						c.Docker.Network.Interface = ipamCfg.Gateway
+					}
 				}
 			}
 		}
