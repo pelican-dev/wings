@@ -75,7 +75,6 @@ func getServerInstallLogs(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": output})
 }
 
-
 // Handles a request to control the power state of a server. If the action being passed
 // through is invalid a 404 is returned. Otherwise, a HTTP/202 Accepted response is returned
 // and the actual power action is run asynchronously so that we don't have to block the
@@ -276,14 +275,17 @@ func deleteServer(c *gin.Context) {
 	//
 	// In addition, servers with large amounts of files can take some time to finish deleting,
 	// so we don't want to block the HTTP call while waiting on this.
-	go func(s *server.Server) {
-		fs := s.Filesystem()
-		p := fs.Path()
-		_ = fs.UnixFS().Close()
-		if err := os.RemoveAll(p); err != nil {
-			log.WithFields(log.Fields{"path": p, "error": err}).Warn("failed to remove server files during deletion process")
-		}
-	}(s)
+	// Skip file removal when a storage pool is configured, since the data is shared across nodes.
+	if config.Get().System.Transfers.StoragePool == "" {
+		go func(s *server.Server) {
+			fs := s.Filesystem()
+			p := fs.Path()
+			_ = fs.UnixFS().Close()
+			if err := os.RemoveAll(p); err != nil {
+				log.WithFields(log.Fields{"path": p, "error": err}).Warn("failed to remove server files during deletion process")
+			}
+		}(s)
+	}
 
 	middleware.ExtractManager(c).Remove(func(server *server.Server) bool {
 		return server.ID() == s.ID()
