@@ -32,17 +32,11 @@ jobs:
           GOARCH=arm64 go build -o dist/wings_linux_arm64 -v -trimpath -ldflags="-s -w -X github.com/pelican-dev/wings/system.Version=${REF:11}" github.com/pelican-dev/wings
           chmod 755 dist/wings_linux_arm64
 
-      - name: Extract changelog
-        env:
-          REF: ${{ github.ref }}
-        run: |
-          sed -n "/^## ${REF:10}/,/^## /{/^## /b;p}" CHANGELOG.md > ./RELEASE_CHANGELOG
 
-      - name: Create checksum and add to changelog
+      - name: Create checksum
         run: |
           SUM=`cd dist && sha256sum wings_linux_amd64`
           SUM2=`cd dist && sha256sum wings_linux_arm64`
-          echo -e "\n#### SHA256 Checksum\n\`\`\`\n$SUM\n$SUM2\n\`\`\`\n" >> ./RELEASE_CHANGELOG
           echo -e "$SUM\n$SUM2" > checksums.txt
 
       - name: Create release branch
@@ -67,7 +61,6 @@ jobs:
         with:
           draft: true
           prerelease: ${{ contains(github.ref, 'rc') || contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
-          body_path: ./RELEASE_CHANGELOG
 
       - name: Upload amd64 binary
         uses: actions/upload-release-asset@v1

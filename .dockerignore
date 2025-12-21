@@ -50,7 +50,5 @@ debug
 *.pdf
 
 Dockerfile
-CHANGELOG.md
 Makefile
 README.md
-wings-api.paw
