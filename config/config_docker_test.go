@@ -13,7 +13,7 @@ func TestDockerNetworkConfiguration_IsContainerNetworkMode(t *testing.T) {
 	}{
 		{"container mode with name", "container:caddy", true},
 		{"container mode with different name", "container:some-vpn-container", true},
-		{"container mode empty name", "container:", true}, // Edge case: technically valid prefix
+		{"container mode empty name", "container:", false}, // Docker rejects "container:" without a name
 		{"default pelican network", "pelican_nw", false},
 		{"bridge network", "bridge", false},
 		{"host network", "host", false},

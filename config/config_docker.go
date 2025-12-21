@@ -47,7 +47,9 @@ type DockerNetworkConfiguration struct {
 // When using "container:<name>" mode, the container inherits the target container's network stack,
 // including hostname, DNS, and network interfaces.
 func (c DockerNetworkConfiguration) IsContainerNetworkMode() bool {
-	return strings.HasPrefix(c.Mode, "container:")
+	// Must have "container:" prefix and at least one character for the container name.
+	// Docker rejects "container:" without a name with "invalid container format container:".
+	return strings.HasPrefix(c.Mode, "container:") && len(c.Mode) > len("container:")
 }
 
 // DockerConfiguration defines the docker configuration used by the daemon when
