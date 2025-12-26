@@ -318,6 +318,10 @@ func (f *ConfigurationFile) parseIniFile(file ufs.File) error {
 		return err
 	}
 
+	// Force format to be key = value
+	ini.PrettyFormat = false
+	ini.PrettyEqual = true
+
 	for _, replacement := range f.Replace {
 		var (
 			path         []string
