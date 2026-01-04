@@ -28,7 +28,6 @@ func (t *Transfer) PushArchiveToTarget(url, token string, backups []string) ([]b
 	}
 
 	t.SendMessage("Streaming archive to destination...")
-	
 
 	// Send the upload progress to the websocket every 5 seconds.
 	ctx2, cancel2 := context.WithCancel(ctx)
