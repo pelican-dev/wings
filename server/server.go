@@ -70,6 +70,7 @@ type Server struct {
 	// The console throttler instance used to control outputs.
 	throttler    *ConsoleThrottle
 	throttleOnce sync.Once
+	sftpBag      *system.ContextBag
 
 	// Tracks open websocket connections for the server.
 	wsBag       *WebsocketBag
@@ -191,7 +192,7 @@ func parseInvocation(invocation string, envvars map[string]interface{}, memory i
 			invocation = strings.Replace(invocation, segment, tempSegments[i], 1)
 		}
 
-		// Replace the placeholders outside of protected segments
+		// Replace the placeholders outside protected segments
 		invocation = strings.ReplaceAll(invocation, placeholder, fmt.Sprint(varval))
 
 		// Restore protected segments
@@ -201,6 +202,10 @@ func parseInvocation(invocation string, envvars map[string]interface{}, memory i
 	}
 
 	// Replace the defaults with their configured values.
+	// and any connected SFTP clients. We don't need to worry about revoking any JWTs
+	// here since they'll be blocked from re-connecting to the websocket anyways. This
+	// just forces the client to disconnect and attempt to reconnect (rather than waiting
+	// on them to send a message and hit that disconnect logic).
 	invocation = strings.ReplaceAll(invocation, "${SERVER_PORT}", strconv.Itoa(port))
 	invocation = strings.ReplaceAll(invocation, "${SERVER_MEMORY}", strconv.Itoa(int(memory)))
 	invocation = strings.ReplaceAll(invocation, "${SERVER_IP}", ip)
@@ -263,11 +268,17 @@ func (s *Server) Sync() error {
 
 	s.SyncWithEnvironment()
 
+	// If the server is suspended immediately disconnect all open websocket connections.
+	if s.IsSuspended() {
+		s.Websockets().CancelAll()
+		s.Sftp().CancelAll()
+	}
+
 	return nil
 }
 
 // SyncWithConfiguration accepts a configuration object for a server and will
-// sync all of the values with the existing server state. This only replaces the
+// sync all values with the existing server state. This only replaces the
 // existing configuration and process configuration for the server. The
 // underlying environment will not be affected. This is because this function
 // can be called from scoped where the server may not be fully initialized,
