@@ -75,7 +75,6 @@ func getServerInstallLogs(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": output})
 }
 
-
 // Handles a request to control the power state of a server. If the action being passed
 // through is invalid a 404 is returned. Otherwise, a HTTP/202 Accepted response is returned
 // and the actual power action is run asynchronously so that we don't have to block the
@@ -295,6 +294,8 @@ func deleteServer(c *gin.Context) {
 // Adds any of the JTIs passed through in the body to the deny list for the websocket
 // preventing any JWT generated before the current time from being used to connect to
 // the socket or send along commands.
+//
+// deprecated: prefer /api/deauthorize-user
 func postServerDenyWSTokens(c *gin.Context) {
 	var data struct {
 		JTIs []string `json:"jtis"`
