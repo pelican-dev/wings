@@ -198,7 +198,7 @@ type SystemConfiguration struct {
 	// some game servers. I.E. Hytale
 	MachineID struct {
 		// Enable controls if the machine-id file is generated and mounted into the server container
-		// This is enabled by defaultc
+		// This is enabled by default
 		Enable bool `json:"enable" yaml:"enable" default:"true"`
 		// FilePath is the full path to the machine-id file that will be generated and mounted
 		Directory string `json:"directory" yaml:"directory" default:"/etc/pelican/machine-id"`
@@ -633,6 +633,11 @@ func ConfigureDirectories() error {
 
 	log.WithField("path", _config.System.Data).Debug("ensuring server data directory exists")
 	if err := os.MkdirAll(_config.System.Data, 0o700); err != nil {
+		return err
+	}
+
+	log.WithField("path", _config.System.TmpDirectory).Debug("ensuring temporary data directory exists")
+	if err := os.MkdirAll(_config.System.TmpDirectory, 0o700); err != nil {
 		return err
 	}
 
