@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -166,7 +167,6 @@ func DetermineServerTimezone(envvars map[string]interface{}, defaultTimezone str
 	return defaultTimezone
 }
 
-
 // parseInvocation parses the start command in the same way we already do in the entrypoint
 // We can use this to set the container command with all variables replaced.
 func parseInvocation(invocation string, envvars map[string]interface{}, memory int64, port int, ip string) (parsed string) {
@@ -310,6 +310,17 @@ func (s *Server) CreateEnvironment() error {
 	// Ensure the data directory exists before getting too far through this process.
 	if err := s.EnsureDataDirectoryExists(); err != nil {
 		return err
+	}
+
+	if config.Get().System.MachineID.Enable {
+		// Hytale wants a machine-id in order to encrypt tokens for the server. So
+		// write a machine-id file for the server that contains the server's UUID
+		// without any dashes.
+		p := filepath.Join(config.Get().System.MachineID.Directory, s.ID())
+		machineID := append([]byte(strings.ReplaceAll(s.ID(), "-", "")))
+		if err := os.WriteFile(p, machineID, 0o644); err != nil {
+			return fmt.Errorf("failed to write machine-id (at '%s') for server '%s': %w", p, s.ID(), err)
+		}
 	}
 
 	return s.Environment.Create()
