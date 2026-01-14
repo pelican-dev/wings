@@ -330,7 +330,7 @@ func (s *Server) CreateMachineID() error {
 	p := filepath.Join(config.Get().System.MachineID.Directory, s.ID())
 	s.Log().WithFields(log.Fields{
 		"path": p}).Debug("creating machine-id file")
-	machineID := append([]byte(strings.ReplaceAll(s.ID(), "-", "")))
+	machineID := []byte(strings.ReplaceAll(s.ID(), "-", ""))
 	if err := os.WriteFile(p, machineID, 0o644); err != nil {
 		return fmt.Errorf("failed to write machine-id (at '%s') for server '%s': %w", p, s.ID(), err)
 	}
