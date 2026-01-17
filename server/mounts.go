@@ -30,15 +30,32 @@ func (s *Server) Mounts() []environment.Mount {
 		},
 	}
 
-	if config.Get().System.User.Passwd {
+	if config.Get().System.User.Passwd.Enable {
 		passwdMount := environment.Mount{
-			Default:  true,
 			Target:   "/etc/passwd",
-			Source:   config.Get().System.User.PasswdFile,
+			Source:   filepath.Join(config.Get().System.User.Passwd.Directory, "passwd"),
 			ReadOnly: true,
 		}
 
 		m = append(m, passwdMount)
+
+		groupMount := environment.Mount{
+			Target:   "/etc/group",
+			Source:   filepath.Join(config.Get().System.User.Passwd.Directory, "group"),
+			ReadOnly: true,
+		}
+
+		m = append(m, groupMount)
+	}
+
+	if config.Get().System.MachineID.Enable {
+		machineIDMount := environment.Mount{
+			Target:   "/etc/machine-id",
+			Source:   filepath.Join(config.Get().System.MachineID.Directory, s.ID()),
+			ReadOnly: true,
+		}
+
+		m = append(m, machineIDMount)
 	}
 	// Also include any of this server's custom mounts when returning them.
 	return append(m, s.customMounts()...)
