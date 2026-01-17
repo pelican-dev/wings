@@ -139,6 +139,9 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 		log.WithField("error", err).Fatal("failed to create pelican system user")
 		return
 	}
+	if err := config.ConfigurePasswd(); err != nil {
+		log.WithField("error", err).Fatal("failed to create passwd files for pelican")
+	}
 	log.WithFields(log.Fields{
 		"username": config.Get().System.Username,
 		"uid":      config.Get().System.User.Uid,
@@ -153,6 +156,7 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 	pclient := remote.New(
 		config.Get().PanelLocation,
 		remote.WithCredentials(t.ID, t.Token),
+		remote.WithCustomHeaders(config.Get().RemoteQuery.CustomHeaders),
 		remote.WithHttpClient(&http.Client{
 			Timeout: time.Second * time.Duration(config.Get().RemoteQuery.Timeout),
 		}),

@@ -75,7 +75,6 @@ func getServerInstallLogs(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": output})
 }
 
-
 // Handles a request to control the power state of a server. If the action being passed
 // through is invalid a 404 is returned. Otherwise, a HTTP/202 Accepted response is returned
 // and the actual power action is run asynchronously so that we don't have to block the
@@ -250,7 +249,7 @@ func deleteServer(c *gin.Context) {
 	// Remove the install log from this server
 	filename := filepath.Join(config.Get().System.LogDirectory, "install", ID+".log")
 	err := os.Remove(filename)
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		log.WithFields(log.Fields{"server_id": ID, "error": err}).Warn("failed to remove server install log during deletion process")
 	}
 
@@ -281,7 +280,16 @@ func deleteServer(c *gin.Context) {
 		p := fs.Path()
 		_ = fs.UnixFS().Close()
 		if err := os.RemoveAll(p); err != nil {
-			log.WithFields(log.Fields{"path": p, "error": err}).Warn("failed to remove server files during deletion process")
+			log.WithFields(log.Fields{"path": p, "error": err}).
+				Warn("failed to remove server files during deletion process")
+		}
+	}(s)
+
+	// remove hanging machine-id file for the server when removing
+	go func(s *server.Server) {
+		if err := os.Remove(filepath.Join(config.Get().System.MachineID.Directory, s.ID())); err != nil {
+			log.WithFields(log.Fields{"server_id": s.ID(), "error": err}).
+				Warn("failed to remove machine-id file for server")
 		}
 	}(s)
 
