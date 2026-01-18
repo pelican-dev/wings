@@ -35,6 +35,7 @@ func (t *Transfer) Archive() (*Archive, error) {
 }
 
 func (a *Archive) StreamBackups(ctx context.Context, mp *multipart.Writer) error {
+	// In theory this can't happen as this function is only called if there is at least 1 backup but just to be sure
 	if len(a.transfer.BackupUUIDs) == 0 {
         a.transfer.Log().Debug("no backups specified for transfer")
         return nil

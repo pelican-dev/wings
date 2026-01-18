@@ -14,7 +14,7 @@ import (
 
 // PushArchiveToTarget POSTs the archive to the target node and returns the
 // response body.
-func (t *Transfer) PushArchiveToTarget(url, token string) ([]byte, error) {
+func (t *Transfer) PushArchiveToTarget(url, token string, backups []string) ([]byte, error) {
 	ctx, cancel := context.WithCancel(t.ctx)
 	defer cancel()
 
@@ -123,7 +123,8 @@ func (t *Transfer) PushArchiveToTarget(url, token string) ([]byte, error) {
 			errChan <- errors.New("failed to stream main archive checksum")
 			return
 		}
-
+		// Store the UUID of the backups we want to transfer in the transfer struct
+		t.BackupUUIDs = backups
 		if len(t.BackupUUIDs) > 0 {
 			t.SendMessage(fmt.Sprintf("Streaming %d backup files to destination...", len(t.BackupUUIDs)))
 			if err := a.StreamBackups(ctx, mp); err != nil {
