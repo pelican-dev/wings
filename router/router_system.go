@@ -14,6 +14,7 @@ import (
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/internal/diagnostics"
 	"github.com/pelican-dev/wings/router/middleware"
+	"github.com/pelican-dev/wings/router/tokens"
 	"github.com/pelican-dev/wings/server"
 	"github.com/pelican-dev/wings/server/installer"
 	"github.com/pelican-dev/wings/system"
@@ -255,4 +256,34 @@ func postUpdateConfiguration(c *gin.Context) {
 	c.JSON(http.StatusOK, postUpdateConfigurationResponse{
 		Applied: true,
 	})
+}
+
+func postDeauthorizeUser(c *gin.Context) {
+	var data struct {
+		User    string   `json:"user"`
+		Servers []string `json:"servers"`
+	}
+
+	if err := c.BindJSON(&data); err != nil {
+		return
+	}
+
+	// todo: disconnect websockets more gracefully
+	m := middleware.ExtractManager(c)
+	if len(data.Servers) > 0 {
+		for _, uuid := range data.Servers {
+			if s, ok := m.Get(uuid); ok {
+				s.Websockets().CancelAll()
+				s.Sftp().Cancel(data.User)
+				tokens.DenyForServer(s.ID(), data.User)
+			}
+		}
+	} else {
+		for _, s := range m.All() {
+			s.Websockets().CancelAll()
+			s.Sftp().Cancel(data.User)
+		}
+	}
+
+	c.Status(http.StatusNoContent)
 }

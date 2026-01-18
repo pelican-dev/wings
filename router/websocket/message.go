@@ -1,5 +1,7 @@
 package websocket
 
+type Event string
+
 const (
 	AuthenticationSuccessEvent = "auth success"
 	TokenExpiringEvent         = "token expiring"
@@ -11,11 +13,12 @@ const (
 	SendStatsEvent             = "send stats"
 	ErrorEvent                 = "daemon error"
 	JwtErrorEvent              = "jwt error"
+	ThrottledEvent             = Event("throttled")
 )
 
 type Message struct {
 	// The event to perform.
-	Event string `json:"event"`
+	Event Event `json:"event"`
 
 	// The data to pass along, only used by power/command currently. Other requests
 	// should either omit the field or pass an empty value as it is ignored.

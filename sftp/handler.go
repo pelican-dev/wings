@@ -107,7 +107,7 @@ func (h *Handler) Filewrite(request *sftp.Request) (io.WriterAt, error) {
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	
+
 	if err := h.fs.IsIgnored(request.Filepath); err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (h *Handler) Filecmd(request *sftp.Request) error {
 	if err := h.fs.IsIgnored(request.Filepath); err != nil {
 		return err
 	}
-	
+
 	switch request.Method {
 	// Allows a user to make changes to the permissions of a given file or directory
 	// on their server using their SFTP client.
@@ -311,4 +311,8 @@ func (h *Handler) can(permission string) bool {
 		}
 	}
 	return false
+}
+
+func (h *Handler) User() string {
+	return h.events.user
 }
