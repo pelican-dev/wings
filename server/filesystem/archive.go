@@ -16,9 +16,9 @@ import (
 	"github.com/klauspost/pgzip"
 	ignore "github.com/sabhiram/go-gitignore"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/internal/progress"
-	"github.com/pelican-dev/wings/internal/ufs"
+	"github.com/Minenetpro/pelican-wings/config"
+	"github.com/Minenetpro/pelican-wings/internal/progress"
+	"github.com/Minenetpro/pelican-wings/internal/ufs"
 )
 
 const memory = 4 * 1024

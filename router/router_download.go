@@ -10,9 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/pelican-dev/wings/router/middleware"
-	"github.com/pelican-dev/wings/router/tokens"
-	"github.com/pelican-dev/wings/server/backup"
+	"github.com/Minenetpro/pelican-wings/router/middleware"
+	"github.com/Minenetpro/pelican-wings/router/tokens"
+	"github.com/Minenetpro/pelican-wings/server/backup"
 )
 
 // Handle a download request for a server backup.

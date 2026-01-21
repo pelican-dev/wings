@@ -10,9 +10,9 @@ import (
 	"github.com/juju/ratelimit"
 	"github.com/mholt/archives"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/remote"
-	"github.com/pelican-dev/wings/server/filesystem"
+	"github.com/Minenetpro/pelican-wings/config"
+	"github.com/Minenetpro/pelican-wings/remote"
+	"github.com/Minenetpro/pelican-wings/server/filesystem"
 )
 
 type LocalBackup struct {

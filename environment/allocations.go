@@ -6,7 +6,7 @@ import (
 
 	"github.com/docker/go-connections/nat"
 
-	"github.com/pelican-dev/wings/config"
+	"github.com/Minenetpro/pelican-wings/config"
 )
 
 

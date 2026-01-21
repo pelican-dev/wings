@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pelican-dev/wings/system"
+	"github.com/Minenetpro/pelican-wings/system"
 	"github.com/spf13/cobra"
 )
 

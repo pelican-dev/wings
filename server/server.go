@@ -18,12 +18,12 @@ import (
 	"github.com/creasty/defaults"
 	"github.com/goccy/go-json"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/events"
-	"github.com/pelican-dev/wings/remote"
-	"github.com/pelican-dev/wings/server/filesystem"
-	"github.com/pelican-dev/wings/system"
+	"github.com/Minenetpro/pelican-wings/config"
+	"github.com/Minenetpro/pelican-wings/environment"
+	"github.com/Minenetpro/pelican-wings/events"
+	"github.com/Minenetpro/pelican-wings/remote"
+	"github.com/Minenetpro/pelican-wings/server/filesystem"
+	"github.com/Minenetpro/pelican-wings/system"
 )
 
 // Server is the high level definition for a server instance being controlled

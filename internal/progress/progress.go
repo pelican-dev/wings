@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/pelican-dev/wings/system"
+	"github.com/Minenetpro/pelican-wings/system"
 )
 
 // Progress is used to track the progress of any I/O operation that are being

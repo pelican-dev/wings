@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pelican-dev/wings/internal/models"
+	"github.com/Minenetpro/pelican-wings/internal/models"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/goccy/go-json"
 
-	"github.com/pelican-dev/wings/system"
+	"github.com/Minenetpro/pelican-wings/system"
 )
 
 type Client interface {

@@ -12,9 +12,9 @@ import (
 	"strings"
 
 	"github.com/apex/log"
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/internal/progress"
-	"github.com/pelican-dev/wings/server/filesystem"
+	"github.com/Minenetpro/pelican-wings/config"
+	"github.com/Minenetpro/pelican-wings/internal/progress"
+	"github.com/Minenetpro/pelican-wings/server/filesystem"
 )
 
 // Archive returns an archive that can be used to stream the contents of the

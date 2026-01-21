@@ -11,7 +11,7 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 
-	"github.com/pelican-dev/wings/config"
+	"github.com/Minenetpro/pelican-wings/config"
 )
 
 var (

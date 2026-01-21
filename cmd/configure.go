@@ -13,7 +13,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/goccy/go-json"
-	"github.com/pelican-dev/wings/config"
+	"github.com/Minenetpro/pelican-wings/config"
 	"github.com/spf13/cobra"
 )
 

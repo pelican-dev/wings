@@ -12,10 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/remote"
-	"github.com/pelican-dev/wings/server"
-	"github.com/pelican-dev/wings/system"
+	"github.com/Minenetpro/pelican-wings/config"
+	"github.com/Minenetpro/pelican-wings/remote"
+	"github.com/Minenetpro/pelican-wings/server"
+	"github.com/Minenetpro/pelican-wings/system"
 )
 
 // AttachRequestID attaches a unique ID to the incoming HTTP request so that any

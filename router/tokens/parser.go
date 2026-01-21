@@ -5,7 +5,7 @@ import (
 
 	"github.com/gbrlsnchs/jwt/v3"
 
-	"github.com/pelican-dev/wings/config"
+	"github.com/Minenetpro/pelican-wings/config"
 )
 
 type TokenData interface {

@@ -25,7 +25,7 @@ import (
 	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v2"
 
-	"github.com/pelican-dev/wings/system"
+	"github.com/Minenetpro/pelican-wings/system"
 )
 
 const DefaultLocation = "/etc/pelican/config.yml"

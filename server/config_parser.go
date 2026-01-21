@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/gammazero/workerpool"
-	"github.com/pelican-dev/wings/internal/ufs"
+	"github.com/Minenetpro/pelican-wings/internal/ufs"
 )
 
 // Helper function to replace variables in the file path of the configuration parser

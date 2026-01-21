@@ -90,15 +90,15 @@ func (h *Handler) HandleLog(e *log.Entry) error {
 			// Stacktrace:
 			// readlink test: no such file or directory
 			// failed to read symlink target for 'test'
-			// github.com/pelican-dev/wings/server/filesystem.(*Archive).addToArchive
-			//         github.com/pelican-dev/wings/server/filesystem/archive.go:166
+			// github.com/Minenetpro/pelican-wings/server/filesystem.(*Archive).addToArchive
+			//         github.com/Minenetpro/pelican-wings/server/filesystem/archive.go:166
 			// ... (Truncated the stack for easier reading)
 			// runtime.goexit
 			//         runtime/asm_amd64.s:1374
 			// **NEW LINE INSERTED HERE**
 			// backup: error while generating server backup
-			// github.com/pelican-dev/wings/server.(*Server).Backup
-			//         github.com/pelican-dev/wings/server/backup.go:84
+			// github.com/Minenetpro/pelican-wings/server.(*Server).Backup
+			//         github.com/Minenetpro/pelican-wings/server/backup.go:84
 			// ... (Truncated the stack for easier reading)
 			// runtime.goexit
 			//         runtime/asm_amd64.s:1374

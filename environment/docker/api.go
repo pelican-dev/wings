@@ -16,7 +16,7 @@ import (
 	"github.com/docker/docker/errdefs"
 	"github.com/goccy/go-json"
 
-	"github.com/pelican-dev/wings/config"
+	"github.com/Minenetpro/pelican-wings/config"
 )
 
 var (

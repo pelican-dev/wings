@@ -3,9 +3,9 @@ package server
 import (
 	"time"
 
-	"github.com/pelican-dev/wings/environment/docker"
+	"github.com/Minenetpro/pelican-wings/environment/docker"
 
-	"github.com/pelican-dev/wings/environment"
+	"github.com/Minenetpro/pelican-wings/environment"
 )
 
 // SyncWithEnvironment updates the environment for the server to match any of

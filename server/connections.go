@@ -1,7 +1,7 @@
 package server
 
 import (
-	"github.com/pelican-dev/wings/system"
+	"github.com/Minenetpro/pelican-wings/system"
 )
 
 // Sftp returns the SFTP connection bag for the server instance. This bag tracks

@@ -27,16 +27,16 @@ import (
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/internal/cron"
-	"github.com/pelican-dev/wings/internal/database"
-	"github.com/pelican-dev/wings/loggers/cli"
-	"github.com/pelican-dev/wings/remote"
-	"github.com/pelican-dev/wings/router"
-	"github.com/pelican-dev/wings/server"
-	"github.com/pelican-dev/wings/sftp"
-	"github.com/pelican-dev/wings/system"
+	"github.com/Minenetpro/pelican-wings/config"
+	"github.com/Minenetpro/pelican-wings/environment"
+	"github.com/Minenetpro/pelican-wings/internal/cron"
+	"github.com/Minenetpro/pelican-wings/internal/database"
+	"github.com/Minenetpro/pelican-wings/loggers/cli"
+	"github.com/Minenetpro/pelican-wings/remote"
+	"github.com/Minenetpro/pelican-wings/router"
+	"github.com/Minenetpro/pelican-wings/server"
+	"github.com/Minenetpro/pelican-wings/sftp"
+	"github.com/Minenetpro/pelican-wings/system"
 )
 
 var (
@@ -469,8 +469,8 @@ __ [blue][bold]Pelican[reset] _____/___/_______ _______ ______
 Copyright © 2018 - %d Dane Everitt & Contributors
 
 Website:  https://pelican.dev
- Source:  https://github.com/pelican-dev/wings
-License:  https://github.com/pelican-dev/wings/blob/main/LICENSE
+ Source:  https://github.com/Minenetpro/pelican-wings
+License:  https://github.com/Minenetpro/pelican-wings/blob/main/LICENSE
 
 This software is made available under the terms of the MIT license.
 The above copyright notice and this permission notice shall be included
