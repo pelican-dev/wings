@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
@@ -177,15 +178,34 @@ func (e *Environment) Create() error {
 	labels["Service"] = "Pelican"
 	labels["ContainerType"] = "server_process"
 
+	// Only set hostname/domainname if not using container network mode.
+	// Containers sharing another container's network namespace inherit that container's
+	// hostname and domainname, so setting them would cause a Docker API error.
+	var hostname, domainname string
+	if !cfg.Docker.Network.IsContainerNetworkMode() {
+		hostname = e.Id
+		domainname = cfg.Docker.Domainname
+	} else {
+		e.log().WithField("network_mode", cfg.Docker.Network.Mode).
+			Debug("environment/docker: using container network mode, skipping hostname/domainname configuration")
+	}
+
+	// Port exposure is not allowed when using container network mode since the network
+	// stack is inherited from the target container. Ports must be exposed on that container instead.
+	var exposedPorts nat.PortSet
+	if !cfg.Docker.Network.IsContainerNetworkMode() {
+		exposedPorts = a.Exposed()
+	}
+
 	conf := &container.Config{
-		Hostname:     e.Id,
-		Domainname:   cfg.Docker.Domainname,
+		Hostname:     hostname,
+		Domainname:   domainname,
 		AttachStdin:  true,
 		AttachStdout: true,
 		AttachStderr: true,
 		OpenStdin:    true,
 		Tty:          true,
-		ExposedPorts: a.Exposed(),
+		ExposedPorts: exposedPorts,
 		Image:        strings.TrimPrefix(e.meta.Image, "~"),
 		Env:          e.Configuration.EnvironmentVariables(),
 		Labels:       labels,
@@ -199,9 +219,14 @@ func (e *Environment) Create() error {
 	}
 
 	networkMode := container.NetworkMode(cfg.Docker.Network.Mode)
+
+	// ForceOutgoingIP is incompatible with container network mode since the network
+	// stack is inherited from the target container. Skip this logic entirely.
 	if a.ForceOutgoingIP {
-		// We can't use ForceOutgoingIP if we made a server with no allocation
-		if a.DefaultMapping.Port != 0 {
+		if cfg.Docker.Network.IsContainerNetworkMode() {
+			e.log().WithField("network_mode", cfg.Docker.Network.Mode).
+				Warn("environment/docker: ForceOutgoingIP is enabled but will be ignored when using container network mode")
+		} else if a.DefaultMapping.Port != 0 {
 			enableIPv6 := false
 			e.log().Debug("environment/docker: forcing outgoing IP address")
 			networkName := "ip-" + strings.ReplaceAll(strings.ReplaceAll(a.DefaultMapping.Ip, ".", "-"), ":", "-")
@@ -233,8 +258,24 @@ func (e *Environment) Create() error {
 		}
 	}
 
+	// DNS settings are inherited when using container network mode.
+	var dns []string
+	if !cfg.Docker.Network.IsContainerNetworkMode() {
+		dns = cfg.Docker.Network.Dns
+	}
+
+	// Port bindings are not allowed when using container network mode since the network
+	// stack is inherited from the target container. Ports must be published on that container instead.
+	var portBindings nat.PortMap
+	if !cfg.Docker.Network.IsContainerNetworkMode() {
+		portBindings = a.DockerBindings()
+	} else {
+		e.log().WithField("network_mode", cfg.Docker.Network.Mode).
+			Debug("environment/docker: using container network mode, skipping port bindings configuration")
+	}
+
 	hostConf := &container.HostConfig{
-		PortBindings: a.DockerBindings(),
+		PortBindings: portBindings,
 
 		// Configure the mounts for this container. First mount the server data directory
 		// into the container as an r/w bind.
@@ -250,7 +291,7 @@ func (e *Environment) Create() error {
 		// from the Panel.
 		Resources: e.Configuration.Limits().AsContainerResources(),
 
-		DNS: cfg.Docker.Network.Dns,
+		DNS: dns,
 
 		// Configure logging for the container to make it easier on the Daemon to grab
 		// the server output. Ensure that we don't use too much space on the host machine
