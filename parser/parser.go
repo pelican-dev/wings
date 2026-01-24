@@ -14,6 +14,7 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/icza/dyno"
 	"github.com/magiconair/properties"
+	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/ini.v1"
 	"gopkg.in/yaml.v3"
 
@@ -29,6 +30,7 @@ const (
 	Ini        = "ini"
 	Json       = "json"
 	Xml        = "xml"
+	Toml       = "toml"
 )
 
 type ReplaceValue struct {
@@ -227,6 +229,8 @@ func (f *ConfigurationFile) Parse(file ufs.File) error {
 		err = f.parseIniFile(file)
 	case Xml:
 		err = f.parseXmlFile(file)
+	case Toml:
+		err = f.parseTomlFile(file)
 	}
 	return err
 }
@@ -465,6 +469,49 @@ func (f *ConfigurationFile) parseYamlFile(file ufs.File) error {
 	// Write the data to the file.
 	if _, err := io.Copy(file, bytes.NewReader(marshaled)); err != nil {
 		return errors.Wrap(err, "parser: failed to write properties file to disk")
+	}
+	return nil
+}
+
+// Parses a toml file and updates any matching key/value pairs before persisting
+// it back to the disk.
+func (f *ConfigurationFile) parseTomlFile(file ufs.File) error {
+	b, err := io.ReadAll(file)
+	if err != nil {
+		return err
+	}
+
+	i := make(map[string]interface{})
+	if err := toml.Unmarshal(b, &i); err != nil {
+		return err
+	}
+
+	// Convert to JSON to reuse IterateOverJson for value replacement.
+	jsonBytes, err := json.Marshal(dyno.ConvertMapI2MapS(i))
+	if err != nil {
+		return err
+	}
+
+	data, err := f.IterateOverJson(jsonBytes)
+	if err != nil {
+		return err
+	}
+
+	// Remarshal back to TOML format.
+	marshaled, err := toml.Marshal(data.Data())
+	if err != nil {
+		return err
+	}
+
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	if err := file.Truncate(0); err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(file, bytes.NewReader(marshaled)); err != nil {
+		return errors.Wrap(err, "parser: failed to write toml file to disk")
 	}
 	return nil
 }
