@@ -67,6 +67,7 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 	protected.POST("/api/servers", postCreateServer)
 	protected.DELETE("/api/transfers/:server", deleteTransfer)
 	protected.POST("/api/deauthorize-user", postDeauthorizeUser)
+	protected.GET("/api/events", getServerEvents)
 
 	// These are server specific routes, and require that the request be authorized, and
 	// that the server exist on the Daemon.
@@ -77,6 +78,7 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 		server.DELETE("", deleteServer)
 
 		server.GET("/logs", getServerLogs)
+		server.GET("/console", getServerConsole)
 		server.GET("/install-logs", getServerInstallLogs)
 		server.POST("/power", postServerPower)
 		server.POST("/commands", postServerCommands)

@@ -38,6 +38,7 @@
 # The built executable
 wings
 wings.exe
+pelican-wings
 
 # IDE/Editor files (VS Code)
 /.vscode

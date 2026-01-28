@@ -654,6 +654,132 @@ If `servers` is empty, revokes for all servers.
 
 ---
 
+### Server Events & Console Endpoints
+
+#### GET /api/events
+
+Stream real-time SSE (Server-Sent Events) for one or more servers. Events include console output, state changes, and resource statistics.
+
+**Authentication:** Required
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `servers` | string | Comma-separated server UUIDs (required) |
+
+**SSE Headers Sent:**
+
+```
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+X-Accel-Buffering: no
+```
+
+**Event Types:**
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `status` | `sseStatusData` | Server state changed |
+| `stats` | `sseStatsData` | Resource usage update |
+| `console output` | `sseConsoleData` | Console output line |
+
+**Wire Format:**
+
+```
+event: status
+data: {"server_id":"abc123-def456","state":"running"}
+
+event: stats
+data: {"server_id":"abc123-def456","memory_bytes":1073741824,"memory_limit_bytes":2147483648,"cpu_absolute":45.2,"network":{"rx_bytes":1024,"tx_bytes":2048},"uptime":360000,"state":"running","disk_bytes":5368709120}
+
+event: console output
+data: {"server_id":"abc123-def456","line":"[21:30:15 INFO]: Player joined the game"}
+
+: keepalive
+```
+
+**Payload Schemas:**
+
+`status` event:
+```json
+{
+  "server_id": "abc123-def456",
+  "state": "running"
+}
+```
+
+`stats` event:
+```json
+{
+  "server_id": "abc123-def456",
+  "memory_bytes": 1073741824,
+  "memory_limit_bytes": 2147483648,
+  "cpu_absolute": 45.2,
+  "network": {
+    "rx_bytes": 1024,
+    "tx_bytes": 2048
+  },
+  "uptime": 360000,
+  "state": "running",
+  "disk_bytes": 5368709120
+}
+```
+
+`console output` event:
+```json
+{
+  "server_id": "abc123-def456",
+  "line": "[21:30:15 INFO]: Player joined the game"
+}
+```
+
+**Behavior:**
+
+- On connect, sends initial `status` and `stats` events for each requested server.
+- A keepalive comment (`: keepalive`) is sent every 15 seconds to prevent proxy timeouts.
+- If a server is deleted mid-stream, a `status` event with `"state": "deleted"` is sent for that server.
+- The connection stays open until the client disconnects.
+
+**Errors:**
+
+- 400: Missing or empty `servers` parameter
+- 404: One or more server UUIDs not found
+
+---
+
+#### GET /api/servers/:server/console
+
+Get recent console log history for a single server.
+
+**Authentication:** Required
+
+**Path Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `server` | string | Server UUID |
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `size` | int | 100 | Number of lines (1-100) |
+
+**Response:**
+
+```json
+{
+  "state": "running",
+  "line_count": 3,
+  "lines": [
+    "[21:30:10 INFO]: Server started",
+    "[21:30:12 INFO]: Loading world...",
+    "[21:30:15 INFO]: Player joined the game"
+  ]
+}
+```
+
+---
+
 ### File Management Endpoints
 
 #### GET /api/servers/:server/files/contents
@@ -2077,6 +2203,7 @@ Key dependencies:
 | POST   | /api/servers                                | Create server     |
 | GET    | /api/servers/:server                        | Server details    |
 | DELETE | /api/servers/:server                        | Delete server     |
+| GET    | /api/servers/:server/console                | Console history   |
 | GET    | /api/servers/:server/logs                   | Console logs      |
 | GET    | /api/servers/:server/install-logs           | Install logs      |
 | POST   | /api/servers/:server/power                  | Power action      |
@@ -2107,6 +2234,7 @@ Key dependencies:
 | DELETE | /api/servers/:server/transfer               | Cancel transfer   |
 | POST   | /api/transfers                              | Receive transfer  |
 | DELETE | /api/transfers/:server                      | Cancel incoming   |
+| GET    | /api/events                                 | SSE event stream  |
 | POST   | /api/deauthorize-user                       | Revoke user       |
 | GET    | /download/file                              | Download file     |
 | GET    | /download/backup                            | Download backup   |
