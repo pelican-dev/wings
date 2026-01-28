@@ -1,6 +1,7 @@
 # Pelican Wings - Comprehensive Documentation
 
 ## Table of Contents
+
 1. [Overview](#overview)
 2. [Architecture](#architecture)
 3. [Installation & Configuration](#installation--configuration)
@@ -25,6 +26,7 @@
 **Pelican Wings** is the server control plane daemon for the Pelican Panel project. It provides a high-performance, secure HTTP API for programmatic control over game server instances running in Docker containers. Wings also includes a built-in SFTP server for file management.
 
 ### Key Features
+
 - RESTful HTTP API for server management
 - Real-time WebSocket connections for console output and events
 - Built-in SFTP server with Panel authentication
@@ -35,6 +37,7 @@
 - File management with quota enforcement
 
 ### Technical Stack
+
 - **Language**: Go 1.24.0
 - **HTTP Framework**: Gin (v1.10.1)
 - **WebSocket**: Gorilla WebSocket (v1.5.3)
@@ -49,75 +52,79 @@
 
 ### System Architecture Diagram
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              Pelican Panel                                   │
-│                    (Central Management Interface)                            │
-└─────────────────────────────────┬───────────────────────────────────────────┘
-                                  │ HTTPS/JWT
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              Wings Daemon                                    │
-│  ┌─────────────────────────────────────────────────────────────────────────┐│
-│  │                         HTTP Server (Gin)                               ││
-│  │                    Port: 8080 (configurable)                            ││
-│  │                      TLS/Auto-TLS Support                               ││
-│  └─────────────────────────────────┬───────────────────────────────────────┘│
-│                                    │                                         │
-│  ┌─────────────┬──────────────┬────┴────┬──────────────┬─────────────────┐ │
-│  │   Router    │  WebSocket   │Middleware│   SFTP      │    Cron Jobs    │ │
-│  │  Handlers   │  Handlers    │  Chain  │  Server     │   (Scheduler)   │ │
-│  └──────┬──────┴──────┬───────┴────┬────┴──────┬──────┴────────┬────────┘ │
-│         │             │            │           │               │           │
-│  ┌──────┴─────────────┴────────────┴───────────┴───────────────┴────────┐ │
-│  │                        Server Manager                                 │ │
-│  │              (Manages all server instances)                           │ │
-│  └──────────────────────────────┬────────────────────────────────────────┘ │
-│                                 │                                           │
-│  ┌──────────────────────────────┴────────────────────────────────────────┐ │
-│  │                        Server Instances                                │ │
-│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐     │ │
-│  │  │  Server A   │ │  Server B   │ │  Server C   │ │  Server N   │     │ │
-│  │  │ (Container) │ │ (Container) │ │ (Container) │ │ (Container) │     │ │
-│  │  └──────┬──────┘ └──────┬──────┘ └──────┬──────┘ └──────┬──────┘     │ │
-│  │         │               │               │               │             │ │
-│  │  ┌──────┴───────────────┴───────────────┴───────────────┴──────┐     │ │
-│  │  │                    Docker Environment                        │     │ │
-│  │  │              (pelican0 bridge network)                       │     │ │
-│  │  └──────────────────────────────────────────────────────────────┘     │ │
-│  └───────────────────────────────────────────────────────────────────────┘ │
-│                                                                             │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │                        Storage Layer                                  │  │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐   │  │
-│  │  │  Server  │ │  Backup  │ │ Archive  │ │   Logs   │ │ Database │   │  │
-│  │  │  Data    │ │  Files   │ │  Files   │ │  Files   │ │ (SQLite) │   │  │
-│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘   │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Panel["Pelican Panel"]
+        PanelCore["Central Management Interface"]
+    end
+
+    Panel -->|"HTTPS/JWT"| Wings
+
+    subgraph Wings["Wings Daemon"]
+        subgraph HTTPServer["HTTP Server (Gin)"]
+            Port["Port: 8080 (configurable)"]
+            TLS["TLS/Auto-TLS Support"]
+        end
+
+        HTTPServer --> Components
+
+        subgraph Components["Core Components"]
+            Router["Router Handlers"]
+            WebSocket["WebSocket Handlers"]
+            Middleware["Middleware Chain"]
+            SFTP["SFTP Server"]
+            Cron["Cron Jobs (Scheduler)"]
+        end
+
+        Components --> ServerManager
+
+        subgraph ServerManager["Server Manager"]
+            Manager["Manages all server instances"]
+        end
+
+        ServerManager --> Instances
+
+        subgraph Instances["Server Instances"]
+            subgraph Docker["Docker Environment (pelican0 bridge network)"]
+                ServerA["Server A (Container)"]
+                ServerB["Server B (Container)"]
+                ServerC["Server C (Container)"]
+                ServerN["Server N (Container)"]
+            end
+        end
+
+        subgraph Storage["Storage Layer"]
+            ServerData["Server Data"]
+            Backup["Backup Files"]
+            Archive["Archive Files"]
+            Logs["Logs Files"]
+            Database["Database (SQLite)"]
+        end
+    end
 ```
 
 ### Package Structure
 
-| Package | Purpose |
-|---------|---------|
-| `cmd/` | CLI command handlers (root, configure, diagnostics, selfupdate) |
-| `config/` | Configuration management (singleton pattern with thread-safe access) |
-| `server/` | Server instance management, lifecycle, filesystem, backup operations |
-| `router/` | HTTP API routes, handlers, middleware, WebSocket, token management |
-| `environment/` | Docker environment abstraction and container management |
-| `remote/` | Panel API client for communication with Pelican Panel |
-| `sftp/` | Built-in SFTP server implementation |
-| `events/` | Event bus system for real-time updates |
-| `internal/` | Internal utilities (database, models, cron jobs, diagnostics) |
-| `parser/` | Configuration file parsing (INI, YAML, JSON) |
-| `system/` | System utilities and version information |
+| Package        | Purpose                                                              |
+| -------------- | -------------------------------------------------------------------- |
+| `cmd/`         | CLI command handlers (root, configure, diagnostics, selfupdate)      |
+| `config/`      | Configuration management (singleton pattern with thread-safe access) |
+| `server/`      | Server instance management, lifecycle, filesystem, backup operations |
+| `router/`      | HTTP API routes, handlers, middleware, WebSocket, token management   |
+| `environment/` | Docker environment abstraction and container management              |
+| `remote/`      | Panel API client for communication with Pelican Panel                |
+| `sftp/`        | Built-in SFTP server implementation                                  |
+| `events/`      | Event bus system for real-time updates                               |
+| `internal/`    | Internal utilities (database, models, cron jobs, diagnostics)        |
+| `parser/`      | Configuration file parsing (INI, YAML, JSON)                         |
+| `system/`      | System utilities and version information                             |
 
 ---
 
 ## Installation & Configuration
 
 ### System Requirements
+
 - Linux (AMD64 or ARM64)
 - Docker Engine (20.10+)
 - Minimum 1GB RAM
@@ -166,15 +173,15 @@ WantedBy=multi-user.target
 
 ### Directory Structure
 
-| Path | Purpose | Default |
-|------|---------|---------|
-| `/etc/pelican/config.yml` | Main configuration file | Required |
-| `/var/lib/pelican` | Root data directory | `system.root_directory` |
-| `/var/lib/pelican/volumes` | Server data files | `system.data` |
-| `/var/lib/pelican/backups` | Local backup storage | `system.backup_directory` |
-| `/var/lib/pelican/archives` | Transfer archives | `system.archive_directory` |
-| `/var/log/pelican` | Log files | `system.log_directory` |
-| `/tmp/pelican` | Temporary files | `system.tmp_directory` |
+| Path                        | Purpose                 | Default                    |
+| --------------------------- | ----------------------- | -------------------------- |
+| `/etc/pelican/config.yml`   | Main configuration file | Required                   |
+| `/var/lib/pelican`          | Root data directory     | `system.root_directory`    |
+| `/var/lib/pelican/volumes`  | Server data files       | `system.data`              |
+| `/var/lib/pelican/backups`  | Local backup storage    | `system.backup_directory`  |
+| `/var/lib/pelican/archives` | Transfer archives       | `system.archive_directory` |
+| `/var/log/pelican`          | Log files               | `system.log_directory`     |
+| `/tmp/pelican`              | Temporary files         | `system.tmp_directory`     |
 
 ---
 
@@ -193,6 +200,7 @@ The token is configured in `/etc/pelican/config.yml` and must match the token st
 ### Response Format
 
 **Success Response:**
+
 ```json
 {
   "data": { ... }
@@ -200,6 +208,7 @@ The token is configured in `/etc/pelican/config.yml` and must match the token st
 ```
 
 **Error Response:**
+
 ```json
 {
   "error": "Human-readable error message",
@@ -209,25 +218,26 @@ The token is configured in `/etc/pelican/config.yml` and must match the token st
 
 ### HTTP Status Codes
 
-| Code | Meaning |
-|------|---------|
-| 200 | Success |
-| 202 | Accepted (async processing) |
-| 204 | No Content (success, no body) |
-| 400 | Bad Request |
-| 401 | Unauthorized (missing token) |
-| 403 | Forbidden (invalid token) |
-| 404 | Not Found |
-| 409 | Conflict |
-| 422 | Unprocessable Entity (validation error) |
-| 500 | Internal Server Error |
-| 502 | Bad Gateway (server not running) |
+| Code | Meaning                                 |
+| ---- | --------------------------------------- |
+| 200  | Success                                 |
+| 202  | Accepted (async processing)             |
+| 204  | No Content (success, no body)           |
+| 400  | Bad Request                             |
+| 401  | Unauthorized (missing token)            |
+| 403  | Forbidden (invalid token)               |
+| 404  | Not Found                               |
+| 409  | Conflict                                |
+| 422  | Unprocessable Entity (validation error) |
+| 500  | Internal Server Error                   |
+| 502  | Bad Gateway (server not running)        |
 
 ---
 
 ### System Endpoints
 
 #### GET /api/system
+
 Get system information.
 
 **Authentication:** Required
@@ -238,6 +248,7 @@ Get system information.
 | `v` | string | API version (v=2 for extended info) |
 
 **Response (v1):**
+
 ```json
 {
   "architecture": "amd64",
@@ -251,11 +262,13 @@ Get system information.
 ---
 
 #### GET /api/system/utilization
+
 Get system resource utilization.
 
 **Authentication:** Required
 
 **Response:**
+
 ```json
 {
   "cpu": {
@@ -278,6 +291,7 @@ Get system resource utilization.
 ---
 
 #### GET /api/system/docker/disk
+
 Get Docker disk usage statistics.
 
 **Authentication:** Required
@@ -287,6 +301,7 @@ Get Docker disk usage statistics.
 ---
 
 #### DELETE /api/system/docker/image/prune
+
 Prune unused Docker images.
 
 **Authentication:** Required
@@ -296,11 +311,13 @@ Prune unused Docker images.
 ---
 
 #### GET /api/system/ips
+
 Get all system IP addresses.
 
 **Authentication:** Required
 
 **Response:**
+
 ```json
 {
   "ip_addresses": ["10.0.0.1", "192.168.1.1", "172.17.0.1"]
@@ -310,6 +327,7 @@ Get all system IP addresses.
 ---
 
 #### GET /api/diagnostics
+
 Get system diagnostic information.
 
 **Authentication:** Required
@@ -326,6 +344,7 @@ Get system diagnostic information.
 ---
 
 #### POST /api/update
+
 Update Wings configuration from Panel.
 
 **Authentication:** Required
@@ -333,6 +352,7 @@ Update Wings configuration from Panel.
 **Request Body:** Full configuration object (JSON)
 
 **Response:**
+
 ```json
 {
   "applied": true
@@ -346,11 +366,13 @@ Update Wings configuration from Panel.
 ### Server Management Endpoints
 
 #### GET /api/servers
+
 List all servers on this node.
 
 **Authentication:** Required
 
 **Response:**
+
 ```json
 [
   {
@@ -372,11 +394,13 @@ List all servers on this node.
 ---
 
 #### POST /api/servers
+
 Create a new server.
 
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "uuid": "abc123-def456",
@@ -391,6 +415,7 @@ Server creation happens asynchronously in the background.
 ---
 
 #### GET /api/servers/:server
+
 Get server details.
 
 **Authentication:** Required
@@ -401,6 +426,7 @@ Get server details.
 | `server` | string | Server UUID |
 
 **Response:**
+
 ```json
 {
   "uuid": "abc123-def456",
@@ -447,6 +473,7 @@ Get server details.
 ---
 
 #### DELETE /api/servers/:server
+
 Delete a server.
 
 **Authentication:** Required
@@ -459,6 +486,7 @@ Delete a server.
 **Response:** 204 No Content
 
 **Effects:**
+
 - Suspends server immediately
 - Stops container
 - Removes server files
@@ -468,6 +496,7 @@ Delete a server.
 ---
 
 #### GET /api/servers/:server/logs
+
 Get server console logs.
 
 **Authentication:** Required
@@ -483,6 +512,7 @@ Get server console logs.
 | `size` | int | 100 | Number of lines (max 100) |
 
 **Response:**
+
 ```json
 {
   "data": "[2024-01-15 10:30:00] Server started\n[2024-01-15 10:30:01] Loading world..."
@@ -492,11 +522,13 @@ Get server console logs.
 ---
 
 #### GET /api/servers/:server/install-logs
+
 Get server installation logs.
 
 **Authentication:** Required
 
 **Response:**
+
 ```json
 {
   "data": "Installation log content..."
@@ -506,11 +538,13 @@ Get server installation logs.
 ---
 
 #### POST /api/servers/:server/power
+
 Control server power state.
 
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "action": "start",
@@ -529,17 +563,20 @@ Control server power state.
 **Response:** 202 Accepted
 
 **Errors:**
+
 - 400: Server is suspended
 - 422: Invalid action
 
 ---
 
 #### POST /api/servers/:server/commands
+
 Send console command.
 
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "commands": ["say Hello World", "list"]
@@ -549,11 +586,13 @@ Send console command.
 **Response:** 204 No Content
 
 **Errors:**
+
 - 502: Server not running
 
 ---
 
 #### POST /api/servers/:server/install
+
 Execute server installation.
 
 **Authentication:** Required
@@ -565,6 +604,7 @@ Installation runs asynchronously.
 ---
 
 #### POST /api/servers/:server/reinstall
+
 Reinstall the server.
 
 **Authentication:** Required
@@ -572,11 +612,13 @@ Reinstall the server.
 **Response:** 202 Accepted
 
 **Errors:**
+
 - 409: Another power action is running
 
 ---
 
 #### POST /api/servers/:server/sync
+
 Sync server configuration with Panel.
 
 **Authentication:** Required
@@ -586,11 +628,13 @@ Sync server configuration with Panel.
 ---
 
 #### POST /api/deauthorize-user
+
 Revoke user access across servers.
 
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "user": "user-uuid",
@@ -603,6 +647,7 @@ If `servers` is empty, revokes for all servers.
 **Response:** 204 No Content
 
 **Effects:**
+
 - Cancels WebSocket connections
 - Cancels SFTP connections
 - Adds user tokens to deny list
@@ -612,6 +657,7 @@ If `servers` is empty, revokes for all servers.
 ### File Management Endpoints
 
 #### GET /api/servers/:server/files/contents
+
 Read file contents.
 
 **Authentication:** Required
@@ -623,6 +669,7 @@ Read file contents.
 | `download` | string | If present, returns as attachment |
 
 **Response Headers:**
+
 ```
 X-Mime-Type: text/plain
 Content-Length: 1234
@@ -632,12 +679,14 @@ Content-Disposition: attachment; filename="config.yml"
 **Response:** Raw file content
 
 **Errors:**
+
 - 404: File not found
 - 400: File is a directory or named pipe
 
 ---
 
 #### GET /api/servers/:server/files/list-directory
+
 List directory contents.
 
 **Authentication:** Required
@@ -648,6 +697,7 @@ List directory contents.
 | `directory` | string | Directory path (required) |
 
 **Response:**
+
 ```json
 [
   {
@@ -678,6 +728,7 @@ List directory contents.
 ---
 
 #### POST /api/servers/:server/files/write
+
 Write file contents.
 
 **Authentication:** Required
@@ -688,6 +739,7 @@ Write file contents.
 | `file` | string | File path (required) |
 
 **Request Headers:**
+
 ```
 Content-Length: 1234
 ```
@@ -699,11 +751,13 @@ Content-Length: 1234
 ---
 
 #### PUT /api/servers/:server/files/rename
+
 Rename/move files.
 
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "root": "/",
@@ -719,17 +773,20 @@ Rename/move files.
 **Response:** 204 No Content
 
 **Errors:**
+
 - 422: No files provided
 - 400: Destination exists
 
 ---
 
 #### POST /api/servers/:server/files/copy
+
 Copy a file.
 
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "location": "/path/to/file.txt"
@@ -738,16 +795,18 @@ Copy a file.
 
 **Response:** 204 No Content
 
-Creates a copy with "_copy" suffix.
+Creates a copy with "\_copy" suffix.
 
 ---
 
 #### POST /api/servers/:server/files/delete
+
 Delete files/directories.
 
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "root": "/",
@@ -760,11 +819,13 @@ Delete files/directories.
 ---
 
 #### POST /api/servers/:server/files/create-directory
+
 Create a directory.
 
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "name": "new-folder",
@@ -777,11 +838,13 @@ Create a directory.
 ---
 
 #### POST /api/servers/:server/files/compress
+
 Compress files into an archive.
 
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "root": "/",
@@ -792,6 +855,7 @@ Compress files into an archive.
 ```
 
 **Supported Extensions:**
+
 - `zip`
 - `tar.gz`
 - `tar.bz2`
@@ -800,16 +864,19 @@ Compress files into an archive.
 **Response:** File stat object of the created archive
 
 **Errors:**
+
 - 409: Insufficient disk space
 
 ---
 
 #### POST /api/servers/:server/files/decompress
+
 Extract an archive.
 
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "root": "/extract/to",
@@ -824,11 +891,13 @@ Supported formats: tar, tar.gz, tar.bz2, tar.xz, zip
 ---
 
 #### POST /api/servers/:server/files/chmod
+
 Change file permissions.
 
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "root": "/",
@@ -846,6 +915,7 @@ Change file permissions.
 ---
 
 #### GET /api/servers/:server/files/search
+
 Search for files.
 
 **Authentication:** Required
@@ -857,12 +927,14 @@ Search for files.
 | `pattern` | string | Search pattern, min 3 chars (required) |
 
 **Pattern Syntax:**
+
 - `*` - Wildcard (any characters)
 - `?` - Single character
 - `.js` - File extension
 - Substring matching (case-insensitive)
 
 **Response:**
+
 ```json
 [
   {
@@ -877,6 +949,7 @@ Search for files.
 ---
 
 #### GET /api/servers/:server/files/pull
+
 List in-progress remote downloads.
 
 **Authentication:** Required
@@ -884,6 +957,7 @@ List in-progress remote downloads.
 **Middleware:** RemoteDownloadEnabled (checks `api.disable_remote_download`)
 
 **Response:**
+
 ```json
 [
   {
@@ -897,6 +971,7 @@ List in-progress remote downloads.
 ---
 
 #### POST /api/servers/:server/files/pull
+
 Start remote file download.
 
 **Authentication:** Required
@@ -904,6 +979,7 @@ Start remote file download.
 **Middleware:** RemoteDownloadEnabled
 
 **Request Body:**
+
 ```json
 {
   "url": "https://example.com/file.zip",
@@ -915,6 +991,7 @@ Start remote file download.
 ```
 
 **Response (background):** 202 Accepted
+
 ```json
 {
   "identifier": "download-uuid"
@@ -928,6 +1005,7 @@ Start remote file download.
 ---
 
 #### DELETE /api/servers/:server/files/pull/:download
+
 Cancel remote download.
 
 **Authentication:** Required
@@ -939,11 +1017,13 @@ Cancel remote download.
 ### Backup Endpoints
 
 #### POST /api/servers/:server/backup
+
 Create a backup.
 
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "adapter": "wings",
@@ -963,6 +1043,7 @@ Create a backup.
 ---
 
 #### POST /api/servers/:server/backup/:backup/restore
+
 Restore from backup.
 
 **Authentication:** Required
@@ -973,6 +1054,7 @@ Restore from backup.
 | `backup` | string | Backup UUID |
 
 **Request Body:**
+
 ```json
 {
   "adapter": "wings",
@@ -988,6 +1070,7 @@ Restore from backup.
 ---
 
 #### DELETE /api/servers/:server/backup/:backup
+
 Delete a backup.
 
 **Authentication:** Required
@@ -997,6 +1080,7 @@ Delete a backup.
 ---
 
 #### DELETE /api/servers/:server/deleteAllBackups
+
 Delete all backups for a server.
 
 **Authentication:** Required
@@ -1008,11 +1092,13 @@ Delete all backups for a server.
 ### Transfer Endpoints
 
 #### POST /api/servers/:server/transfer
+
 Initiate server transfer.
 
 **Authentication:** Required
 
 **Request Body:**
+
 ```json
 {
   "url": "https://destination-wings:8080/api/transfers",
@@ -1024,6 +1110,7 @@ Initiate server transfer.
 **Response:** 202 Accepted
 
 **Effects:**
+
 - Stops server if running
 - Creates archive of server files
 - Includes install logs and selected backups
@@ -1032,6 +1119,7 @@ Initiate server transfer.
 ---
 
 #### DELETE /api/servers/:server/transfer
+
 Cancel outgoing transfer.
 
 **Authentication:** Required
@@ -1041,11 +1129,13 @@ Cancel outgoing transfer.
 ---
 
 #### POST /api/transfers
+
 Receive incoming transfer.
 
 **Authentication:** JWT in Authorization header (issued by Panel)
 
 **Request Body:** multipart/form-data
+
 - `archive`: Server files archive
 - `checksum_archive`: SHA256 checksum
 - `install_logs`: Installation logs
@@ -1057,6 +1147,7 @@ Receive incoming transfer.
 ---
 
 #### DELETE /api/transfers/:server
+
 Cancel incoming transfer.
 
 **Authentication:** Required
@@ -1068,6 +1159,7 @@ Cancel incoming transfer.
 ### Download/Upload Endpoints
 
 #### GET /download/file
+
 Download a server file.
 
 **Authentication:** Signed token in query parameter
@@ -1080,6 +1172,7 @@ Download a server file.
 **Response:** Binary file stream
 
 **Headers:**
+
 ```
 Content-Length: 1234567
 Content-Disposition: attachment; filename="server.jar"
@@ -1089,6 +1182,7 @@ Content-Type: application/octet-stream
 ---
 
 #### GET /download/backup
+
 Download a backup file.
 
 **Authentication:** Signed token in query parameter
@@ -1103,6 +1197,7 @@ Download a backup file.
 ---
 
 #### POST /upload/file
+
 Upload files to server.
 
 **Authentication:** Signed token in query parameter
@@ -1154,60 +1249,60 @@ GET /api/servers/:server/ws
 
 ### Client Events (Inbound)
 
-| Event | Args | Rate Limit | Description |
-|-------|------|-----------|-------------|
-| `auth` | `[jwt_token]` | 2/5s | Authenticate connection |
-| `send logs` | `[]` | 2/5s | Request console log history |
-| `send command` | `[command]` | 10/1s | Send console command |
-| `set state` | `[action]` | 4/1s | Request power action (start/stop/restart/kill) |
+| Event          | Args          | Rate Limit | Description                                    |
+| -------------- | ------------- | ---------- | ---------------------------------------------- |
+| `auth`         | `[jwt_token]` | 2/5s       | Authenticate connection                        |
+| `send logs`    | `[]`          | 2/5s       | Request console log history                    |
+| `send command` | `[command]`   | 10/1s      | Send console command                           |
+| `set state`    | `[action]`    | 4/1s       | Request power action (start/stop/restart/kill) |
 
 ### Server Events (Outbound)
 
-| Event | Args | Description |
-|-------|------|-------------|
-| `auth success` | `[]` | Authentication succeeded |
-| `auth` | `[]` | Authentication required |
-| `token expiring` | `[]` | JWT about to expire |
-| `token expired` | `[]` | JWT expired |
-| `console output` | `[line]` | Console output line |
-| `status` | `[state]` | Server state changed (offline/starting/running/stopping) |
-| `stats` | `[json]` | Resource usage stats |
-| `daemon message` | `[message]` | Daemon notification |
-| `daemon error` | `[error]` | Daemon error message |
-| `install output` | `[line]` | Installation output (requires permission) |
-| `install started` | `[]` | Installation started |
-| `install completed` | `[]` | Installation completed |
-| `backup completed` | `[json]` | Backup completed |
-| `backup restore completed` | `[]` | Backup restore completed |
-| `transfer logs` | `[line]` | Transfer output |
-| `transfer status` | `[status]` | Transfer status update |
+| Event                      | Args        | Description                                              |
+| -------------------------- | ----------- | -------------------------------------------------------- |
+| `auth success`             | `[]`        | Authentication succeeded                                 |
+| `auth`                     | `[]`        | Authentication required                                  |
+| `token expiring`           | `[]`        | JWT about to expire                                      |
+| `token expired`            | `[]`        | JWT expired                                              |
+| `console output`           | `[line]`    | Console output line                                      |
+| `status`                   | `[state]`   | Server state changed (offline/starting/running/stopping) |
+| `stats`                    | `[json]`    | Resource usage stats                                     |
+| `daemon message`           | `[message]` | Daemon notification                                      |
+| `daemon error`             | `[error]`   | Daemon error message                                     |
+| `install output`           | `[line]`    | Installation output (requires permission)                |
+| `install started`          | `[]`        | Installation started                                     |
+| `install completed`        | `[]`        | Installation completed                                   |
+| `backup completed`         | `[json]`    | Backup completed                                         |
+| `backup restore completed` | `[]`        | Backup restore completed                                 |
+| `transfer logs`            | `[line]`    | Transfer output                                          |
+| `transfer status`          | `[status]`  | Transfer status update                                   |
 
 ### Permissions
 
 JWT must include appropriate permissions:
 
-| Permission | Grants |
-|------------|--------|
-| `websocket.connect` | Basic connection |
-| `control.console` | Send commands |
-| `control.start` | Start server |
-| `control.stop` | Stop server |
-| `control.restart` | Restart server |
-| `admin.websocket.errors` | Receive error events |
-| `admin.websocket.install` | Receive install events |
+| Permission                 | Grants                  |
+| -------------------------- | ----------------------- |
+| `websocket.connect`        | Basic connection        |
+| `control.console`          | Send commands           |
+| `control.start`            | Start server            |
+| `control.stop`             | Stop server             |
+| `control.restart`          | Restart server          |
+| `admin.websocket.errors`   | Receive error events    |
+| `admin.websocket.install`  | Receive install events  |
 | `admin.websocket.transfer` | Receive transfer events |
-| `backup.read` | Receive backup events |
+| `backup.read`              | Receive backup events   |
 
 ### Rate Limiting
 
-| Category | Limit |
-|----------|-------|
-| Global | 50 messages per 200ms (burst: 10) |
-| Authentication | 2 per 5 seconds |
-| Log requests | 2 per 5 seconds |
-| Commands | 10 per 1 second |
-| State changes | 4 per 1 second |
-| Default | 4 per 1 second |
+| Category       | Limit                             |
+| -------------- | --------------------------------- |
+| Global         | 50 messages per 200ms (burst: 10) |
+| Authentication | 2 per 5 seconds                   |
+| Log requests   | 2 per 5 seconds                   |
+| Commands       | 10 per 1 second                   |
+| State changes  | 4 per 1 second                    |
+| Default        | 4 per 1 second                    |
 
 ---
 
@@ -1278,11 +1373,11 @@ type Server struct {
 
 ### Server States
 
-| State | Description |
-|-------|-------------|
-| `offline` | Server is not running |
-| `starting` | Server is booting |
-| `running` | Server is operational |
+| State      | Description             |
+| ---------- | ----------------------- |
+| `offline`  | Server is not running   |
+| `starting` | Server is booting       |
+| `running`  | Server is operational   |
 | `stopping` | Server is shutting down |
 
 ### Configuration
@@ -1397,18 +1492,19 @@ type Activity struct {
 
 ### Power Actions
 
-| Action | Description | API Endpoint |
-|--------|-------------|--------------|
-| `start` | Start stopped server | POST /api/servers/:server/power |
-| `stop` | Graceful shutdown | POST /api/servers/:server/power |
-| `restart` | Stop then start | POST /api/servers/:server/power |
-| `kill` | Force terminate | POST /api/servers/:server/power |
+| Action    | Description          | API Endpoint                    |
+| --------- | -------------------- | ------------------------------- |
+| `start`   | Start stopped server | POST /api/servers/:server/power |
+| `stop`    | Graceful shutdown    | POST /api/servers/:server/power |
+| `restart` | Stop then start      | POST /api/servers/:server/power |
+| `kill`    | Force terminate      | POST /api/servers/:server/power |
 
 ### Crash Detection
 
 Wings monitors server exits and can automatically restart crashed servers.
 
 **Configuration:**
+
 ```yaml
 system:
   crash_detection:
@@ -1418,6 +1514,7 @@ system:
 ```
 
 **Behavior:**
+
 1. Server exits unexpectedly
 2. If crash detection enabled and not within timeout of last crash
 3. Server automatically restarts
@@ -1451,6 +1548,7 @@ Stores backups on the local filesystem.
 Uploads backups to S3-compatible storage.
 
 **Supported Providers:**
+
 - Amazon S3
 - MinIO
 - Wasabi
@@ -1466,10 +1564,10 @@ system:
     compression_level: best_speed
 ```
 
-| Level | Description |
-|-------|-------------|
-| `none` | No compression |
-| `best_speed` | Gzip level 1 (fast, larger) |
+| Level              | Description                  |
+| ------------------ | ---------------------------- |
+| `none`             | No compression               |
+| `best_speed`       | Gzip level 1 (fast, larger)  |
 | `best_compression` | Gzip level 9 (slow, smaller) |
 
 ### Ignore Patterns
@@ -1477,6 +1575,7 @@ system:
 Backups support gitignore-style patterns via `.pelicanignore` file or per-backup ignore list.
 
 **Example .pelicanignore:**
+
 ```
 *.log
 *.tmp
@@ -1490,7 +1589,7 @@ node_modules/
 ```yaml
 system:
   backups:
-    write_limit: 0  # MiB/s, 0 = unlimited
+    write_limit: 0 # MiB/s, 0 = unlimited
 ```
 
 ### Checksum Verification
@@ -1531,13 +1630,13 @@ All backups include SHA1 checksums for integrity verification.
 
 ### Transfer Status
 
-| Status | Description |
-|--------|-------------|
-| `pending` | Transfer initiated |
+| Status       | Description          |
+| ------------ | -------------------- |
+| `pending`    | Transfer initiated   |
 | `processing` | Transfer in progress |
-| `completed` | Transfer successful |
-| `failed` | Transfer failed |
-| `cancelled` | Transfer cancelled |
+| `completed`  | Transfer successful  |
+| `failed`     | Transfer failed      |
+| `cancelled`  | Transfer cancelled   |
 
 ---
 
@@ -1567,12 +1666,12 @@ wings --auto-tls --tls-hostname wings.example.com
 
 ### Authentication Methods
 
-| Method | Use Case |
-|--------|----------|
-| Bearer Token | API authentication |
-| JWT | WebSocket, transfers |
-| Signed Token | File downloads |
-| Panel Auth | SFTP authentication |
+| Method       | Use Case             |
+| ------------ | -------------------- |
+| Bearer Token | API authentication   |
+| JWT          | WebSocket, transfers |
+| Signed Token | File downloads       |
+| Panel Auth   | SFTP authentication  |
 
 ### File System Security
 
@@ -1617,7 +1716,7 @@ api:
     enabled: false
     cert: /etc/pelican/certs/cert.pem
     key: /etc/pelican/certs/key.pem
-  upload_limit: 100  # MiB
+  upload_limit: 100 # MiB
   trusted_proxies: []
   disable_remote_download: false
   remote_download:
@@ -1652,8 +1751,8 @@ system:
     directory: /etc/pelican/machine-id
 
   # Performance settings
-  disk_check_interval: 150  # seconds
-  activity_send_interval: 60  # seconds
+  disk_check_interval: 150 # seconds
+  activity_send_interval: 60 # seconds
   activity_send_count: 100
   check_permissions_on_boot: true
   enable_log_rotate: true
@@ -1670,21 +1769,21 @@ system:
   crash_detection:
     enabled: true
     detect_clean_exit_as_crash: true
-    timeout: 60  # seconds
+    timeout: 60 # seconds
 
   crash_detection_activity_lines: 2
 
   # Backup Configuration
   backups:
-    write_limit: 0  # MiB/s, 0 = unlimited
-    compression_level: best_speed  # none, best_speed, best_compression
+    write_limit: 0 # MiB/s, 0 = unlimited
+    compression_level: best_speed # none, best_speed, best_compression
     remove_backups_on_server_delete: true
 
   # Transfer Configuration
   transfers:
-    download_limit: 0  # MiB/s, 0 = unlimited
+    download_limit: 0 # MiB/s, 0 = unlimited
 
-  openat_mode: auto  # auto, openat, openat2
+  openat_mode: auto # auto, openat, openat2
 
 # Docker Configuration
 docker:
@@ -1703,12 +1802,12 @@ docker:
 throttles:
   enabled: true
   lines: 2000
-  line_reset_interval: 100  # ms
+  line_reset_interval: 100 # ms
 
 # Panel Connection
 remote: https://panel.example.com
 remote_query:
-  timeout: 30  # seconds
+  timeout: 30 # seconds
   boot_servers_per_page: 50
   custom_headers: {}
 
@@ -1739,14 +1838,14 @@ ignore_panel_config_updates: false
 
 ### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `WINGS_TOKEN_ID` | Override token ID |
-| `WINGS_TOKEN` | Override authentication token |
+| Variable         | Description                       |
+| ---------------- | --------------------------------- |
+| `WINGS_TOKEN_ID` | Override token ID                 |
+| `WINGS_TOKEN`    | Override authentication token     |
 | `WINGS_USERNAME` | Override system username (Docker) |
-| `WINGS_UID` | Override user ID (Docker) |
-| `WINGS_GID` | Override group ID (Docker) |
-| `TZ` | Timezone |
+| `WINGS_UID`      | Override user ID (Docker)         |
+| `WINGS_GID`      | Override group ID (Docker)        |
+| `TZ`             | Timezone                          |
 
 ### File-based Secrets
 
@@ -1757,6 +1856,7 @@ token: file:///run/secrets/wings-token
 ```
 
 Works with systemd's `LoadCredential`:
+
 ```yaml
 token: file://${CREDENTIALS_DIRECTORY}/token
 ```
@@ -1838,15 +1938,15 @@ wings selfupdate [flags]
 
 ### Common Errors
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `server is suspended` | Server suspended in Panel | Unsuspend in Panel |
-| `server is already running` | Power action while running | Stop server first |
-| `server is installing` | Action during installation | Wait for install |
-| `server is transferring` | Action during transfer | Wait for transfer |
-| `insufficient disk space` | Disk quota exceeded | Free space or increase quota |
-| `file not found` | Invalid file path | Check path exists |
-| `permission denied` | File permission issue | Check file permissions |
+| Error                       | Cause                      | Solution                     |
+| --------------------------- | -------------------------- | ---------------------------- |
+| `server is suspended`       | Server suspended in Panel  | Unsuspend in Panel           |
+| `server is already running` | Power action while running | Stop server first            |
+| `server is installing`      | Action during installation | Wait for install             |
+| `server is transferring`    | Action during transfer     | Wait for transfer            |
+| `insufficient disk space`   | Disk quota exceeded        | Free space or increase quota |
+| `file not found`            | Invalid file path          | Check path exists            |
+| `permission denied`         | File permission issue      | Check file permissions       |
 
 ### Error Response Format
 
@@ -1877,20 +1977,20 @@ Wings uses a topic-based event bus for real-time updates.
 
 ### Event Topics
 
-| Topic | Description |
-|-------|-------------|
-| `console output` | Server console lines |
-| `status` | Server state changes |
-| `stats` | Resource usage updates |
-| `daemon message` | Daemon notifications |
-| `daemon error` | Daemon errors |
-| `install output` | Installation output |
-| `install started` | Installation began |
-| `install completed` | Installation finished |
-| `backup completed` | Backup finished |
-| `backup restore completed` | Restore finished |
-| `transfer logs` | Transfer output |
-| `transfer status` | Transfer state changes |
+| Topic                      | Description            |
+| -------------------------- | ---------------------- |
+| `console output`           | Server console lines   |
+| `status`                   | Server state changes   |
+| `stats`                    | Resource usage updates |
+| `daemon message`           | Daemon notifications   |
+| `daemon error`             | Daemon errors          |
+| `install output`           | Installation output    |
+| `install started`          | Installation began     |
+| `install completed`        | Installation finished  |
+| `backup completed`         | Backup finished        |
+| `backup restore completed` | Restore finished       |
+| `transfer logs`            | Transfer output        |
+| `transfer status`          | Transfer state changes |
 
 ### Event Namespacing
 
@@ -1948,6 +2048,7 @@ ENTRYPOINT ["/wings"]
 ### Project Dependencies
 
 Key dependencies:
+
 - `github.com/gin-gonic/gin` - HTTP framework
 - `github.com/gorilla/websocket` - WebSocket support
 - `github.com/docker/docker` - Docker SDK
@@ -1963,54 +2064,54 @@ Key dependencies:
 
 ### API Quick Reference
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/system | System info |
-| GET | /api/system/utilization | Resource usage |
-| GET | /api/system/docker/disk | Docker disk usage |
-| DELETE | /api/system/docker/image/prune | Prune images |
-| GET | /api/system/ips | System IPs |
-| GET | /api/diagnostics | Diagnostics |
-| POST | /api/update | Update config |
-| GET | /api/servers | List servers |
-| POST | /api/servers | Create server |
-| GET | /api/servers/:server | Server details |
-| DELETE | /api/servers/:server | Delete server |
-| GET | /api/servers/:server/logs | Console logs |
-| GET | /api/servers/:server/install-logs | Install logs |
-| POST | /api/servers/:server/power | Power action |
-| POST | /api/servers/:server/commands | Send command |
-| POST | /api/servers/:server/install | Install |
-| POST | /api/servers/:server/reinstall | Reinstall |
-| POST | /api/servers/:server/sync | Sync config |
-| GET | /api/servers/:server/ws | WebSocket |
-| GET | /api/servers/:server/files/contents | Read file |
-| GET | /api/servers/:server/files/list-directory | List dir |
-| PUT | /api/servers/:server/files/rename | Rename |
-| POST | /api/servers/:server/files/copy | Copy |
-| POST | /api/servers/:server/files/write | Write |
-| POST | /api/servers/:server/files/create-directory | Create dir |
-| POST | /api/servers/:server/files/delete | Delete |
-| POST | /api/servers/:server/files/compress | Compress |
-| POST | /api/servers/:server/files/decompress | Decompress |
-| POST | /api/servers/:server/files/chmod | Chmod |
-| GET | /api/servers/:server/files/search | Search |
-| GET | /api/servers/:server/files/pull | List downloads |
-| POST | /api/servers/:server/files/pull | Start download |
-| DELETE | /api/servers/:server/files/pull/:download | Cancel download |
-| POST | /api/servers/:server/backup | Create backup |
-| POST | /api/servers/:server/backup/:backup/restore | Restore |
-| DELETE | /api/servers/:server/backup/:backup | Delete backup |
-| DELETE | /api/servers/:server/deleteAllBackups | Delete all |
-| POST | /api/servers/:server/transfer | Start transfer |
-| DELETE | /api/servers/:server/transfer | Cancel transfer |
-| POST | /api/transfers | Receive transfer |
-| DELETE | /api/transfers/:server | Cancel incoming |
-| POST | /api/deauthorize-user | Revoke user |
-| GET | /download/file | Download file |
-| GET | /download/backup | Download backup |
-| POST | /upload/file | Upload file |
+| Method | Endpoint                                    | Description       |
+| ------ | ------------------------------------------- | ----------------- |
+| GET    | /api/system                                 | System info       |
+| GET    | /api/system/utilization                     | Resource usage    |
+| GET    | /api/system/docker/disk                     | Docker disk usage |
+| DELETE | /api/system/docker/image/prune              | Prune images      |
+| GET    | /api/system/ips                             | System IPs        |
+| GET    | /api/diagnostics                            | Diagnostics       |
+| POST   | /api/update                                 | Update config     |
+| GET    | /api/servers                                | List servers      |
+| POST   | /api/servers                                | Create server     |
+| GET    | /api/servers/:server                        | Server details    |
+| DELETE | /api/servers/:server                        | Delete server     |
+| GET    | /api/servers/:server/logs                   | Console logs      |
+| GET    | /api/servers/:server/install-logs           | Install logs      |
+| POST   | /api/servers/:server/power                  | Power action      |
+| POST   | /api/servers/:server/commands               | Send command      |
+| POST   | /api/servers/:server/install                | Install           |
+| POST   | /api/servers/:server/reinstall              | Reinstall         |
+| POST   | /api/servers/:server/sync                   | Sync config       |
+| GET    | /api/servers/:server/ws                     | WebSocket         |
+| GET    | /api/servers/:server/files/contents         | Read file         |
+| GET    | /api/servers/:server/files/list-directory   | List dir          |
+| PUT    | /api/servers/:server/files/rename           | Rename            |
+| POST   | /api/servers/:server/files/copy             | Copy              |
+| POST   | /api/servers/:server/files/write            | Write             |
+| POST   | /api/servers/:server/files/create-directory | Create dir        |
+| POST   | /api/servers/:server/files/delete           | Delete            |
+| POST   | /api/servers/:server/files/compress         | Compress          |
+| POST   | /api/servers/:server/files/decompress       | Decompress        |
+| POST   | /api/servers/:server/files/chmod            | Chmod             |
+| GET    | /api/servers/:server/files/search           | Search            |
+| GET    | /api/servers/:server/files/pull             | List downloads    |
+| POST   | /api/servers/:server/files/pull             | Start download    |
+| DELETE | /api/servers/:server/files/pull/:download   | Cancel download   |
+| POST   | /api/servers/:server/backup                 | Create backup     |
+| POST   | /api/servers/:server/backup/:backup/restore | Restore           |
+| DELETE | /api/servers/:server/backup/:backup         | Delete backup     |
+| DELETE | /api/servers/:server/deleteAllBackups       | Delete all        |
+| POST   | /api/servers/:server/transfer               | Start transfer    |
+| DELETE | /api/servers/:server/transfer               | Cancel transfer   |
+| POST   | /api/transfers                              | Receive transfer  |
+| DELETE | /api/transfers/:server                      | Cancel incoming   |
+| POST   | /api/deauthorize-user                       | Revoke user       |
+| GET    | /download/file                              | Download file     |
+| GET    | /download/backup                            | Download backup   |
+| POST   | /upload/file                                | Upload file       |
 
 ---
 
-*Documentation generated for Pelican Wings. For the latest updates, visit [pelican.dev](https://pelican.dev).*
+_Documentation generated for Pelican Wings. For the latest updates, visit [pelican.dev](https://pelican.dev)._

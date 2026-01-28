@@ -1,4 +1,6 @@
-# Pelican Wings
+# Pelican Wings (Modified)
+
+> **Note:** This is a modified version of the original [Pelican Wings](https://github.com/pelican-dev/wings) project.
 
 Wings is Pelican's server control plane, built for the rapidly changing gaming industry and designed to be
 highly performant and secure. Wings provides an HTTP API allowing you to interface directly with running server
@@ -9,9 +11,10 @@ dependencies, and allowing users to authenticate with the same credentials they 
 
 ## Documentation
 
-* [Panel Documentation](https://pelican.dev/docs/panel/getting-started)
-* [Wings Documentation](https://pelican.dev/docs/wings/install)
-* Or, get additional help [via Discord](https://discord.gg/pelican-panel)
+- **[Local Documentation](docs/DOCUMENTATION.md)** - Comprehensive documentation for this modified version
+- [Panel Documentation](https://pelican.dev/docs/panel/getting-started)
+- [Wings Documentation](https://pelican.dev/docs/wings/install)
+- Or, get additional help [via Discord](https://discord.gg/pelican-panel)
 
 ## Reporting Issues
 
