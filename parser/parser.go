@@ -14,6 +14,7 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/icza/dyno"
 	"github.com/magiconair/properties"
+	"github.com/tidwall/pretty"
 	"gopkg.in/ini.v1"
 	"gopkg.in/yaml.v3"
 
@@ -414,8 +415,14 @@ func (f *ConfigurationFile) parseJsonFile(file ufs.File) error {
 		return err
 	}
 
-	// Write the data to the file.
-	if _, err := io.Copy(file, bytes.NewReader(data.BytesIndent("", "    "))); err != nil {
+	prettified := pretty.PrettyOptions(data, &pretty.Options{
+		Width:    80,
+		Prefix:   "",
+		Indent:   "  ",
+		SortKeys: false,
+	})
+
+	if _, err := io.Copy(file, bytes.NewReader(prettified)); err != nil {
 		return errors.Wrap(err, "parser: failed to write properties file to disk")
 	}
 	return nil
@@ -435,8 +442,8 @@ func (f *ConfigurationFile) parseYamlFile(file ufs.File) error {
 	}
 
 	// Unmarshal the yaml data into a JSON interface such that we can work with
-	// any arbitrary data structure. If we don't do this, I can't use gabs which
-	// makes working with unknown JSON significantly easier.
+	// any arbitrary data structure. This allows us to use gjson/sjson for
+	// working with unknown JSON significantly easier.
 	jsonBytes, err := json.Marshal(dyno.ConvertMapI2MapS(i))
 	if err != nil {
 		return err
@@ -449,8 +456,12 @@ func (f *ConfigurationFile) parseYamlFile(file ufs.File) error {
 		return err
 	}
 
-	// Remarshal the JSON into YAML format before saving it back to the disk.
-	marshaled, err := yaml.Marshal(data.Data())
+	var jsonData interface{}
+	if err := json.Unmarshal(data, &jsonData); err != nil {
+		return err
+	}
+
+	marshaled, err := yaml.Marshal(jsonData)
 	if err != nil {
 		return err
 	}

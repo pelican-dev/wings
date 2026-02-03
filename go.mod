@@ -4,7 +4,6 @@ go 1.24.0
 
 require (
 	emperror.dev/errors v0.8.1
-	github.com/Jeffail/gabs/v2 v2.7.0
 	github.com/NYTimes/logrotate v1.0.0
 	github.com/acobaugh/osrelease v0.1.0
 	github.com/apex/log v1.9.0
@@ -41,6 +40,8 @@ require (
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
+	github.com/tidwall/gjson v1.18.0
+	github.com/tidwall/sjson v1.2.5
 	golang.org/x/crypto v0.41.0
 	golang.org/x/sync v0.16.0
 	golang.org/x/sys v0.35.0
@@ -72,6 +73,8 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 )
 
