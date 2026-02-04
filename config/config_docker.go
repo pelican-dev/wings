@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/base64"
 	"sort"
+	"strings"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/registry"
@@ -40,6 +41,15 @@ type DockerNetworkConfiguration struct {
 	EnableICC  bool                    `default:"true" yaml:"enable_icc"`
 	NetworkMTU int64                   `default:"1500" yaml:"network_mtu"`
 	Interfaces dockerNetworkInterfaces `yaml:"interfaces"`
+}
+
+// IsContainerNetworkMode returns true if the network mode shares another container's network namespace.
+// When using "container:<name>" mode, the container inherits the target container's network stack,
+// including hostname, DNS, and network interfaces.
+func (c DockerNetworkConfiguration) IsContainerNetworkMode() bool {
+	// Must have "container:" prefix and at least one character for the container name.
+	// Docker rejects "container:" without a name with "invalid container format container:".
+	return strings.HasPrefix(c.Mode, "container:") && len(c.Mode) > len("container:")
 }
 
 // DockerConfiguration defines the docker configuration used by the daemon when
