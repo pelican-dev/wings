@@ -202,6 +202,12 @@ func (ip *InstallationProcess) Run() error {
 		return err
 	}
 
+	// Ensure correct file ownership after installation since the install
+	// container runs as root, leaving all files owned by root:root.
+	if err := ip.Server.Filesystem().Chown("/"); err != nil {
+		ip.Server.Log().WithField("error", err).Warn("failed to chown server root directory after installation")
+	}
+
 	// If this step fails, log a warning but don't exit out of the process. This is completely
 	// internal to the daemon's functionality, and does not affect the status of the server itself.
 	if err := ip.AfterExecute(cID); err != nil {
