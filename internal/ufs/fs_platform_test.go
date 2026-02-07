@@ -132,14 +132,11 @@ func TestChtimesatWithZeroTime(t *testing.T) {
 func TestOLargefileConstant(t *testing.T) {
 	t.Parallel()
 
-	switch runtime.GOOS {
-	case "linux":
-		if ufs.O_LARGEFILE == 0 {
-			t.Error("expected O_LARGEFILE to be non-zero on Linux")
-		}
-	case "darwin":
-		if ufs.O_LARGEFILE != 0 {
-			t.Error("expected O_LARGEFILE to be 0 on Darwin")
-		}
+	// On Darwin, O_LARGEFILE must be 0 (large file support is always native).
+	// On Linux, O_LARGEFILE is architecture-dependent: 0 on 64-bit (native
+	// large file support) and non-zero on 32-bit. We only assert the Darwin
+	// case since CI runs on 64-bit Linux where the value is also 0.
+	if runtime.GOOS == "darwin" && ufs.O_LARGEFILE != 0 {
+		t.Error("expected O_LARGEFILE to be 0 on Darwin")
 	}
 }
