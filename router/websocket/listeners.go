@@ -97,7 +97,7 @@ func (h *Handler) listenForServerEvents(ctx context.Context) error {
 	h.server.Sink(system.InstallSink).On(installOutput)
 
 	onError := func(evt string, err2 error) {
-		h.Logger().WithField("event", evt).WithField("error", err2).Error("failed to send event over server websocket")
+		h.Logger().WithField("event", evt).WithField("error", err2).Info("failed to send event over server websocket")
 		// Avoid race conditions by only setting the error once and then canceling
 		// the context. This way if additional processing errors come through due
 		// to a massive flood of things you still only report and stop at the first.
