@@ -17,9 +17,13 @@ rmdebug:
 	go build -gcflags "all=-N -l" -ldflags="-X github.com/pelican-dev/wings/system.Version=$(GIT_HEAD)" -race
 	sudo dlv --listen=:2345 --headless=true --api-version=2 --accept-multiclient exec ./wings -- --debug --ignore-certificate-errors --config config.yml
 
+build-darwin:
+	GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -gcflags "all=-trimpath=$(pwd)" -o build/wings_darwin_arm64 -v wings.go
+	GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -gcflags "all=-trimpath=$(pwd)" -o build/wings_darwin_amd64 -v wings.go
+
 cross-build: clean build compress
 
 clean:
 	rm -rf build/wings_*
 
-.PHONY: all build compress clean
+.PHONY: all build build-darwin compress clean
