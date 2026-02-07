@@ -27,7 +27,7 @@ func nameFromDirent(de *unix.Dirent) []byte {
 	}
 
 	// NOTE: This branch is not expected, but included for defensive
-	// programming, and provides a hard stop on the name based on the structure
-	// field array size.
-	return name[:len(de.Name)]
+	// programming. Return the calculated name slice as-is since it is already
+	// bounded by Reclen.
+	return name
 }
