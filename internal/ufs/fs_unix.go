@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -25,8 +26,9 @@ type UnixFS struct {
 	basePath string
 
 	// useOpenat2 controls whether the `openat2` syscall is used instead of the
-	// older `openat` syscall.
-	useOpenat2 bool
+	// older `openat` syscall. Accessed atomically because multiple goroutines
+	// may call openat concurrently and the ENOSYS fallback writes false.
+	useOpenat2 atomic.Bool
 }
 
 // NewUnixFS creates a new sandboxed unix filesystem. BasePath is used as the
@@ -42,9 +44,9 @@ func NewUnixFS(basePath string, useOpenat2 bool) (*UnixFS, error) {
 		basePath = resolved
 	}
 	fs := &UnixFS{
-		basePath:   basePath,
-		useOpenat2: useOpenat2,
+		basePath: basePath,
 	}
+	fs.useOpenat2.Store(useOpenat2)
 	return fs, nil
 }
 
@@ -650,12 +652,12 @@ func (fs *UnixFS) openat(dirfd int, name string, flag int, mode FileMode) (int, 
 	var fd int
 	for {
 		var err error
-		if fs.useOpenat2 {
+		if fs.useOpenat2.Load() {
 			fd, err = fs._openat2(dirfd, name, uint64(flag), uint64(syscallMode(mode)))
 			// If openat2 is not supported (e.g. on Darwin or older kernels),
 			// permanently fall back to openat for this instance.
 			if err == unix.ENOSYS {
-				fs.useOpenat2 = false
+				fs.useOpenat2.Store(false)
 				fd, err = fs._openat(dirfd, name, flag, uint32(syscallMode(mode)))
 			}
 		} else {
@@ -672,7 +674,7 @@ func (fs *UnixFS) openat(dirfd int, name string, flag int, mode FileMode) (int, 
 	}
 
 	// If we are using openat2, we don't need the additional security checks.
-	if fs.useOpenat2 {
+	if fs.useOpenat2.Load() {
 		return fd, nil
 	}
 
@@ -704,7 +706,7 @@ func (fs *UnixFS) openat(dirfd int, name string, flag int, mode FileMode) (int, 
 	// Check if the path is within our root.
 	if !fs.unsafeIsPathInsideOfBase(finalPath) {
 		op := "openat"
-		if fs.useOpenat2 {
+		if fs.useOpenat2.Load() {
 			op = "openat2"
 		}
 		return fd, &PathError{
