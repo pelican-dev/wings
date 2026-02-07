@@ -27,9 +27,9 @@ func (h *Handler) registerListenerEvents(ctx context.Context) {
 
 	go func() {
 		if err := h.listenForServerEvents(ctx); err != nil {
-			h.Logger().Warn("error while processing server event; closing websocket connection")
+			h.Logger().Info("closing websocket connection after server event ended")
 			if err := h.Connection.Close(); err != nil {
-				h.Logger().WithField("error", errors.WithStack(err)).Error("error closing websocket connection")
+				h.Logger().WithField("error", errors.WithStack(err)).Info("websocket connection already closed")
 			}
 		}
 	}()
