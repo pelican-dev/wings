@@ -508,8 +508,13 @@ func (f *ConfigurationFile) parseTomlFile(file ufs.File) error {
 		return err
 	}
 
+	var jsonData interface{}
+	if err := json.Unmarshal(data, &jsonData); err != nil {
+		return err
+	}
+
 	// Remarshal back to TOML format.
-	marshaled, err := toml.Marshal(data.Data())
+	marshaled, err := toml.Marshal(jsonData)
 	if err != nil {
 		return err
 	}
