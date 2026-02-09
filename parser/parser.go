@@ -462,12 +462,9 @@ func (f *ConfigurationFile) parseYamlFile(file ufs.File) error {
 	}
 
 	var jsonData interface{}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	if err := decoder.Decode(&jsonData); err != nil {
+	if err := json.Unmarshal(data, &jsonData); err != nil {
 		return err
 	}
-	jsonData = normalizeTomlTypes(jsonData)
 
 	marshaled, err := yaml.Marshal(jsonData)
 	if err != nil {
@@ -513,9 +510,12 @@ func (f *ConfigurationFile) parseTomlFile(file ufs.File) error {
 	}
 
 	var jsonData interface{}
-	if err := json.Unmarshal(data, &jsonData); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := decoder.Decode(&jsonData); err != nil {
 		return err
 	}
+	jsonData = normalizeTomlTypes(jsonData)
 
 	// Remarshal back to TOML format.
 	marshaled, err := toml.Marshal(jsonData)
