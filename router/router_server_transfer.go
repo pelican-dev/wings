@@ -18,9 +18,10 @@ import (
 
 // Data passed over to initiate a server transfer.
 type serverTransferRequest struct {
-	URL    string                  `binding:"required" json:"url"`
-	Token  string                  `binding:"required" json:"token"`
-	Server installer.ServerDetails `json:"server"`
+	URL     string                  `binding:"required" json:"url"`
+	Token   string                  `binding:"required" json:"token"`
+	Backups []string                `json:"backups"`
+	Server  installer.ServerDetails `json:"server"`
 }
 
 // postServerTransfer handles the start of a transfer for a server.
@@ -80,7 +81,7 @@ func postServerTransfer(c *gin.Context) {
 	go func() {
 		defer transfer.Outgoing().Remove(trnsfr)
 
-		if _, err := trnsfr.PushArchiveToTarget(data.URL, data.Token); err != nil {
+		if _, err := trnsfr.PushArchiveToTarget(data.URL, data.Token, data.Backups); err != nil {
 			notifyPanelOfFailure()
 
 			if err == context.Canceled {

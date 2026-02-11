@@ -214,6 +214,13 @@ func (s *Server) onBeforeStart() error {
 		}
 	}
 
+	// create the machine-id file on start in case it's missing
+	if config.Get().System.MachineID.Enable {
+		if err := s.CreateMachineID(); err != nil {
+			return err
+		}
+	}
+
 	s.Log().Info("completed server preflight, starting boot process...")
 	return nil
 }
