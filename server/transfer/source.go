@@ -61,8 +61,8 @@ func (t *Transfer) PushArchiveToTarget(url, token string) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Authorization", token)
-	if sp != "" {
-		req.Header.Set("X-Storage-Pool", sp)
+	if sp.Enabled && sp.PoolName != "" {
+		req.Header.Set("X-Storage-Pool", sp.PoolName)
 	}
 
 	// Create a new multipart writer that writes the archive to the pipe.

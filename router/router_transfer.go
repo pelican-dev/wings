@@ -132,7 +132,7 @@ func postTransfers(c *gin.Context) {
 	{
 		remotePool := config.Get().System.Transfers.StoragePool
 		sourcePool := c.GetHeader("X-Storage-Pool")
-		if remotePool != "" && sourcePool != "" && strings.EqualFold(remotePool, sourcePool) {
+		if remotePool.Enabled && remotePool.PoolName != "" && sourcePool != "" && strings.EqualFold(remotePool.PoolName, sourcePool) {
 			if err := trnsfr.Server.CreateEnvironment(); err != nil {
 				middleware.CaptureAndAbort(c, err)
 				return

@@ -275,8 +275,8 @@ func deleteServer(c *gin.Context) {
 	//
 	// In addition, servers with large amounts of files can take some time to finish deleting,
 	// so we don't want to block the HTTP call while waiting on this.
-	// Skip file removal when a storage pool is configured, since the data is shared across nodes.
-	if config.Get().System.Transfers.StoragePool == "" {
+	// Skip file removal when a storage pool is enabled, since the data is shared across nodes.
+	if !config.Get().System.Transfers.StoragePool.Enabled {
 		go func(s *server.Server) {
 			fs := s.Filesystem()
 			p := fs.Path()
