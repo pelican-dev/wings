@@ -3,6 +3,7 @@ package environment
 import (
 	"fmt"
 	"math"
+	"os"
 	"strconv"
 
 	"github.com/apex/log"
@@ -108,14 +109,23 @@ func boolPtr(b bool) *bool {
 // that Docker understands.
 func (l Limits) AsContainerResources() container.Resources {
 	pids := l.ProcessLimit()
+
 	resources := container.Resources{
 		Memory:            l.BoundedMemoryLimit(),
 		MemoryReservation: l.MemoryLimit * 1024 * 1024,
 		MemorySwap:        l.ConvertedSwap(),
 		BlkioWeight:       l.IoWeight,
-		OomKillDisable:    boolPtr(!l.OOMKiller),
 		PidsLimit:         &pids,
 	}
+
+	// If the user wants to disable the OOM killer, we need to handle it differently
+	// depending on the cgroup version.
+	if !l.OOMKiller {
+        if _, err := os.Stat("/sys/fs/cgroup/cgroup.controllers"); err == nil {
+        } else {
+            resources.OomKillDisable = boolPtr(true)
+        }
+    }
 
 	// If the CPU Limit is not set, don't send any of these fields through. Providing
 	// them seems to break some Java services that try to read the available processors.
