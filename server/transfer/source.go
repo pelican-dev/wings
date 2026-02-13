@@ -10,6 +10,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"time"
+
+	"github.com/pelican-dev/wings/config"
 )
 
 // PushArchiveToTarget POSTs the archive to the target node and returns the
@@ -20,6 +22,10 @@ func (t *Transfer) PushArchiveToTarget(url, token string, backups []string) ([]b
 
 	t.SendMessage("Preparing to stream server data to destination...")
 	t.SetStatus(StatusProcessing)
+
+	// Always include the configured storage pool identifier in the outgoing request headers.
+	// The destination can use this information to determine if it should skip copying files when both nodes share the same storage backend.
+	sp := config.Get().System.Transfers.StoragePool
 
 	a, err := t.Archive()
 	if err != nil {
@@ -61,6 +67,9 @@ func (t *Transfer) PushArchiveToTarget(url, token string, backups []string) ([]b
 		return nil, err
 	}
 	req.Header.Set("Authorization", token)
+	if sp.Enabled && sp.PoolName != "" {
+		req.Header.Set("X-Storage-Pool", sp.PoolName)
+	}
 
 	// Create a new multipart writer that writes the archive to the pipe.
 	mp := multipart.NewWriter(writer)
