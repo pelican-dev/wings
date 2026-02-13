@@ -6,6 +6,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
@@ -14,6 +15,7 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/icza/dyno"
 	"github.com/magiconair/properties"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/tidwall/pretty"
 	"gopkg.in/ini.v1"
 	"gopkg.in/yaml.v3"
@@ -30,6 +32,7 @@ const (
 	Ini        = "ini"
 	Json       = "json"
 	Xml        = "xml"
+	Toml       = "toml"
 )
 
 type ReplaceValue struct {
@@ -228,6 +231,8 @@ func (f *ConfigurationFile) Parse(file ufs.File) error {
 		err = f.parseIniFile(file)
 	case Xml:
 		err = f.parseXmlFile(file)
+	case Toml:
+		err = f.parseTomlFile(file)
 	}
 	return err
 }
@@ -478,6 +483,90 @@ func (f *ConfigurationFile) parseYamlFile(file ufs.File) error {
 		return errors.Wrap(err, "parser: failed to write properties file to disk")
 	}
 	return nil
+}
+
+// Parses a toml file and updates any matching key/value pairs before persisting
+// it back to the disk.
+func (f *ConfigurationFile) parseTomlFile(file ufs.File) error {
+	b, err := io.ReadAll(file)
+	if err != nil {
+		return err
+	}
+
+	i := make(map[string]interface{})
+	if err := toml.Unmarshal(b, &i); err != nil {
+		return err
+	}
+
+	// Convert to JSON to reuse IterateOverJson for value replacement.
+	jsonBytes, err := json.Marshal(dyno.ConvertMapI2MapS(i))
+	if err != nil {
+		return err
+	}
+
+	data, err := f.IterateOverJson(jsonBytes)
+	if err != nil {
+		return err
+	}
+
+	var jsonData interface{}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := decoder.Decode(&jsonData); err != nil {
+		return err
+	}
+	jsonData = normalizeTomlTypes(jsonData)
+
+	// Remarshal back to TOML format.
+	marshaled, err := toml.Marshal(jsonData)
+	if err != nil {
+		return err
+	}
+
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	if err := file.Truncate(0); err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(file, bytes.NewReader(marshaled)); err != nil {
+		return errors.Wrap(err, "parser: failed to write toml file to disk")
+	}
+	return nil
+}
+
+func normalizeTomlTypes(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		for key, item := range typed {
+			typed[key] = normalizeTomlTypes(item)
+		}
+		return typed
+	case []interface{}:
+		for i := range typed {
+			typed[i] = normalizeTomlTypes(typed[i])
+		}
+		return typed
+	case json.Number:
+		if intVal, err := typed.Int64(); err == nil {
+			return intVal
+		}
+		if floatVal, err := typed.Float64(); err == nil {
+			return floatVal
+		}
+		return typed.String()
+	case string:
+		if timeVal, err := time.Parse(time.RFC3339Nano, typed); err == nil {
+			return timeVal
+		}
+		if timeVal, err := time.Parse(time.RFC3339, typed); err == nil {
+			return timeVal
+		}
+		return typed
+	default:
+		return value
+	}
 }
 
 // Parses a text file using basic find and replace. This is a highly inefficient method of
