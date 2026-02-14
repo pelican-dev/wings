@@ -220,7 +220,7 @@ func (fs *UnixFS) readDir(fd int, name, relative string, b []byte) ([]DirEntry, 
 		}
 		var rel string
 		if relative == "." {
-			rel = name
+			rel = childName
 		} else {
 			rel = path.Join(relative, childName)
 		}
@@ -255,16 +255,14 @@ func (de dirent) Info() (FileInfo, error) {
 	if de.fs == nil {
 		return nil, nil
 	}
-	return de.fs.Lstatat(de.dirfd, de.name)
-	// return de.fs.Lstat(de.path)
+	return de.info()
 }
 
 func (de dirent) Open() (File, error) {
 	if de.fs == nil {
 		return nil, nil
 	}
-	return de.fs.OpenFileat(de.dirfd, de.name, O_RDONLY, 0)
-	// return de.fs.OpenFile(de.path, O_RDONLY, 0)
+	return de.open()
 }
 
 // reset releases memory held by entry err and name, and resets mode type to 0.
