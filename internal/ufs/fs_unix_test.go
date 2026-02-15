@@ -34,11 +34,14 @@ func newTestUnixFS() (*testUnixFS, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Resolve symlinks in tmpDir so tests work on macOS where /var -> /private/var.
+	if resolved, err := filepath.EvalSymlinks(tmpDir); err == nil {
+		tmpDir = resolved
+	}
 	root := filepath.Join(tmpDir, "root")
 	if err := os.Mkdir(root, 0o755); err != nil {
 		return nil, err
 	}
-	// fmt.Println(tmpDir)
 	fs, err := ufs.NewUnixFS(root, true)
 	if err != nil {
 		return nil, err

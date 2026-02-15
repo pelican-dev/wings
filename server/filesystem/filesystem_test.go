@@ -31,6 +31,10 @@ func NewFs() (*Filesystem, *rootFs) {
 		panic(err)
 		return nil, nil
 	}
+	// Resolve symlinks in tmpDir so tests work on macOS where /var -> /private/var.
+	if resolved, err := filepath.EvalSymlinks(tmpDir); err == nil {
+		tmpDir = resolved
+	}
 
 	rfs := rootFs{root: tmpDir}
 
