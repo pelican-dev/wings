@@ -46,9 +46,9 @@ type ConfigurationMeta struct {
 type Configuration struct {
 	mu sync.RWMutex
 
-	// ID is the database id from the panel that is guaranteed to be unique
+	// P_ID is the database id from the panel that is guaranteed to be unique
 	// this is being used for quotas
-	ID int `json:"id"`
+	Pid int `json:"id"`
 
 	// The unique identifier for the server that should be used when referencing
 	// it against the Panel API (and internally). This will be used when naming
@@ -110,6 +110,12 @@ func (c *Configuration) GetUuid() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.Uuid
+}
+
+func (c *Configuration) GetPID() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Pid
 }
 
 func (c *Configuration) SetSuspended(s bool) {

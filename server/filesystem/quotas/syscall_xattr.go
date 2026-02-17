@@ -12,23 +12,23 @@ import (
  * Flags for the fsx_xflags field
  */
 const (
-	FS_XFLAG_REALTIME     = 0x00000001 /* data in realtime volume */
-	FS_XFLAG_PREALLOC     = 0x00000002 /* preallocated file extents */
-	FS_XFLAG_IMMUTABLE    = 0x00000008 /* file cannot be modified */
-	FS_XFLAG_APPEND       = 0x00000010 /* all writes append */
-	FS_XFLAG_SYNC         = 0x00000020 /* all writes synchronous */
-	FS_XFLAG_NOATIME      = 0x00000040 /* do not update access time */
-	FS_XFLAG_NODUMP       = 0x00000080 /* do not include in backups */
-	FS_XFLAG_RTINHERIT    = 0x00000100 /* create with rt bit set */
-	FS_XFLAG_PROJINHERIT  = 0x00000200 /* create with parents projid */
-	FS_XFLAG_NOSYMLINKS   = 0x00000400 /* disallow symlink creation */
-	FS_XFLAG_EXTSIZE      = 0x00000800 /* extent size allocator hint */
-	FS_XFLAG_EXTSZINHERIT = 0x00001000 /* inherit inode extent size */
-	FS_XFLAG_NODEFRAG     = 0x00002000 /* do not defragment */
-	FS_XFLAG_FILESTREAM   = 0x00004000 /* use filestream allocator */
-	FS_XFLAG_DAX          = 0x00008000 /* use DAX for IO */
-	FS_XFLAG_COWEXTSIZE   = 0x00010000 /* CoW extent size allocator hint */
-	FS_XFLAG_HASATTR      = 0x80000000 /* no DIFLAG for this   */
+	FS_XFLAG_REALTIME     uint32 = 0x00000001 /* data in realtime volume */
+	FS_XFLAG_PREALLOC     uint32 = 0x00000002 /* preallocated file extents */
+	FS_XFLAG_IMMUTABLE    uint32 = 0x00000008 /* file cannot be modified */
+	FS_XFLAG_APPEND       uint32 = 0x00000010 /* all writes append */
+	FS_XFLAG_SYNC         uint32 = 0x00000020 /* all writes synchronous */
+	FS_XFLAG_NOATIME      uint32 = 0x00000040 /* do not update access time */
+	FS_XFLAG_NODUMP       uint32 = 0x00000080 /* do not include in backups */
+	FS_XFLAG_RTINHERIT    uint32 = 0x00000100 /* create with rt bit set */
+	FS_XFLAG_PROJINHERIT  uint32 = 0x00000200 /* create with parents projid */
+	FS_XFLAG_NOSYMLINKS   uint32 = 0x00000400 /* disallow symlink creation */
+	FS_XFLAG_EXTSIZE      uint32 = 0x00000800 /* extent size allocator hint */
+	FS_XFLAG_EXTSZINHERIT uint32 = 0x00001000 /* inherit inode extent size */
+	FS_XFLAG_NODEFRAG     uint32 = 0x00002000 /* do not defragment */
+	FS_XFLAG_FILESTREAM   uint32 = 0x00004000 /* use filestream allocator */
+	FS_XFLAG_DAX          uint32 = 0x00008000 /* use DAX for IO */
+	FS_XFLAG_COWEXTSIZE   uint32 = 0x00010000 /* CoW extent size allocator hint */
+	FS_XFLAG_HASATTR      uint32 = 0x80000000 /* no DIFLAG for this   */
 )
 
 /*
@@ -55,10 +55,9 @@ type fsXAttr struct {
 
 // xAttrCtl sets the
 func xAttrCtl(f *os.File, request uintptr, xattr *fsXAttr) (err error) {
-	attreq := uintptr(unsafe.Pointer(xattr))
+	xattreq := uintptr(unsafe.Pointer(xattr))
 
-	_, _, errno := syscall.RawSyscall(syscall.SYS_IOCTL, f.Fd(), request, attreq)
-
+	_, _, errno := syscall.RawSyscall(syscall.SYS_IOCTL, f.Fd(), request, xattreq)
 	if errno != 0 {
 		return os.NewSyscallError("ioctl", errno)
 	}
@@ -76,16 +75,15 @@ func getXAttr(f *os.File) (attr fsXAttr, err error) {
 }
 
 // setXAttr sets xattr values for the
-func setXAttr(serverDir *os.File, fsXAttr fsXAttr) (err error) {
-	xAttr, err := getXAttr(serverDir)
+func setXAttr(f *os.File, projectID int, attr uint32) (err error) {
+	fxattr, err := getXAttr(f)
 	if err != nil {
 		return err
 	}
 
-	// bitwise add for uint32 X Attributes
-	xAttr.XFlags |= fsXAttr.XFlags
+	fxattr.XFlags |= attr
+	fxattr.ProjectID = uint32(projectID)
 
-	err = xAttrCtl(serverDir, FS_IOC_FSSETXATTR, &fsXAttr)
-
+	err = xAttrCtl(f, FS_IOC_FSSETXATTR, &fxattr)
 	return
 }

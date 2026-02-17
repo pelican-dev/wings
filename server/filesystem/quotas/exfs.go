@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"emperror.dev/errors"
+	"github.com/apex/log"
 	"github.com/parkervcp/fsquota"
 	"github.com/pelican-dev/wings/config"
 )
@@ -19,9 +21,9 @@ type exfsProject struct {
 }
 
 const (
-	projidTemplate = `{{ range . }}{{ .UUID }}:{{ .ID }}
+	projidTemplate = `{{ range . }}{{ .Name }}:{{ .ID }}
 {{ end }}`
-	projectsTemplate = `{{ range . }}{{ .ID }}:{{ .BasePath }}/{{ .UUID }}
+	projectsTemplate = `{{ range . }}{{ .ID }}:{{ .BasePath }}/{{ .Name }}
 {{ end }}`
 
 	projidFile  = `/etc/projid`
@@ -30,22 +32,22 @@ const (
 
 // setQuota sets the quota in bytes for the specified server uuid
 func (q exfsProject) setQuota(byteLimit uint64) (err error) {
+	log.WithFields(log.Fields{"server-path": fmt.Sprintf("%s/%s", q.BasePath, q.Name)}).Debug("setting quota")
 	serverProject, err := fsquota.LookupProject(q.Name)
 	if err != nil {
 		return
 	}
 
 	serverDirPath := fmt.Sprintf("%s/%s", config.Get().System.Data, q.Name)
-	projInfo, err := fsquota.GetProjectInfo(serverDirPath, serverProject)
-	if err != nil {
+	limits := fsquota.Limits{}
+
+	limits.Bytes.SetHard(byteLimit)
+
+	if _, err = fsquota.SetProjectQuota(serverDirPath, serverProject, limits); err != nil {
 		return
 	}
 
-	projInfo.Limits.Bytes.SetHard(byteLimit)
-
-	if _, err = fsquota.SetProjectQuota(serverDirPath, serverProject, projInfo.Limits); err != nil {
-		return
-	}
+	log.WithFields(log.Fields{"server-path": fmt.Sprintf("%s/%s", q.BasePath, q.Name)}).Debug("quota set")
 	return
 }
 
@@ -53,14 +55,13 @@ func (q exfsProject) setQuota(byteLimit uint64) (err error) {
 func (q exfsProject) getQuota() (bytesUsed int64, err error) {
 	serverProject, err := fsquota.LookupProject(q.Name)
 	if err != nil {
-		return
+		return -1, err
 	}
 
 	projInfo, err := fsquota.GetProjectInfo(q.BasePath, serverProject)
 	if err != nil {
-		return
+		return -1, err
 	}
-
 	// converts the uint64 to int64.
 	// This should only be an issue in the terms of exabytes...
 	return int64(projInfo.BytesUsed), nil
@@ -68,42 +69,28 @@ func (q exfsProject) getQuota() (bytesUsed int64, err error) {
 
 // enableEXFSQuota enables quotas on a specified directory
 func (q exfsProject) enableEXFSQuota() (err error) {
-	serverDir, err := os.OpenFile(fmt.Sprintf("%s/%s", q.BasePath, q.Name), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	serverDir, err := os.Open(fmt.Sprintf("%s/%s", q.BasePath, q.Name))
 	if err != nil {
-		return
+		return err
 	}
 
 	defer serverDir.Close()
 
-	folderXattr, err := getXAttr(serverDir)
-	if err != nil {
+	// enable project quota inheritance and set project id
+	if err = setXAttr(serverDir, q.ID, FS_XFLAG_PROJINHERIT); err != nil {
+		log.WithFields(log.Fields{"server-uuid": q.Name, "server-path": serverDir.Name()}).Error("failed to update XATTRs for server")
 		return
-	}
-
-	// ensure project inherit flag is set
-	if (folderXattr.XFlags & FS_XFLAG_PROJINHERIT) != 0 {
-		if err = setXAttr(serverDir, fsXAttr{XFlags: FS_XFLAG_PROJINHERIT}); err != nil {
-			return
-		}
-	}
-
-	// ensure correct project id is set
-	if folderXattr.ProjectID != uint32(q.ID) {
-		if err = setXAttr(serverDir, fsXAttr{ProjectID: uint32(q.ID)}); err != nil {
-			return
-		}
 	}
 
 	return
 }
 
 func (q exfsProject) addProject() (err error) {
-	basePath := config.Get().System.Data
-	if strings.HasSuffix(basePath, "/") {
-		basePath = strings.TrimSuffix(config.Get().System.Data, "/")
+	q.BasePath = config.Get().System.Data
+	if strings.HasSuffix(q.BasePath, "/") {
+		q.BasePath = strings.TrimSuffix(config.Get().System.Data, "/")
 	}
 
-	q.BasePath = basePath
 	exfsProjects = append(exfsProjects, q)
 
 	if err = writeEXFSProjects(); err != nil {
@@ -129,11 +116,21 @@ func (q exfsProject) removeProject() (err error) {
 	return
 }
 
+func getProject(serverUUID string) (serverProject exfsProject, err error) {
+	for _, project := range exfsProjects {
+		if project.Name == serverUUID {
+			return project, nil
+		}
+	}
+
+	return serverProject, errors.New("quota for server doesn't exist")
+}
+
 func writeEXFSProjects() (err error) {
 	// write out projid file
 	idtmpl, err := template.New("projid").Parse(projidTemplate)
 	if err != nil {
-		return
+		return err
 	}
 
 	if err = writeTemplate(idtmpl, projidFile, exfsProjects); err != nil {
@@ -142,7 +139,7 @@ func writeEXFSProjects() (err error) {
 
 	projtmpl, err := template.New("projects").Parse(projectsTemplate)
 	if err != nil {
-		return
+		return err
 	}
 
 	if err = writeTemplate(projtmpl, projectFile, exfsProjects); err != nil {

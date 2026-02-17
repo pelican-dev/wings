@@ -81,7 +81,7 @@ func getServerInstallLogs(c *gin.Context) {
 // request until a potentially slow operation completes.
 //
 // This is done because for the most part the Panel is using websockets to determine when
-// things are happening, so theres no reason to sit and wait for a request to finish. We'll
+// things are happening, so there's no reason to sit and wait for a request to finish. We'll
 // just see over the socket if something isn't working correctly.
 func postServerPower(c *gin.Context) {
 	s := ExtractServer(c)
@@ -286,7 +286,7 @@ func deleteServer(c *gin.Context) {
 
 		if config.Get().System.Quotas.Enabled {
 			if err = quotas.DelQuota(s.Config().Uuid); err != nil {
-				log.WithFields(log.Fields{"server_id": s.Config().ID, "error": err}).
+				log.WithFields(log.Fields{"server_id": s.Config().Pid, "error": err}).
 					Warn("failed to remove quota during deletion process")
 			}
 		}

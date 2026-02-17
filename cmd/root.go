@@ -168,6 +168,17 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 		return
 	}
 
+	// if quotas are enabled ensure they are added and enabled.
+	if config.Get().System.Quotas.Enabled {
+		log.Info("validating system is configured for quotas")
+		// check if the fs is supported
+		if !quotas.IsSupportedFS() {
+			log.Fatal("failed to validate quota configuration")
+		}
+
+		log.Info("quotas are supported and enabled")
+	}
+
 	manager, err := server.NewManager(cmd.Context(), pclient)
 	if err != nil {
 		log.WithField("error", err).Fatal("failed to load server configurations")
@@ -189,24 +200,7 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 
 	// Just for some nice log output.
 	for _, s := range manager.All() {
-		log.WithField("server", s.ID()).Info("finished loading configuration for server")
-	}
-
-	// if quotas are enabled ensure they are added and enabled.
-	if config.Get().System.Quotas.Enabled {
-		// check if the fs is supported
-		if err = quotas.IsSupportedFS(); err != nil {
-			log.WithField("error", err).Fatal("failed to validate quota configuration")
-		}
-
-		// validate all servers are configured for quotas
-		for _, s := range manager.All() {
-			if err = quotas.AddQuota(s.Config().ID, s.Config().Uuid); err != nil {
-				log.WithField("error", err).Error("failed to add server to quota list")
-			}
-		}
-
-		log.Info("quotas configured")
+		log.WithField("server", s.ID()).Info("finished loading configuration")
 	}
 
 	states, err := manager.ReadStates()
