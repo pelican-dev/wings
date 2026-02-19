@@ -32,7 +32,7 @@ const (
 
 // setQuota sets the quota in bytes for the specified server uuid
 func (q exfsProject) setQuota(byteLimit uint64) (err error) {
-	log.WithFields(log.Fields{"server-path": fmt.Sprintf("%s/%s", q.BasePath, q.Name)}).Debug("setting quota")
+	log.WithFields(log.Fields{"server-path": fmt.Sprintf("%s/%s", q.BasePath, q.Name), "bytes": byteLimit}).Debug("setting quota")
 	serverProject, err := fsquota.LookupProject(q.Name)
 	if err != nil {
 		return
@@ -62,6 +62,7 @@ func (q exfsProject) getQuota() (bytesUsed int64, err error) {
 	if err != nil {
 		return -1, err
 	}
+
 	// converts the uint64 to int64.
 	// This should only be an issue in the terms of exabytes...
 	return int64(projInfo.BytesUsed), nil

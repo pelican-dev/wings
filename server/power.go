@@ -195,9 +195,8 @@ func (s *Server) onBeforeStart() error {
 			log.WithField("error", err).Error("failed to get quota for server")
 			return err
 		}
-
 		// used space is greater than the configured disk space
-		if used >= s.Environment.Config().Limits().DiskSpace {
+		if used >= s.DiskSpace() {
 			return errors.New("currently used disk space is more than allocated")
 		}
 	} else {
