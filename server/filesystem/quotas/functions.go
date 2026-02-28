@@ -1,7 +1,7 @@
 package quotas
 
 import (
-	"syscall"
+	"golang.org/x/sys/unix"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
@@ -19,13 +19,13 @@ const (
 var fsType int64
 
 func getFSType(mount string) (err error) {
-	var stat syscall.Statfs_t
+	var stat unix.Statfs_t
 
 	if mount == "" {
 		return errors.New("must specify path to check the filesystem type")
 	}
 
-	err = syscall.Statfs(mount, &stat)
+	err = unix.Statfs(mount, &stat)
 	if err != nil {
 		return err
 	}

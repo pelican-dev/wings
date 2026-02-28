@@ -2,8 +2,9 @@ package quotas
 
 import (
 	"os"
-	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 // Pulled definitions from /usr/include/linux/fs.h
@@ -57,7 +58,7 @@ type fsXAttr struct {
 func xAttrCtl(f *os.File, request uintptr, xattr *fsXAttr) (err error) {
 	xattreq := uintptr(unsafe.Pointer(xattr))
 
-	_, _, errno := syscall.RawSyscall(syscall.SYS_IOCTL, f.Fd(), request, xattreq)
+	_, _, errno := unix.RawSyscall(unix.SYS_IOCTL, f.Fd(), request, xattreq)
 	if errno != 0 {
 		return os.NewSyscallError("ioctl", errno)
 	}

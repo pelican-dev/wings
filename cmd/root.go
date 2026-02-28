@@ -14,7 +14,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/NYTimes/logrotate"
@@ -27,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
+	"golang.org/x/sys/unix"
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
@@ -191,7 +191,7 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 	}
 
 	if err := config.WriteToDisk(config.Get()); err != nil {
-		if !errors.Is(err, syscall.EROFS) {
+		if !errors.Is(err, unix.EROFS) {
 			log.WithField("error", err).Error("failed to write configuration to disk")
 		} else {
 			log.WithField("error", err).Debug("failed to write configuration to disk")
