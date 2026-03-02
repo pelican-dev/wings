@@ -4,6 +4,7 @@ import (
 	"os"
 	"unsafe"
 
+	"emperror.dev/errors"
 	"golang.org/x/sys/unix"
 )
 
@@ -64,7 +65,7 @@ type fsXAttr struct {
 	FSXPad     [8]byte
 }
 
-// xAttrCtl sets the
+// xAttrCtl handles the xattr calls for a specified file
 func xAttrCtl(f *os.File, request uintptr, xattr *fsXAttr) (err error) {
 	xattreq := uintptr(unsafe.Pointer(xattr))
 
@@ -85,8 +86,12 @@ func getXAttr(f *os.File) (attr fsXAttr, err error) {
 	return
 }
 
-// setXAttr sets xattr values for the
+// setXAttr sets xattr values for a specified file
 func setXAttr(f *os.File, projectID int, attr uint32) (err error) {
+	if projectID < 0 || uint64(projectID) > uint64(^uint32(0)) {
+		return errors.New("projectID out of range")
+	}
+
 	fxattr, err := getXAttr(f)
 	if err != nil {
 		return err

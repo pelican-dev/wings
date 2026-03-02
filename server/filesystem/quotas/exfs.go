@@ -36,7 +36,7 @@ const (
 
 // setQuota sets the quota in bytes for the specified server uuid
 func (q exfsProject) setQuota(byteLimit uint64) (err error) {
-	log.WithFields(log.Fields{"server-path": fmt.Sprintf("%s/%s", q.BasePath, q.Name), "bytes": byteLimit}).Debug("setting quota")
+	log.WithFields(log.Fields{"server_path": fmt.Sprintf("%s/%s", q.BasePath, q.Name), "limit_bytes": byteLimit}).Debug("setting quota")
 	serverProject, err := fsquota.LookupProject(q.Name)
 	if err != nil {
 		return
@@ -51,7 +51,7 @@ func (q exfsProject) setQuota(byteLimit uint64) (err error) {
 		return
 	}
 
-	log.WithFields(log.Fields{"server-path": fmt.Sprintf("%s/%s", q.BasePath, q.Name)}).Debug("quota set")
+	log.WithField("server_path", fmt.Sprintf("%s/%s", q.BasePath, q.Name)).Debug("quota set")
 	return
 }
 
@@ -83,7 +83,7 @@ func (q exfsProject) enableEXFSQuota() (err error) {
 
 	// enable project quota inheritance and set project id
 	if err = setXAttr(serverDir, q.ID, FS_XFLAG_PROJINHERIT); err != nil {
-		log.WithFields(log.Fields{"server-uuid": q.Name, "server-path": serverDir.Name()}).Error("failed to update XATTRs for server")
+		log.WithFields(log.Fields{"server_uuid": q.Name, "server_path": serverDir.Name()}).Error("failed to update XATTRs for server")
 		return
 	}
 
@@ -96,13 +96,16 @@ func (q exfsProject) addProject() (err error) {
 		q.BasePath = strings.TrimSuffix(config.Get().System.Data, "/")
 	}
 	exfs.lock.Lock()
+	defer exfs.lock.Unlock()
 	exfs.projects = append(exfs.projects, q)
-	exfs.lock.Unlock()
+
 	if err = writeEXFSProjects(); err != nil {
+		log.WithError(err).Error("failed to write exfs projects")
 		return
 	}
 
 	if err = q.enableEXFSQuota(); err != nil {
+		log.WithError(err).Error("failed to enable quota")
 		return
 	}
 

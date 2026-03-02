@@ -56,7 +56,7 @@ func IsSupportedFS() (supported bool) {
 	log.WithField("path", config.Get().System.Data).Debug("checking filesystem type")
 	err := getFSType(config.Get().System.Data)
 	if err != nil {
-		log.Error(err.Error())
+		log.WithError(err).Error("error checking filesystem type")
 		return
 	}
 
@@ -64,6 +64,7 @@ func IsSupportedFS() (supported bool) {
 		// technically tested on EXT4 and will need to be validated for XFS
 		supported, err = fsquota.ProjectQuotasSupported(config.Get().System.Data)
 		if err != nil {
+			log.WithError(err).Error("error checking for quota support")
 			return
 		}
 
@@ -107,8 +108,8 @@ func DelQuota(serverUUID string) (err error) {
 func SetQuota(limit int64, serverUUID string) (err error) {
 	log.WithField("server", serverUUID).Debug("setting quota")
 	if limit < 0 {
+		log.WithField("requested_limit", limit).Error("quota limit cannot be negative, setting to zero")
 		limit = 0
-		log.WithFields(log.Fields{"requested_limit": limit}).Error("quota limit cannot be negative, setting to zero")
 	}
 	if fsType == FSEXT4 || fsType == FSXFS {
 		fsProject, err := getProject(serverUUID)
