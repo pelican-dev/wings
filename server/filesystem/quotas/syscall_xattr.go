@@ -44,14 +44,24 @@ const (
 	FS_IOC_FSSETXATTR uintptr = 0x401c5820 // https://docs.rs/linux-raw-sys/latest/linux_raw_sys/ioctl/constant.FS_IOC_FSSETXATTR.html
 )
 
+//struct fsxattr {
+//__u32           fsx_xflags;     /* xflags field value (get/set) */
+//__u32           fsx_extsize;    /* extsize field value (get/set)*/
+//__u32           fsx_nextents;   /* nextents field value (get)   */
+//__u32           fsx_projid;     /* project identifier (get/set) */
+//__u32           fsx_cowextsize; /* CoW extsize field value (get/set)*/
+//unsigned char   fsx_pad[8];
+//};
+
 // fsXAttr is the struct defining the structure
 // for FS_IOC_FSGETXATTR and FS_IOC_FSSETXATTR
 type fsXAttr struct {
-	XFlags    uint32
-	ExtSize   uint32
-	NextENTs  uint32
-	ProjectID uint32
-	FSXPad    byte
+	XFlags     uint32
+	ExtSize    uint32
+	NextENTs   uint32
+	ProjectID  uint32
+	CowExtSize uint32
+	FSXPad     [8]byte
 }
 
 // xAttrCtl sets the

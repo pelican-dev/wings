@@ -34,7 +34,7 @@ func getFSType(mount string) (err error) {
 
 	switch fsType {
 	case FSBTRFS:
-		log.WithField("fs-type", "brtfs").Debug("found filesystem")
+		log.WithField("fs-type", "btrfs").Debug("found filesystem")
 		return nil
 	case FSEXT4:
 		log.WithField("fs-type", "ext4").Debug("found filesystem")
@@ -75,7 +75,7 @@ func IsSupportedFS() (supported bool) {
 	} else if fsType == FSBTRFS {
 		log.WithField("path", config.Get().System.Data).Error("btrfs is not supported")
 	} else if fsType == FSZFS {
-		log.WithField("path", config.Get().System.Data).Error("btrfs is not supported")
+		log.WithField("path", config.Get().System.Data).Error("zfs is not supported")
 	}
 
 	return
@@ -106,6 +106,10 @@ func DelQuota(serverUUID string) (err error) {
 // SetQuota configures quotas for a specified server
 func SetQuota(limit int64, serverUUID string) (err error) {
 	log.WithField("server", serverUUID).Debug("setting quota")
+	if limit < 0 {
+		limit = 0
+		log.WithFields(log.Fields{"requested_limit": limit}).Error("quota limit cannot be negative, setting to zero")
+	}
 	if fsType == FSEXT4 || fsType == FSXFS {
 		fsProject, err := getProject(serverUUID)
 		if err != nil {

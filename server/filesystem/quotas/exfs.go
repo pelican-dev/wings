@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"os"
 	"strings"
+	"sync"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
@@ -12,7 +13,10 @@ import (
 	"github.com/pelican-dev/wings/config"
 )
 
-var exfsProjects []exfsProject
+var exfs struct {
+	projects []exfsProject
+	lock     sync.Mutex
+}
 
 type exfsProject struct {
 	ID       int
@@ -91,9 +95,9 @@ func (q exfsProject) addProject() (err error) {
 	if strings.HasSuffix(q.BasePath, "/") {
 		q.BasePath = strings.TrimSuffix(config.Get().System.Data, "/")
 	}
-
-	exfsProjects = append(exfsProjects, q)
-
+	exfs.lock.Lock()
+	exfs.projects = append(exfs.projects, q)
+	exfs.lock.Unlock()
 	if err = writeEXFSProjects(); err != nil {
 		return
 	}
@@ -107,9 +111,12 @@ func (q exfsProject) addProject() (err error) {
 
 // removeProject drops a specified project from the
 func (q exfsProject) removeProject() (err error) {
-	for pos, project := range exfsProjects {
+	exfs.lock.Lock()
+	defer exfs.lock.Unlock()
+	for pos, project := range exfs.projects {
 		if project.Name == q.Name {
-			exfsProjects = append(exfsProjects[:pos], exfsProjects[pos+1:]...)
+			exfs.projects = append(exfs.projects[:pos], exfs.projects[pos+1:]...)
+			break
 		}
 	}
 
@@ -118,7 +125,9 @@ func (q exfsProject) removeProject() (err error) {
 }
 
 func getProject(serverUUID string) (serverProject exfsProject, err error) {
-	for _, project := range exfsProjects {
+	exfs.lock.Lock()
+	defer exfs.lock.Unlock()
+	for _, project := range exfs.projects {
 		if project.Name == serverUUID {
 			return project, nil
 		}
@@ -128,13 +137,15 @@ func getProject(serverUUID string) (serverProject exfsProject, err error) {
 }
 
 func writeEXFSProjects() (err error) {
+	exfs.lock.Lock()
+	defer exfs.lock.Unlock()
 	// write out projid file
 	idtmpl, err := template.New("projid").Parse(projidTemplate)
 	if err != nil {
 		return err
 	}
 
-	if err = writeTemplate(idtmpl, projidFile, exfsProjects); err != nil {
+	if err = writeTemplate(idtmpl, projidFile, exfs.projects); err != nil {
 		return
 	}
 
@@ -143,7 +154,7 @@ func writeEXFSProjects() (err error) {
 		return err
 	}
 
-	if err = writeTemplate(projtmpl, projectFile, exfsProjects); err != nil {
+	if err = writeTemplate(projtmpl, projectFile, exfs.projects); err != nil {
 		return
 	}
 
@@ -156,12 +167,9 @@ func writeTemplate(t *template.Template, file string, data interface{}) (err err
 		return err
 	}
 
-	err = t.Execute(f, data)
-	if err != nil {
-		return err
-	}
+	defer f.Close()
 
-	err = f.Close()
+	err = t.Execute(f, data)
 	if err != nil {
 		return err
 	}
