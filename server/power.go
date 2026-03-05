@@ -6,10 +6,11 @@ import (
 	"time"
 
 	"emperror.dev/errors"
+	"github.com/apex/log"
 	"github.com/google/uuid"
-
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
+	"github.com/pelican-dev/wings/server/filesystem/quotas"
 )
 
 type PowerAction string
@@ -186,12 +187,26 @@ func (s *Server) onBeforeStart() error {
 
 	// If a server has unlimited disk space, we don't care enough to block the startup to check remaining.
 	// However, we should trigger a size anyway, as it'd be good to kick it off for other processes.
-	if s.DiskSpace() <= 0 {
-		s.Filesystem().HasSpaceAvailable(true)
-	} else {
-		s.PublishConsoleOutputFromDaemon("Checking server disk space usage, this could take a few seconds...")
-		if err := s.Filesystem().HasSpaceErr(false); err != nil {
+	if config.Get().System.Quotas.Enabled {
+		s.PublishConsoleOutputFromDaemon("checking disk space via quota, just a second")
+		// get used disk space
+		used, err := quotas.GetQuota(s.Config().Uuid)
+		if err != nil {
+			log.WithField("error", err).Error("failed to get quota for server")
 			return err
+		}
+		// used space is greater than the configured disk space
+		if used >= s.DiskSpace() {
+			return errors.New("currently used disk space is more than allocated")
+		}
+	} else {
+		if s.DiskSpace() <= 0 {
+			s.Filesystem().HasSpaceAvailable(true)
+		} else {
+			s.PublishConsoleOutputFromDaemon("checking server disk space usage, this could take a few seconds...")
+			if err := s.Filesystem().HasSpaceErr(false); err != nil {
+				return err
+			}
 		}
 	}
 

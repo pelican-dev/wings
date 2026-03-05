@@ -240,7 +240,7 @@ func postServerDeleteFiles(c *gin.Context) {
 				return s.Filesystem().SafeDeleteRecursively(pi)
 			}
 		})
-		
+
 	}
 
 	if err := g.Wait(); err != nil {

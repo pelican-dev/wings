@@ -12,7 +12,6 @@ import (
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
 	"github.com/pelican-dev/wings/internal/models"
-
 )
 
 type CrashHandler struct {
@@ -100,7 +99,7 @@ func (s *Server) handleServerCrash() error {
 		"oomkilled": oomKilled,
 		"logs":      logs,
 	})
-	
+
 	s.crasher.SetLastCrash(time.Now())
 
 	return errors.Wrap(s.HandlePowerAction(PowerActionStart), "failed to start server after crash detection")

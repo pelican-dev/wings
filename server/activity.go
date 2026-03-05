@@ -21,7 +21,6 @@ const (
 	ActivitySftpDelete          = models.Event("server:sftp.delete")
 	ActivityFileUploaded        = models.Event("server:file.uploaded")
 	ActivityServerCrashed       = models.Event("server:crashed")
-
 )
 
 // RequestActivity is a wrapper around a LoggedEvent that is able to track additional request

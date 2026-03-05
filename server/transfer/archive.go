@@ -37,10 +37,10 @@ func (t *Transfer) Archive() (*Archive, error) {
 func (a *Archive) StreamBackups(ctx context.Context, mp *multipart.Writer) error {
 	// In theory this can't happen as this function is only called if there is at least 1 backup but just to be sure
 	if len(a.transfer.BackupUUIDs) == 0 {
-        a.transfer.Log().Debug("no backups specified for transfer")
-        return nil
-    }
-	
+		a.transfer.Log().Debug("no backups specified for transfer")
+		return nil
+	}
+
 	cfg := config.Get()
 	backupPath := filepath.Join(cfg.System.BackupDirectory, a.transfer.Server.ID())
 
@@ -55,27 +55,27 @@ func (a *Archive) StreamBackups(ctx context.Context, mp *multipart.Writer) error
 		return err
 	}
 
-    // Create a set of backup UUIDs for quick lookup
-    backupSet := make(map[string]bool)
-    for _, uuid := range a.transfer.BackupUUIDs {
-        backupSet[uuid+".tar.gz"] = true // Backup files are stored as UUID.tar.gz
-    }
+	// Create a set of backup UUIDs for quick lookup
+	backupSet := make(map[string]bool)
+	for _, uuid := range a.transfer.BackupUUIDs {
+		backupSet[uuid+".tar.gz"] = true // Backup files are stored as UUID.tar.gz
+	}
 
-    var backupsToTransfer []os.DirEntry
-    for _, entry := range entries {
-        if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".tar.gz") {
-            if backupSet[entry.Name()] {
-                backupsToTransfer = append(backupsToTransfer, entry)
-            }
-        }
-    }
+	var backupsToTransfer []os.DirEntry
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".tar.gz") {
+			if backupSet[entry.Name()] {
+				backupsToTransfer = append(backupsToTransfer, entry)
+			}
+		}
+	}
 
-    totalBackups := len(backupsToTransfer)
-    if totalBackups == 0 {
-        a.transfer.Log().Debug("no matching backup files found")
-        return nil
-    }
-	
+	totalBackups := len(backupsToTransfer)
+	if totalBackups == 0 {
+		a.transfer.Log().Debug("no matching backup files found")
+		return nil
+	}
+
 	a.transfer.Log().Infof("Starting transfer of %d backup files", totalBackups)
 	a.transfer.SendMessage(fmt.Sprintf("Starting transfer of %d backup files", totalBackups))
 

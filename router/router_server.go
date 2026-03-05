@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pelican-dev/wings/config"
-
 	"emperror.dev/errors"
 	"github.com/apex/log"
 	"github.com/gin-gonic/gin"
+	"github.com/pelican-dev/wings/config"
+	"github.com/pelican-dev/wings/server/filesystem/quotas"
 
 	"github.com/pelican-dev/wings/router/downloader"
 	"github.com/pelican-dev/wings/router/middleware"
@@ -81,7 +81,7 @@ func getServerInstallLogs(c *gin.Context) {
 // request until a potentially slow operation completes.
 //
 // This is done because for the most part the Panel is using websockets to determine when
-// things are happening, so theres no reason to sit and wait for a request to finish. We'll
+// things are happening, so there's no reason to sit and wait for a request to finish. We'll
 // just see over the socket if something isn't working correctly.
 func postServerPower(c *gin.Context) {
 	s := ExtractServer(c)
@@ -282,6 +282,13 @@ func deleteServer(c *gin.Context) {
 		if err := os.RemoveAll(p); err != nil {
 			log.WithFields(log.Fields{"path": p, "error": err}).
 				Warn("failed to remove server files during deletion process")
+		}
+
+		if config.Get().System.Quotas.Enabled {
+			if err = quotas.DelQuota(s.Config().Uuid); err != nil {
+				log.WithFields(log.Fields{"server_id": s.Config().Pid, "error": err}).
+					Warn("failed to remove quota during deletion process")
+			}
 		}
 	}(s)
 

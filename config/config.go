@@ -214,6 +214,11 @@ type SystemConfiguration struct {
 	// disk usage is not a concern.
 	DiskCheckInterval int64 `default:"150" yaml:"disk_check_interval"`
 
+	// Quotas define is quota management is enabled on the Data directory
+	Quotas struct {
+		Enabled bool `json:"enabled" yaml:"enabled" default:"false"`
+	} `json:"quotas" yaml:"quotas"`
+
 	// ActivitySendInterval is the amount of time that should ellapse between aggregated server activity
 	// being sent to the Panel. By default this will send activity collected over the last minute. Keep
 	// in mind that only a fixed number of activity log entries, defined by ActivitySendCount, will be sent

@@ -17,6 +17,7 @@ import (
 	"github.com/apex/log"
 	"github.com/creasty/defaults"
 	"github.com/goccy/go-json"
+	"github.com/pelican-dev/wings/server/filesystem/quotas"
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
@@ -125,6 +126,11 @@ func (s *Server) ID() string {
 	return s.Config().GetUuid()
 }
 
+// PID returns the Panel DBID for the server instance.
+func (s *Server) PID() int {
+	return s.Config().GetPID()
+}
+
 // Id returns the UUID for the server instance. This function is deprecated
 // in favor of Server.ID().
 //
@@ -142,7 +148,7 @@ func (s *Server) CtxCancel() {
 	}
 }
 
-// Returns a context instance for the server. This should be used to allow background
+// Context returns a context instance for the server. This should be used to allow background
 // tasks to be canceled if the server is removed. It will only be canceled when the
 // application is stopped or if the server gets deleted.
 func (s *Server) Context() context.Context {
@@ -264,7 +270,13 @@ func (s *Server) Sync() error {
 
 	// Update the disk space limits for the server whenever the configuration for
 	// it changes.
-	s.fs.SetDiskLimit(s.DiskSpace())
+	if config.Get().System.Quotas.Enabled {
+		if err = quotas.SetQuota(s.DiskSpace(), s.ID()); err != nil {
+			return err
+		}
+	} else {
+		s.fs.SetDiskLimit(s.DiskSpace())
+	}
 
 	s.SyncWithEnvironment()
 
