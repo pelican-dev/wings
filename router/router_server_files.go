@@ -424,7 +424,10 @@ func postServerCreateDirectory(c *gin.Context) {
 		middleware.CaptureAndAbort(c, err)
 		return
 	}
-
+	if err := s.Filesystem().Chown(filepath.Join(data.Path, data.Name)); err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
 	c.Status(http.StatusNoContent)
 }
 
