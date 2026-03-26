@@ -275,15 +275,25 @@ func deleteServer(c *gin.Context) {
 	//
 	// In addition, servers with large amounts of files can take some time to finish deleting,
 	// so we don't want to block the HTTP call while waiting on this.
-	go func(s *server.Server) {
-		fs := s.Filesystem()
-		p := fs.Path()
-		_ = fs.UnixFS().Close()
-		if err := os.RemoveAll(p); err != nil {
-			log.WithFields(log.Fields{"path": p, "error": err}).
-				Warn("failed to remove server files during deletion process")
-		}
-	}(s)
+	//
+	// Only skip file removal when:
+	//   1. shared storage pooling is explicitly enabled,
+	//   2. the pool has a name configured, and
+	//   3. this server is actively being transferred.
+	//
+	// This avoids preserving data for ordinary server deletions.
+	pool := config.Get().System.Transfers.StoragePool
+	skipFileRemoval := pool.Enabled && pool.PoolName != "" && s.IsTransferring()
+	if !skipFileRemoval {
+		go func(s *server.Server) {
+			fs := s.Filesystem()
+			p := fs.Path()
+			_ = fs.UnixFS().Close()
+			if err := os.RemoveAll(p); err != nil {
+				log.WithFields(log.Fields{"path": p, "error": err}).Warn("failed to remove server files during deletion process")
+			}
+		}(s)
+	}
 
 	// remove hanging machine-id file for the server when removing
 	go func(s *server.Server) {

@@ -129,6 +129,20 @@ func postTransfers(c *gin.Context) {
 		trnsfr.Server.Events().Publish(server.TransferStatusEvent, "success")
 	}(ctx, trnsfr)
 
+	{
+		remotePool := config.Get().System.Transfers.StoragePool
+		sourcePool := c.GetHeader("X-Storage-Pool")
+		if remotePool.Enabled && remotePool.PoolName != "" && sourcePool != "" && strings.EqualFold(remotePool.PoolName, sourcePool) {
+			if err := trnsfr.Server.CreateEnvironment(); err != nil {
+				middleware.CaptureAndAbort(c, err)
+				return
+			}
+			successful = true
+			c.Status(http.StatusOK)
+			return
+		}
+	}
+
 	mediaType, params, err := mime.ParseMediaType(c.GetHeader("Content-Type"))
 	if err != nil {
 		trnsfr.Log().Debug("failed to parse content type header")
