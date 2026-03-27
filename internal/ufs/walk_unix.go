@@ -7,12 +7,10 @@
 package ufs
 
 import (
-	"bytes"
 	"fmt"
 	iofs "io/fs"
 	"os"
 	"path"
-	"reflect"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -122,42 +120,6 @@ func ReadDirMap[T any](fs *UnixFS, path string, fn func(DirEntry) (T, error)) ([
 	return out, nil
 }
 
-// nameOffset is a compile time constant
-const nameOffset = int(unsafe.Offsetof(unix.Dirent{}.Name))
-
-func nameFromDirent(de *unix.Dirent) (name []byte) {
-	// Because this GOOS' syscall.Dirent does not provide a field that specifies
-	// the name length, this function must first calculate the max possible name
-	// length, and then search for the NULL byte.
-	ml := int(de.Reclen) - nameOffset
-
-	// Convert syscall.Dirent.Name, which is array of int8, to []byte, by
-	// overwriting Cap, Len, and Data slice header fields to the max possible
-	// name length computed above, and finding the terminating NULL byte.
-	//
-	// TODO: is there an alternative to the deprecated SliceHeader?
-	// SliceHeader was mainly deprecated due to it being misused for avoiding
-	// allocations when converting a byte slice to a string, ref;
-	// https://go.dev/issue/53003
-	sh := (*reflect.SliceHeader)(unsafe.Pointer(&name))
-	sh.Cap = ml
-	sh.Len = ml
-	sh.Data = uintptr(unsafe.Pointer(&de.Name[0]))
-
-	if index := bytes.IndexByte(name, 0); index >= 0 {
-		// Found NULL byte; set slice's cap and len accordingly.
-		sh.Cap = index
-		sh.Len = index
-		return
-	}
-
-	// NOTE: This branch is not expected, but included for defensive
-	// programming, and provides a hard stop on the name based on the structure
-	// field array size.
-	sh.Cap = len(de.Name)
-	sh.Len = sh.Cap
-	return
-}
 
 // modeTypeFromDirent converts a syscall defined constant, which is in purview
 // of OS, to a constant defined by Go, assumed by this project to be stable.
@@ -222,7 +184,7 @@ func (fs *UnixFS) readDir(fd int, name, relative string, b []byte) ([]DirEntry, 
 	var sde unix.Dirent
 	for {
 		if len(workBuffer) == 0 {
-			n, err := unix.Getdents(fd, scratchBuffer)
+			n, err := getdents(fd, scratchBuffer)
 			if err != nil {
 				if err == unix.EINTR {
 					continue
@@ -258,7 +220,7 @@ func (fs *UnixFS) readDir(fd int, name, relative string, b []byte) ([]DirEntry, 
 		}
 		var rel string
 		if relative == "." {
-			rel = name
+			rel = childName
 		} else {
 			rel = path.Join(relative, childName)
 		}
@@ -293,16 +255,14 @@ func (de dirent) Info() (FileInfo, error) {
 	if de.fs == nil {
 		return nil, nil
 	}
-	return de.fs.Lstatat(de.dirfd, de.name)
-	// return de.fs.Lstat(de.path)
+	return de.info()
 }
 
 func (de dirent) Open() (File, error) {
 	if de.fs == nil {
 		return nil, nil
 	}
-	return de.fs.OpenFileat(de.dirfd, de.name, O_RDONLY, 0)
-	// return de.fs.OpenFile(de.path, O_RDONLY, 0)
+	return de.open()
 }
 
 // reset releases memory held by entry err and name, and resets mode type to 0.

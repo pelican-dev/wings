@@ -111,18 +111,21 @@ func GetSystemInformation() (*Information, error) {
 		return nil, err
 	}
 
-	release, err := osrelease.Read()
-	if err != nil {
-		return nil, err
-	}
-
 	var os string
-	if release["PRETTY_NAME"] != "" {
-		os = release["PRETTY_NAME"]
-	} else if release["NAME"] != "" {
-		os = release["NAME"]
+	if runtime.GOOS == "darwin" {
+		os = "macOS"
 	} else {
-		os = info.OperatingSystem
+		release, err := osrelease.Read()
+		if err != nil {
+			return nil, err
+		}
+		if release["PRETTY_NAME"] != "" {
+			os = release["PRETTY_NAME"]
+		} else if release["NAME"] != "" {
+			os = release["NAME"]
+		} else {
+			os = info.OperatingSystem
+		}
 	}
 
 	var filesystem string
@@ -204,6 +207,9 @@ func getDiskForPath(path string, partitions []disk.PartitionStat) (string, strin
 
 // Gets the system release name.
 func getSystemName() (string, error) {
+	if runtime.GOOS == "darwin" {
+		return "darwin", nil
+	}
 	// use osrelease to get release version and ID
 	release, err := osrelease.Read()
 	if err != nil {
