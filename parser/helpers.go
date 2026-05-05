@@ -36,10 +36,29 @@ var configMatchRegex = regexp.MustCompile(`{{\s?config\.([\w.-]+)\s?}}`)
 var xmlValueMatchRegex = regexp.MustCompile(`^\[([\w]+)='(.*)'\]$`)
 
 // Gets the value of a key based on the value type defined.
-func (cfr *ConfigurationFileReplacement) getKeyValue(value string) interface{} {
+//
+// existing is the current value at that path in the document. When the panel expands a
+// template variable the result is always a JSON string, so ReplaceWith.Type() is never
+// jsonparser.Boolean. Passing the existing value lets us mirror the document's own type.
+func (cfr *ConfigurationFileReplacement) getKeyValue(value string, existing interface{}) interface{} {
 	if cfr.ReplaceWith.Type() == jsonparser.Boolean {
 		v, _ := strconv.ParseBool(value)
 		return v
+	}
+
+	// Mirror the type already present in the document so booleans and numbers survive
+	// a round-trip through template expansion.
+	if existing != nil {
+		switch existing.(type) {
+		case bool:
+			v, _ := strconv.ParseBool(value)
+			return v
+		case float64:
+			// encoding/json unmarshals all JSON numbers as float64.
+			if v, err := strconv.ParseFloat(value, 64); err == nil {
+				return v
+			}
+		}
 	}
 
 	// Try to parse into an int, if this fails just ignore the error and continue
@@ -182,7 +201,7 @@ func setValueAtPath(c *gabs.Container, path string, value interface{}) error {
 // value or not before doing it.
 func (cfr *ConfigurationFileReplacement) SetAtPathway(c *gabs.Container, path string, value string) error {
 	if cfr.IfValue == "" {
-		return setValueAtPath(c, path, cfr.getKeyValue(value))
+		return setValueAtPath(c, path, cfr.getKeyValue(value, c.Path(path).Data()))
 	}
 
 	// Check if we are replacing instead of overwriting.
@@ -211,7 +230,7 @@ func (cfr *ConfigurationFileReplacement) SetAtPathway(c *gabs.Container, path st
 		return nil
 	}
 
-	return setValueAtPath(c, path, cfr.getKeyValue(value))
+	return setValueAtPath(c, path, cfr.getKeyValue(value, c.Path(path).Data()))
 }
 
 // Looks up a configuration value on the Daemon given a dot-notated syntax.
