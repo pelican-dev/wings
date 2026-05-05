@@ -35,26 +35,6 @@ var configMatchRegex = regexp.MustCompile(`{{\s?config\.([\w.-]+)\s?}}`)
 // noinspection RegExpRedundantEscape
 var xmlValueMatchRegex = regexp.MustCompile(`^\[([\w]+)='(.*)'\]$`)
 
-// Gets the value of a key based on the value type defined.
-func (cfr *ConfigurationFileReplacement) getKeyValue(value string) interface{} {
-	if cfr.ReplaceWith.Type() == jsonparser.Boolean {
-		v, err := strconv.ParseBool(value)
-		if err != nil {
-			log.WithFields(log.Fields{"value": value, "match": cfr.Match}).Warn("cannot parse replacement as boolean, falling back to string value")
-			return value
-		}
-		return v
-	}
-
-	// Try to parse into an int, if this fails just ignore the error and continue
-	// through, returning the string.
-	if v, err := strconv.Atoi(value); err == nil {
-		return v
-	}
-
-	return value
-}
-
 // Iterate over an unstructured JSON/YAML/etc. interface and set all of the required
 // key/value pairs for the configuration file.
 //
