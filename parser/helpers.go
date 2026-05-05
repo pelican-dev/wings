@@ -40,7 +40,7 @@ func (cfr *ConfigurationFileReplacement) getKeyValue(value string) interface{} {
 	if cfr.ReplaceWith.Type() == jsonparser.Boolean {
 		v, err := strconv.ParseBool(value)
 		if err != nil {
-			log.WithField("value", value).Warn("cannot parse replacement as boolean, falling back to string value")
+			log.WithFields(log.Fields{"value": value, "match": cfr.Match}).Warn("cannot parse replacement as boolean, falling back to string value")
 			return value
 		}
 		return v
@@ -180,7 +180,7 @@ func (cfr *ConfigurationFileReplacement) setValueWithSjson(jsonStr string, path 
 		// Explicit boolean type declared in the egg definition.
 		v, err := strconv.ParseBool(value)
 		if err != nil {
-			log.WithField("value", value).Warn("cannot parse replacement as boolean, falling back to string value")
+			log.WithFields(log.Fields{"value": value, "path": path, "match": cfr.Match}).Warn("cannot parse replacement as boolean, falling back to string value")
 			return sjson.Set(jsonStr, path, value)
 		}
 		setValue = v
@@ -192,7 +192,7 @@ func (cfr *ConfigurationFileReplacement) setValueWithSjson(jsonStr string, path 
 		case gjson.True, gjson.False:
 			v, err := strconv.ParseBool(value)
 			if err != nil {
-				log.WithField("value", value).Warn("cannot parse replacement as boolean, falling back to string value")
+				log.WithFields(log.Fields{"value": value, "path": path, "match": cfr.Match}).Warn("cannot parse replacement as boolean, falling back to string value")
 				return sjson.Set(jsonStr, path, value)
 			}
 			setValue = v
