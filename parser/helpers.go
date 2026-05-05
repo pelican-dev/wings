@@ -38,7 +38,11 @@ var xmlValueMatchRegex = regexp.MustCompile(`^\[([\w]+)='(.*)'\]$`)
 // Gets the value of a key based on the value type defined.
 func (cfr *ConfigurationFileReplacement) getKeyValue(value string) interface{} {
 	if cfr.ReplaceWith.Type() == jsonparser.Boolean {
-		v, _ := strconv.ParseBool(value)
+		v, err := strconv.ParseBool(value)
+		if err != nil {
+			log.WithField("value", value).Warn("cannot parse replacement as boolean, falling back to string value")
+			return value
+		}
 		return v
 	}
 
@@ -173,12 +177,38 @@ func (cfr *ConfigurationFileReplacement) setValueWithSjson(jsonStr string, path 
 
 	var setValue interface{}
 	if cfr.ReplaceWith.Type() == jsonparser.Boolean {
-		v, _ := strconv.ParseBool(value)
-		setValue = v
-	} else if v, err := strconv.Atoi(value); err == nil {
+		// Explicit boolean type declared in the egg definition.
+		v, err := strconv.ParseBool(value)
+		if err != nil {
+			log.WithField("value", value).Warn("cannot parse replacement as boolean, falling back to string value")
+			return sjson.Set(jsonStr, path, value)
+		}
 		setValue = v
 	} else {
-		setValue = value
+		// Mirror the type already present in the document so booleans and numbers
+		// survive template expansion (panel always sends values as JSON strings).
+		existing := gjson.Get(jsonStr, path)
+		switch existing.Type {
+		case gjson.True, gjson.False:
+			v, err := strconv.ParseBool(value)
+			if err != nil {
+				log.WithField("value", value).Warn("cannot parse replacement as boolean, falling back to string value")
+				return sjson.Set(jsonStr, path, value)
+			}
+			setValue = v
+		case gjson.Number:
+			if v, err := strconv.ParseFloat(value, 64); err == nil {
+				setValue = v
+			} else {
+				setValue = value
+			}
+		default:
+			if v, err := strconv.Atoi(value); err == nil {
+				setValue = v
+			} else {
+				setValue = value
+			}
+		}
 	}
 
 	return sjson.Set(jsonStr, path, setValue)
