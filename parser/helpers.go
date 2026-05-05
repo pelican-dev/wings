@@ -42,7 +42,11 @@ var xmlValueMatchRegex = regexp.MustCompile(`^\[([\w]+)='(.*)'\]$`)
 // jsonparser.Boolean. Passing the existing value lets us mirror the document's own type.
 func (cfr *ConfigurationFileReplacement) getKeyValue(value string, existing interface{}) interface{} {
 	if cfr.ReplaceWith.Type() == jsonparser.Boolean {
-		v, _ := strconv.ParseBool(value)
+		v, err := strconv.ParseBool(value)
+		if err != nil {
+			log.WithField("value", value).Warn("cannot parse replacement as boolean, falling back to string value")
+			return value
+		}
 		return v
 	}
 
@@ -51,7 +55,11 @@ func (cfr *ConfigurationFileReplacement) getKeyValue(value string, existing inte
 	if existing != nil {
 		switch existing.(type) {
 		case bool:
-			v, _ := strconv.ParseBool(value)
+			v, err := strconv.ParseBool(value)
+			if err != nil {
+				log.WithField("value", value).Warn("cannot parse replacement as boolean, falling back to string value")
+				return value
+			}
 			return v
 		case float64:
 			// encoding/json unmarshals all JSON numbers as float64.
