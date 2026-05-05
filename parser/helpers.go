@@ -197,11 +197,13 @@ func (cfr *ConfigurationFileReplacement) setValueWithSjson(jsonStr string, path 
 			}
 			setValue = v
 		case gjson.Number:
-			if v, err := strconv.ParseFloat(value, 64); err == nil {
-				setValue = v
-			} else {
-				setValue = value
+			// Write the numeric literal as-is via SetRaw to avoid float64 precision
+			// loss for large integers (> 2^53). Fall back to string if the incoming
+			// value is not a valid JSON number.
+			if gjson.Parse(value).Type == gjson.Number {
+				return sjson.SetRaw(jsonStr, path, value)
 			}
+			setValue = value
 		default:
 			if v, err := strconv.Atoi(value); err == nil {
 				setValue = v
