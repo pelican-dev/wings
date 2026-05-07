@@ -35,22 +35,6 @@ var configMatchRegex = regexp.MustCompile(`{{\s?config\.([\w.-]+)\s?}}`)
 // noinspection RegExpRedundantEscape
 var xmlValueMatchRegex = regexp.MustCompile(`^\[([\w]+)='(.*)'\]$`)
 
-// Gets the value of a key based on the value type defined.
-func (cfr *ConfigurationFileReplacement) getKeyValue(value string) interface{} {
-	if cfr.ReplaceWith.Type() == jsonparser.Boolean {
-		v, _ := strconv.ParseBool(value)
-		return v
-	}
-
-	// Try to parse into an int, if this fails just ignore the error and continue
-	// through, returning the string.
-	if v, err := strconv.Atoi(value); err == nil {
-		return v
-	}
-
-	return value
-}
-
 // Iterate over an unstructured JSON/YAML/etc. interface and set all of the required
 // key/value pairs for the configuration file.
 //
@@ -173,12 +157,40 @@ func (cfr *ConfigurationFileReplacement) setValueWithSjson(jsonStr string, path 
 
 	var setValue interface{}
 	if cfr.ReplaceWith.Type() == jsonparser.Boolean {
-		v, _ := strconv.ParseBool(value)
-		setValue = v
-	} else if v, err := strconv.Atoi(value); err == nil {
+		// Explicit boolean type declared in the egg definition.
+		v, err := strconv.ParseBool(value)
+		if err != nil {
+			log.WithFields(log.Fields{"value": value, "path": path, "match": cfr.Match}).Warn("cannot parse replacement as boolean, falling back to string value")
+			return sjson.Set(jsonStr, path, value)
+		}
 		setValue = v
 	} else {
-		setValue = value
+		// Mirror the type already present in the document so booleans and numbers
+		// survive template expansion (panel always sends values as JSON strings).
+		existing := gjson.Get(jsonStr, path)
+		switch existing.Type {
+		case gjson.True, gjson.False:
+			v, err := strconv.ParseBool(value)
+			if err != nil {
+				log.WithFields(log.Fields{"value": value, "path": path, "match": cfr.Match}).Warn("cannot parse replacement as boolean, falling back to string value")
+				return sjson.Set(jsonStr, path, value)
+			}
+			setValue = v
+		case gjson.Number:
+			// Write the numeric literal as-is via SetRaw to avoid float64 precision
+			// loss for large integers (> 2^53). Fall back to string if the incoming
+			// value is not a valid JSON number.
+			if gjson.Parse(value).Type == gjson.Number {
+				return sjson.SetRaw(jsonStr, path, value)
+			}
+			setValue = value
+		default:
+			if v, err := strconv.Atoi(value); err == nil {
+				setValue = v
+			} else {
+				setValue = value
+			}
+		}
 	}
 
 	return sjson.Set(jsonStr, path, setValue)
