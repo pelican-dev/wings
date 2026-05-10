@@ -27,8 +27,15 @@ import (
 func Restore(ctx context.Context, volumePath, presignedUrl, expectedSha256, callbackUrl string) error {
 	startedAt := time.Now()
 
-	if entries, err := os.ReadDir(volumePath); err == nil && len(entries) > 0 {
+	entries, err := os.ReadDir(volumePath)
+	if err == nil && len(entries) > 0 {
 		return postCallback(callbackUrl, failurePayload(startedAt, fmt.Sprintf("%v: %s", ErrVolumeAlreadyExists, volumePath)))
+	}
+	if err != nil && !os.IsNotExist(err) {
+		// permission denied, EIO, or anything else short of not exist means
+		// we cannot prove the destination is empty. refuse rather than write
+		// over whatever might be there.
+		return postCallback(callbackUrl, failurePayload(startedAt, fmt.Sprintf("stat volume dir %s: %v", volumePath, err)))
 	}
 
 	if err := os.MkdirAll(volumePath, 0o755); err != nil {
