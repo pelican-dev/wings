@@ -118,6 +118,12 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 			backup.POST("/:backup/restore", postServerRestoreBackup)
 			backup.DELETE("/:backup", deleteServerBackup)
 		}
+
+		nest := server.Group("/nest")
+		{
+			nest.POST("/capture", postServerNestCapture)
+			nest.POST("/restore", postServerNestRestore)
+		}
 	}
 
 	return router
