@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"emperror.dev/errors"
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -31,14 +32,27 @@ func Capture(ctx context.Context, volumePath, presignedUrl, callbackUrl string) 
 	startedAt := time.Now()
 
 	pr, pw := io.Pipe()
+	// hash and count the encoded bytes the producer writes, which equals the
+	// bytes s3 stores. transfer encoding framing is hop by hop and stripped
+	// before s3 commits the object, so the panel side hash recorded on
+	// capture and verified on restore round trip matches what is on the wire.
 	hasher := sha256.New()
 	counter := &countingWriter{}
 	multi := io.MultiWriter(pw, hasher, counter)
 
 	encErr := make(chan error, 1)
 	go func() {
-		encErr <- encodeVolume(volumePath, multi)
-		_ = pw.Close()
+		err := encodeVolume(volumePath, multi)
+		if err != nil {
+			// close the pipe with the error so the http transport aborts the
+			// in flight PUT mid body, s3 sees a broken connection and rejects
+			// the partial upload rather than committing a truncated archive
+			// under the panel known key.
+			_ = pw.CloseWithError(err)
+		} else {
+			_ = pw.Close()
+		}
+		encErr <- err
 	}()
 
 	uploadCtx, cancel := context.WithTimeout(ctx, CaptureUploadTimeout)
@@ -163,7 +177,7 @@ func encodeVolume(volumePath string, w io.Writer) error {
 func postCallback(callbackUrl string, payload CallbackPayload) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("marshal callback: %w", err)
+		return errors.Wrap(err, "nest: marshal callback")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), CallbackTimeout)
@@ -171,19 +185,19 @@ func postCallback(callbackUrl string, payload CallbackPayload) error {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, callbackUrl, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("build callback request: %w", err)
+		return errors.Wrap(err, "nest: build callback request")
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("post callback: %w", err)
+		return errors.Wrap(err, "nest: post callback")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("callback returned status %d: %s", resp.StatusCode, truncate(string(respBody), 256))
+		return errors.Errorf("nest: callback returned status %d: %s", resp.StatusCode, truncate(string(respBody), 256))
 	}
 	return nil
 }
