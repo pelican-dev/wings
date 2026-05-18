@@ -144,13 +144,11 @@ func (f *ConfigurationFile) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	f.Replace = []ConfigurationFileReplacement{}
 	if replaceRaw, ok := m["replace"]; ok && replaceRaw != nil {
 		if err := json.Unmarshal(*replaceRaw, &f.Replace); err != nil {
 			log.WithField("file", f.FileName).WithField("error", err).Warn("failed to unmarshal configuration file replacement")
-			f.Replace = []ConfigurationFileReplacement{}
 		}
-	} else {
-		f.Replace = []ConfigurationFileReplacement{}
 	}
 
 	// test if "create_file" exists, if not just assume true
@@ -567,13 +565,22 @@ func normalizeYamlTypes(value interface{}) interface{} {
 		}
 		return typed
 	case json.Number:
+		s := typed.String()
+		// Preserve float representation: if the number contains '.', 'e' or 'E'
+		// it was originally a float and must not be coerced to int64.
+		if strings.ContainsAny(s, ".eE") {
+			if floatVal, err := typed.Float64(); err == nil {
+				return floatVal
+			}
+			return s
+		}
 		if intVal, err := typed.Int64(); err == nil {
 			return intVal
 		}
 		if floatVal, err := typed.Float64(); err == nil {
 			return floatVal
 		}
-		return typed.String()
+		return s
 	default:
 		return value
 	}
@@ -629,8 +636,10 @@ func (f *ConfigurationFile) parseTextFile(file ufs.File) error {
 				continue
 			}
 			// If an if_value is set, only replace when the remainder of the line matches.
+			// Trim trailing \r\n so Windows line endings do not break the comparison.
 			if replace.IfValue != "" {
-				if string(bytes.TrimPrefix(line, []byte(replace.Match))) != replace.IfValue {
+				remainder := bytes.TrimRight(bytes.TrimPrefix(line, []byte(replace.Match)), "\r\n")
+				if string(remainder) != replace.IfValue {
 					continue
 				}
 			}

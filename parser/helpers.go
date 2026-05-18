@@ -204,8 +204,11 @@ func (f *ConfigurationFile) LookupConfigurationValue(cfr ConfigurationFileReplac
 	// If there is a match, lookup the value in the configuration for the Daemon. If no key
 	// is found, just return the string representation, otherwise use the value from the
 	// daemon configuration here.
-	result := cfr.ReplaceWith.String()
-	for _, placeholder := range configMatchRegex.FindAllString(result, -1) {
+	var lookupErr error
+	result := configMatchRegex.ReplaceAllStringFunc(cfr.ReplaceWith.String(), func(placeholder string) string {
+		if lookupErr != nil {
+			return placeholder
+		}
 		keyPath := configMatchRegex.ReplaceAllString(placeholder, "$1")
 
 		var path []string
@@ -217,13 +220,14 @@ func (f *ConfigurationFile) LookupConfigurationValue(cfr ConfigurationFileReplac
 		match, _, _, err := jsonparser.Get(f.configuration, path...)
 		if err != nil {
 			if err != jsonparser.KeyPathNotFoundError {
-				return result, err
+				lookupErr = err
+				return placeholder
 			}
 			log.WithFields(log.Fields{"path": path, "filename": f.FileName}).Debug("attempted to load a configuration value that does not exist")
 			// Leave placeholder intact so the misconfiguration is visible.
-			continue
+			return placeholder
 		}
-		result = strings.Replace(result, placeholder, string(match), 1)
-	}
-	return result, nil
+		return string(match)
+	})
+	return result, lookupErr
 }
