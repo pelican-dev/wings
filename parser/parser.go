@@ -128,17 +128,28 @@ func (f *ConfigurationFile) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	if err := json.Unmarshal(*m["file"], &f.FileName); err != nil {
+	fileRaw, ok := m["file"]
+	if !ok || fileRaw == nil {
+		return errors.New("parser: configuration file missing required 'file' key")
+	}
+	if err := json.Unmarshal(*fileRaw, &f.FileName); err != nil {
 		return err
 	}
 
-	if err := json.Unmarshal(*m["parser"], &f.Parser); err != nil {
+	parserRaw, ok := m["parser"]
+	if !ok || parserRaw == nil {
+		return errors.New("parser: configuration file missing required 'parser' key")
+	}
+	if err := json.Unmarshal(*parserRaw, &f.Parser); err != nil {
 		return err
 	}
 
-	if err := json.Unmarshal(*m["replace"], &f.Replace); err != nil {
-		log.WithField("file", f.FileName).WithField("error", err).Warn("failed to unmarshal configuration file replacement")
-
+	if replaceRaw, ok := m["replace"]; ok && replaceRaw != nil {
+		if err := json.Unmarshal(*replaceRaw, &f.Replace); err != nil {
+			log.WithField("file", f.FileName).WithField("error", err).Warn("failed to unmarshal configuration file replacement")
+			f.Replace = []ConfigurationFileReplacement{}
+		}
+	} else {
 		f.Replace = []ConfigurationFileReplacement{}
 	}
 
@@ -292,6 +303,7 @@ func (f *ConfigurationFile) parseXmlFile(file ufs.File) error {
 				k := xmlValueMatchRegex.ReplaceAllString(value, "$1")
 				v := xmlValueMatchRegex.ReplaceAllString(value, "$2")
 
+				element.RemoveAttr(k)
 				element.CreateAttr(k, v)
 			} else {
 				element.SetText(value)
@@ -615,6 +627,12 @@ func (f *ConfigurationFile) parseTextFile(file ufs.File) error {
 			// line. Otherwise, update the line to have the replacement value.
 			if !bytes.HasPrefix(line, []byte(replace.Match)) {
 				continue
+			}
+			// If an if_value is set, only replace when the remainder of the line matches.
+			if replace.IfValue != "" {
+				if string(bytes.TrimPrefix(line, []byte(replace.Match))) != replace.IfValue {
+					continue
+				}
 			}
 			b.Write(replace.ReplaceWith.Bytes())
 			replaced = true
