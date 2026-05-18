@@ -462,9 +462,12 @@ func (f *ConfigurationFile) parseYamlFile(file ufs.File) error {
 	}
 
 	var jsonData interface{}
-	if err := json.Unmarshal(data, &jsonData); err != nil {
+	yamlDecoder := json.NewDecoder(bytes.NewReader(data))
+	yamlDecoder.UseNumber()
+	if err := yamlDecoder.Decode(&jsonData); err != nil {
 		return err
 	}
+	jsonData = normalizeYamlTypes(jsonData)
 
 	marshaled, err := yaml.Marshal(jsonData)
 	if err != nil {
@@ -534,6 +537,34 @@ func (f *ConfigurationFile) parseTomlFile(file ufs.File) error {
 		return errors.Wrap(err, "parser: failed to write toml file to disk")
 	}
 	return nil
+}
+
+// normalizeYamlTypes converts json.Number values (produced by UseNumber()) into
+// proper Go numeric types so that yaml.Marshal writes integers as plain integers
+// instead of float64 scientific notation (e.g. 1.5e+18 for large Snowflake IDs).
+func normalizeYamlTypes(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		for key, item := range typed {
+			typed[key] = normalizeYamlTypes(item)
+		}
+		return typed
+	case []interface{}:
+		for i := range typed {
+			typed[i] = normalizeYamlTypes(typed[i])
+		}
+		return typed
+	case json.Number:
+		if intVal, err := typed.Int64(); err == nil {
+			return intVal
+		}
+		if floatVal, err := typed.Float64(); err == nil {
+			return floatVal
+		}
+		return typed.String()
+	default:
+		return value
+	}
 }
 
 func normalizeTomlTypes(value interface{}) interface{} {
