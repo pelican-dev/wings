@@ -185,11 +185,7 @@ func (cfr *ConfigurationFileReplacement) setValueWithSjson(jsonStr string, path 
 			}
 			setValue = value
 		default:
-			if v, err := strconv.Atoi(value); err == nil {
-				setValue = v
-			} else {
-				setValue = value
-			}
+			setValue = value
 		}
 	}
 
@@ -208,29 +204,30 @@ func (f *ConfigurationFile) LookupConfigurationValue(cfr ConfigurationFileReplac
 	// If there is a match, lookup the value in the configuration for the Daemon. If no key
 	// is found, just return the string representation, otherwise use the value from the
 	// daemon configuration here.
-	huntPath := configMatchRegex.ReplaceAllString(
-		configMatchRegex.FindString(cfr.ReplaceWith.String()), "$1",
-	)
+	var lookupErr error
+	result := configMatchRegex.ReplaceAllStringFunc(cfr.ReplaceWith.String(), func(placeholder string) string {
+		if lookupErr != nil {
+			return placeholder
+		}
+		keyPath := configMatchRegex.ReplaceAllString(placeholder, "$1")
 
-	var path []string
-	for _, value := range strings.Split(huntPath, ".") {
-		path = append(path, strcase.ToSnake(value))
-	}
-
-	// Look for the key in the configuration file, and if found return that value to the
-	// calling function.
-	match, _, _, err := jsonparser.Get(f.configuration, path...)
-	if err != nil {
-		if err != jsonparser.KeyPathNotFoundError {
-			return string(match), err
+		var path []string
+		for _, part := range strings.Split(keyPath, ".") {
+			path = append(path, strcase.ToSnake(part))
 		}
 
-		log.WithFields(log.Fields{"path": path, "filename": f.FileName}).Debug("attempted to load a configuration value that does not exist")
-
-		// If there is no key, keep the original value intact, that way it is obvious there
-		// is a replace issue at play.
-		return string(match), nil
-	} else {
-		return configMatchRegex.ReplaceAllString(cfr.ReplaceWith.String(), string(match)), nil
-	}
+		// Look for the key in the Wings configuration and substitute the placeholder.
+		match, _, _, err := jsonparser.Get(f.configuration, path...)
+		if err != nil {
+			if err != jsonparser.KeyPathNotFoundError {
+				lookupErr = err
+				return placeholder
+			}
+			log.WithFields(log.Fields{"path": path, "filename": f.FileName}).Debug("attempted to load a configuration value that does not exist")
+			// Leave placeholder intact so the misconfiguration is visible.
+			return placeholder
+		}
+		return string(match)
+	})
+	return result, lookupErr
 }

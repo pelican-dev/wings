@@ -128,18 +128,27 @@ func (f *ConfigurationFile) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	if err := json.Unmarshal(*m["file"], &f.FileName); err != nil {
+	fileRaw, ok := m["file"]
+	if !ok || fileRaw == nil {
+		return errors.New("parser: configuration file missing required 'file' key")
+	}
+	if err := json.Unmarshal(*fileRaw, &f.FileName); err != nil {
 		return err
 	}
 
-	if err := json.Unmarshal(*m["parser"], &f.Parser); err != nil {
+	parserRaw, ok := m["parser"]
+	if !ok || parserRaw == nil {
+		return errors.New("parser: configuration file missing required 'parser' key")
+	}
+	if err := json.Unmarshal(*parserRaw, &f.Parser); err != nil {
 		return err
 	}
 
-	if err := json.Unmarshal(*m["replace"], &f.Replace); err != nil {
-		log.WithField("file", f.FileName).WithField("error", err).Warn("failed to unmarshal configuration file replacement")
-
-		f.Replace = []ConfigurationFileReplacement{}
+	f.Replace = []ConfigurationFileReplacement{}
+	if replaceRaw, ok := m["replace"]; ok && replaceRaw != nil {
+		if err := json.Unmarshal(*replaceRaw, &f.Replace); err != nil {
+			log.WithField("file", f.FileName).WithField("error", err).Warn("failed to unmarshal configuration file replacement")
+		}
 	}
 
 	// test if "create_file" exists, if not just assume true
@@ -292,6 +301,7 @@ func (f *ConfigurationFile) parseXmlFile(file ufs.File) error {
 				k := xmlValueMatchRegex.ReplaceAllString(value, "$1")
 				v := xmlValueMatchRegex.ReplaceAllString(value, "$2")
 
+				element.RemoveAttr(k)
 				element.CreateAttr(k, v)
 			} else {
 				element.SetText(value)
@@ -462,9 +472,12 @@ func (f *ConfigurationFile) parseYamlFile(file ufs.File) error {
 	}
 
 	var jsonData interface{}
-	if err := json.Unmarshal(data, &jsonData); err != nil {
+	yamlDecoder := json.NewDecoder(bytes.NewReader(data))
+	yamlDecoder.UseNumber()
+	if err := yamlDecoder.Decode(&jsonData); err != nil {
 		return err
 	}
+	jsonData = normalizeYamlTypes(jsonData)
 
 	marshaled, err := yaml.Marshal(jsonData)
 	if err != nil {
@@ -536,6 +549,43 @@ func (f *ConfigurationFile) parseTomlFile(file ufs.File) error {
 	return nil
 }
 
+// normalizeYamlTypes converts json.Number values (produced by UseNumber()) into
+// proper Go numeric types so that yaml.Marshal writes integers as plain integers
+// instead of float64 scientific notation (e.g. 1.5e+18 for large Snowflake IDs).
+func normalizeYamlTypes(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		for key, item := range typed {
+			typed[key] = normalizeYamlTypes(item)
+		}
+		return typed
+	case []interface{}:
+		for i := range typed {
+			typed[i] = normalizeYamlTypes(typed[i])
+		}
+		return typed
+	case json.Number:
+		s := typed.String()
+		// Preserve float representation: if the number contains '.', 'e' or 'E'
+		// it was originally a float and must not be coerced to int64.
+		if strings.ContainsAny(s, ".eE") {
+			if floatVal, err := typed.Float64(); err == nil {
+				return floatVal
+			}
+			return s
+		}
+		if intVal, err := typed.Int64(); err == nil {
+			return intVal
+		}
+		if floatVal, err := typed.Float64(); err == nil {
+			return floatVal
+		}
+		return s
+	default:
+		return value
+	}
+}
+
 func normalizeTomlTypes(value interface{}) interface{} {
 	switch typed := value.(type) {
 	case map[string]interface{}:
@@ -584,6 +634,14 @@ func (f *ConfigurationFile) parseTextFile(file ufs.File) error {
 			// line. Otherwise, update the line to have the replacement value.
 			if !bytes.HasPrefix(line, []byte(replace.Match)) {
 				continue
+			}
+			// If an if_value is set, only replace when the remainder of the line matches.
+			// Trim trailing \r\n so Windows line endings do not break the comparison.
+			if replace.IfValue != "" {
+				remainder := bytes.TrimRight(bytes.TrimPrefix(line, []byte(replace.Match)), "\r\n")
+				if string(remainder) != replace.IfValue {
+					continue
+				}
 			}
 			b.Write(replace.ReplaceWith.Bytes())
 			replaced = true
