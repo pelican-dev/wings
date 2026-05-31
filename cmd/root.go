@@ -169,7 +169,7 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 	}
 
 	// if quotas are enabled ensure they are added and enabled.
-	if config.Get().System.Quotas.Enabled {
+	if runtime.GOOS == "linux" && config.Get().System.Quotas.Enabled {
 		log.Info("validating system is configured for quotas")
 		// check if the fs is supported
 		if !quotas.IsSupportedFS() {

@@ -1,6 +1,9 @@
+//go:build linux
+
 package quotas
 
 import (
+	"math"
 	"os"
 	"unsafe"
 
@@ -8,6 +11,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// Pulled definitions from /usr/include/linux/fs.h
 // Pulled definitions from /usr/include/linux/fs.h
 
 /*
@@ -69,7 +73,7 @@ type fsXAttr struct {
 func xAttrCtl(f *os.File, request uintptr, xattr *fsXAttr) (err error) {
 	xattreq := uintptr(unsafe.Pointer(xattr))
 
-	_, _, errno := unix.RawSyscall(unix.SYS_IOCTL, f.Fd(), request, xattreq)
+	_, _, errno := unix.Syscall(unix.SYS_IOCTL, f.Fd(), request, xattreq)
 	if errno != 0 {
 		return os.NewSyscallError("ioctl", errno)
 	}
@@ -77,23 +81,14 @@ func xAttrCtl(f *os.File, request uintptr, xattr *fsXAttr) (err error) {
 	return
 }
 
-// getXAttr gets the extended attributes of a file
-func getXAttr(f *os.File) (attr fsXAttr, err error) {
-	if err = xAttrCtl(f, FS_IOC_FSGETXATTR, &attr); err != nil {
-		return
-	}
-
-	return
-}
-
 // setXAttr sets xattr values for a specified file
 func setXAttr(f *os.File, projectID int, attr uint32) (err error) {
-	if projectID < 0 || uint64(projectID) > uint64(^uint32(0)) {
+	if projectID < 0 || projectID > math.MaxUint32 {
 		return errors.New("projectID out of range")
 	}
 
-	fxattr, err := getXAttr(f)
-	if err != nil {
+	fxattr := fsXAttr{}
+	if err = xAttrCtl(f, FS_IOC_FSGETXATTR, &fxattr); err != nil {
 		return err
 	}
 

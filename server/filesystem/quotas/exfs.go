@@ -1,9 +1,11 @@
+//go:build linux
+
 package quotas
 
 import (
-	"fmt"
 	"html/template"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -15,7 +17,7 @@ import (
 
 var exfs struct {
 	projects []exfsProject
-	lock     sync.Mutex
+	sync.Mutex
 }
 
 type exfsProject struct {
@@ -25,24 +27,30 @@ type exfsProject struct {
 }
 
 const (
-	projidTemplate = `{{ range . }}{{ .Name }}:{{ .ID }}
+	projidTemplateSrc = `{{ range . }}{{ .Name }}:{{ .ID }}
 {{ end }}`
-	projectsTemplate = `{{ range . }}{{ .ID }}:{{ .BasePath }}/{{ .Name }}
+	projectsTemplateSrc = `{{ range . }}{{ .ID }}:{{ .BasePath }}/{{ .Name }}
 {{ end }}`
 
 	projidFile  = `/etc/projid`
 	projectFile = `/etc/projects`
 )
 
+var (
+	projidTemplate   = template.Must(template.New("projid").Parse(projidTemplateSrc))
+	projectsTemplate = template.Must(template.New("projects").Parse(projectsTemplateSrc))
+)
+
 // setQuota sets the quota in bytes for the specified server uuid
+// A limit of 0 is treated as unlimited by xfs and ext4
 func (q exfsProject) setQuota(byteLimit uint64) (err error) {
-	log.WithFields(log.Fields{"server_path": fmt.Sprintf("%s/%s", q.BasePath, q.Name), "limit_bytes": byteLimit}).Debug("setting quota")
+	serverDirPath := filepath.Join(q.BasePath, q.Name)
+	log.WithFields(log.Fields{"server_path": serverDirPath, "limit_bytes": byteLimit}).Debug("setting quota")
 	serverProject, err := fsquota.LookupProject(q.Name)
 	if err != nil {
 		return
 	}
 
-	serverDirPath := fmt.Sprintf("%s/%s", config.Get().System.Data, q.Name)
 	limits := fsquota.Limits{}
 
 	limits.Bytes.SetHard(byteLimit)
@@ -51,7 +59,7 @@ func (q exfsProject) setQuota(byteLimit uint64) (err error) {
 		return
 	}
 
-	log.WithField("server_path", fmt.Sprintf("%s/%s", q.BasePath, q.Name)).Debug("quota set")
+	log.WithField("server_path", serverDirPath).Debug("quota set")
 	return
 }
 
@@ -74,7 +82,7 @@ func (q exfsProject) getQuota() (bytesUsed int64, err error) {
 
 // enableEXFSQuota enables quotas on a specified directory
 func (q exfsProject) enableEXFSQuota() (err error) {
-	serverDir, err := os.Open(fmt.Sprintf("%s/%s", q.BasePath, q.Name))
+	serverDir, err := os.Open(filepath.Join(q.BasePath, q.Name))
 	if err != nil {
 		return err
 	}
@@ -91,45 +99,57 @@ func (q exfsProject) enableEXFSQuota() (err error) {
 }
 
 func (q exfsProject) addProject() (err error) {
-	q.BasePath = config.Get().System.Data
-	if strings.HasSuffix(q.BasePath, "/") {
-		q.BasePath = strings.TrimSuffix(config.Get().System.Data, "/")
-	}
-	exfs.lock.Lock()
-	defer exfs.lock.Unlock()
-	exfs.projects = append(exfs.projects, q)
+	q.BasePath = strings.TrimSuffix(config.Get().System.Data, "/")
+	exfs.Lock()
+	defer exfs.Unlock()
 
-	if err = writeEXFSProjects(); err != nil {
+	projects := make([]exfsProject, len(exfs.projects), len(exfs.projects)+1)
+	copy(projects, exfs.projects)
+	projects = append(projects, q)
+
+	if err = writeEXFSProjects(projects); err != nil {
 		log.WithError(err).Error("failed to write exfs projects")
 		return
 	}
 
 	if err = q.enableEXFSQuota(); err != nil {
 		log.WithError(err).Error("failed to enable quota")
+		// Roll back the disk write so /etc/projects and exfs.projects stay in sync.
+		if err := writeEXFSProjects(exfs.projects); err != nil {
+			log.WithError(err).Error("failed to roll back exfs projects after enableEXFSQuota failure")
+		}
 		return
 	}
 
+	exfs.projects = projects
 	return
 }
 
 // removeProject drops a specified project from the
+// if the project is already missing will return with no error
 func (q exfsProject) removeProject() (err error) {
-	exfs.lock.Lock()
-	defer exfs.lock.Unlock()
-	for pos, project := range exfs.projects {
-		if project.Name == q.Name {
-			exfs.projects = append(exfs.projects[:pos], exfs.projects[pos+1:]...)
-			break
+	exfs.Lock()
+	defer exfs.Unlock()
+
+	projects := make([]exfsProject, 0, len(exfs.projects))
+	for _, project := range exfs.projects {
+		if project.Name != q.Name {
+			projects = append(projects, project)
 		}
 	}
 
-	err = writeEXFSProjects()
+	if err = writeEXFSProjects(projects); err != nil {
+		return err
+	}
+
+	exfs.projects = projects
+
 	return
 }
 
 func getProject(serverUUID string) (serverProject exfsProject, err error) {
-	exfs.lock.Lock()
-	defer exfs.lock.Unlock()
+	exfs.Lock()
+	defer exfs.Unlock()
 	for _, project := range exfs.projects {
 		if project.Name == serverUUID {
 			return project, nil
@@ -139,43 +159,53 @@ func getProject(serverUUID string) (serverProject exfsProject, err error) {
 	return serverProject, errors.New("quota for server doesn't exist")
 }
 
-func writeEXFSProjects() (err error) {
-	exfs.lock.Lock()
-	defer exfs.lock.Unlock()
-	// write out projid file
-	idtmpl, err := template.New("projid").Parse(projidTemplate)
-	if err != nil {
+// writeEXFSProjects
+func writeEXFSProjects(projects []exfsProject) (err error) {
+	if err = writeTemplate(projidTemplate, projidFile, projects); err != nil {
 		return err
 	}
-
-	if err = writeTemplate(idtmpl, projidFile, exfs.projects); err != nil {
-		return
-	}
-
-	projtmpl, err := template.New("projects").Parse(projectsTemplate)
-	if err != nil {
+	if err = writeTemplate(projectsTemplate, projectFile, projects); err != nil {
 		return err
 	}
-
-	if err = writeTemplate(projtmpl, projectFile, exfs.projects); err != nil {
-		return
-	}
-
 	return
 }
 
+// writeTemplate renders t into file atomically: it writes to a temp file in
+// the same directory, fsyncs, and renames over the target. On any failure the
+// temp file is removed and the original file is left untouched.
 func writeTemplate(t *template.Template, file string, data interface{}) (err error) {
-	f, err := os.Create(file)
+	dir := filepath.Dir(file)
+	tmp, err := os.CreateTemp(dir, filepath.Base(file)+".tmp.*")
 	if err != nil {
 		return err
 	}
 
-	defer f.Close()
+	tmpName := tmp.Name()
 
-	err = t.Execute(f, data)
-	if err != nil {
+	defer func() {
+		if err != nil {
+			os.Remove(tmpName)
+		}
+	}()
+
+	if err = t.Execute(tmp, data); err != nil {
+		tmp.Close()
 		return err
 	}
 
-	return nil
+	if err = tmp.Chmod(0o644); err != nil {
+		tmp.Close()
+		return err
+	}
+
+	if err = tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+
+	if err = tmp.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(tmpName, file)
 }
