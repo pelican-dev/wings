@@ -506,6 +506,8 @@ github.com/parkervcp/fsquota v0.0.0-20240729140958-47d273ab9426 h1:4JbdZ5mDEEz1F
 github.com/parkervcp/fsquota v0.0.0-20240729140958-47d273ab9426/go.mod h1:8T5p+Jn1ZK/bz/F+QBxaMrzjpi3/lCjISQjUdVSW+DQ=
 github.com/parkervcp/fsquota v0.0.0-20260506201313-20951fbdc96c h1:FEmNhONJnZ6s1VP3RJFz9JmmDtltIv/jzwZYXxl/msc=
 github.com/parkervcp/fsquota v0.0.0-20260506201313-20951fbdc96c/go.mod h1:6h6R2C6O5GUabNBvyjDF3qm4i1mPwM3QuqimqVeWqD0=
+github.com/parkervcp/fsquota v0.0.0-20260601132657-d13427a22f09 h1:115EvPzndlxbjHYQkXHeg3YNYMx4MtT0IdY2hrLmAU4=
+github.com/parkervcp/fsquota v0.0.0-20260601132657-d13427a22f09/go.mod h1:6h6R2C6O5GUabNBvyjDF3qm4i1mPwM3QuqimqVeWqD0=
 github.com/patrickmn/go-cache v2.1.0+incompatible h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=
 github.com/patrickmn/go-cache v2.1.0+incompatible/go.mod h1:3Qf8kWWT7OJRJbdiICTKqZju1ZixQ/KpMGzzAfe6+WQ=
 github.com/pelletier/go-toml v1.9.5 h1:4yBQzkHv+7BHq2PQUZF3Mx0IYxG7LsP222s7Agd3ve8=

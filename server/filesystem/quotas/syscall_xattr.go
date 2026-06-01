@@ -12,7 +12,6 @@ import (
 )
 
 // Pulled definitions from /usr/include/linux/fs.h
-// Pulled definitions from /usr/include/linux/fs.h
 
 /*
  * Flags for the fsx_xflags field

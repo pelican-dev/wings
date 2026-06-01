@@ -35,7 +35,7 @@ require (
 	github.com/mattn/go-colorable v0.1.15
 	github.com/mholt/archives v0.1.5
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db
-	github.com/parkervcp/fsquota v0.0.0-20260506201313-20951fbdc96c
+	github.com/parkervcp/fsquota v0.0.0-20260601132657-d13427a22f09
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/sftp v1.13.10
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06

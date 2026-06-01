@@ -45,7 +45,9 @@ func IsSupportedFS() (supported bool) {
 		// check if project quotas are enabled
 		projectSupported, err := fsquota.ProjectQuotasSupported(config.Get().System.Data)
 		if err != nil {
-			log.WithError(err).Error("there was an issue with checking quota support")
+			log.WithField("quota-check", "failed while running fsquota support check").
+				WithError(err).
+				Error("there was an issue with checking quota support")
 			return false
 		}
 
