@@ -1,0 +1,26 @@
+name: Helm Lint
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "chart/**"
+      - ".github/workflows/helm-lint.yaml"
+  pull_request:
+    paths:
+      - "chart/**"
+      - ".github/workflows/helm-lint.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  lint-helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - name: Lint Helm chart
+        run: helm lint chart/pelican-wings
