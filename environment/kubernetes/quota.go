@@ -25,7 +25,10 @@ func (e *Environment) EnsureResourceQuota(ctx context.Context) error {
 	}
 
 	ns := e.namespace()
-	quota := buildResourceQuota(ns, &cfg.Kubernetes.ResourceQuota)
+	quota, err := buildResourceQuota(ns, &cfg.Kubernetes.ResourceQuota)
+	if err != nil {
+		return err
+	}
 
 	existing, err := e.client.CoreV1().ResourceQuotas(ns).Get(ctx, quotaName, metav1.GetOptions{})
 	if err == nil {
@@ -56,7 +59,10 @@ func (e *Environment) EnsureLimitRange(ctx context.Context) error {
 	}
 
 	ns := e.namespace()
-	lr := buildLimitRange(ns, &cfg.Kubernetes.LimitRange)
+	lr, err := buildLimitRange(ns, &cfg.Kubernetes.LimitRange)
+	if err != nil {
+		return err
+	}
 
 	existing, err := e.client.CoreV1().LimitRanges(ns).Get(ctx, limitRangeName, metav1.GetOptions{})
 	if err == nil {
@@ -78,30 +84,45 @@ func (e *Environment) EnsureLimitRange(ctx context.Context) error {
 	return nil
 }
 
+// setQuantity parses a quantity string into the resource list under key when
+// the value is non-empty. Unlike resource.MustParse it returns an error for
+// invalid (user-configurable) values instead of panicking the process.
+func setQuantity(list corev1.ResourceList, key corev1.ResourceName, field, value string) error {
+	if value == "" {
+		return nil
+	}
+	q, err := resource.ParseQuantity(value)
+	if err != nil {
+		return errors.Wrapf(err, "environment/kubernetes: invalid quantity %q for %s", value, field)
+	}
+	list[key] = q
+	return nil
+}
+
 // buildResourceQuota constructs the ResourceQuota spec from config values.
-func buildResourceQuota(namespace string, cfg *config.KubeResourceQuota) *corev1.ResourceQuota {
+func buildResourceQuota(namespace string, cfg *config.KubeResourceQuota) (*corev1.ResourceQuota, error) {
 	hard := corev1.ResourceList{}
 
-	if cfg.CPULimit != "" {
-		hard[corev1.ResourceLimitsCPU] = resource.MustParse(cfg.CPULimit)
-	}
-	if cfg.MemoryLimit != "" {
-		hard[corev1.ResourceLimitsMemory] = resource.MustParse(cfg.MemoryLimit)
-	}
-	if cfg.CPURequest != "" {
-		hard[corev1.ResourceRequestsCPU] = resource.MustParse(cfg.CPURequest)
-	}
-	if cfg.MemoryRequest != "" {
-		hard[corev1.ResourceRequestsMemory] = resource.MustParse(cfg.MemoryRequest)
+	for _, q := range []struct {
+		key   corev1.ResourceName
+		field string
+		value string
+	}{
+		{corev1.ResourceLimitsCPU, "cpu_limit", cfg.CPULimit},
+		{corev1.ResourceLimitsMemory, "memory_limit", cfg.MemoryLimit},
+		{corev1.ResourceRequestsCPU, "cpu_request", cfg.CPURequest},
+		{corev1.ResourceRequestsMemory, "memory_request", cfg.MemoryRequest},
+		{corev1.ResourceRequestsStorage, "max_storage", cfg.MaxStorage},
+	} {
+		if err := setQuantity(hard, q.key, q.field, q.value); err != nil {
+			return nil, err
+		}
 	}
 	if cfg.MaxPods > 0 {
 		hard[corev1.ResourcePods] = *resource.NewQuantity(cfg.MaxPods, resource.DecimalSI)
 	}
 	if cfg.MaxPVCs > 0 {
 		hard[corev1.ResourcePersistentVolumeClaims] = *resource.NewQuantity(cfg.MaxPVCs, resource.DecimalSI)
-	}
-	if cfg.MaxStorage != "" {
-		hard[corev1.ResourceRequestsStorage] = resource.MustParse(cfg.MaxStorage)
 	}
 
 	return &corev1.ResourceQuota{
@@ -115,11 +136,11 @@ func buildResourceQuota(namespace string, cfg *config.KubeResourceQuota) *corev1
 		Spec: corev1.ResourceQuotaSpec{
 			Hard: hard,
 		},
-	}
+	}, nil
 }
 
 // buildLimitRange constructs the LimitRange spec from config values.
-func buildLimitRange(namespace string, cfg *config.KubeLimitRange) *corev1.LimitRange {
+func buildLimitRange(namespace string, cfg *config.KubeLimitRange) (*corev1.LimitRange, error) {
 	containerLimit := corev1.LimitRangeItem{
 		Type:           corev1.LimitTypeContainer,
 		Default:        corev1.ResourceList{},
@@ -127,23 +148,22 @@ func buildLimitRange(namespace string, cfg *config.KubeLimitRange) *corev1.Limit
 		Max:            corev1.ResourceList{},
 	}
 
-	if cfg.DefaultCPULimit != "" {
-		containerLimit.Default[corev1.ResourceCPU] = resource.MustParse(cfg.DefaultCPULimit)
-	}
-	if cfg.DefaultMemoryLimit != "" {
-		containerLimit.Default[corev1.ResourceMemory] = resource.MustParse(cfg.DefaultMemoryLimit)
-	}
-	if cfg.DefaultCPURequest != "" {
-		containerLimit.DefaultRequest[corev1.ResourceCPU] = resource.MustParse(cfg.DefaultCPURequest)
-	}
-	if cfg.DefaultMemoryRequest != "" {
-		containerLimit.DefaultRequest[corev1.ResourceMemory] = resource.MustParse(cfg.DefaultMemoryRequest)
-	}
-	if cfg.MaxCPU != "" {
-		containerLimit.Max[corev1.ResourceCPU] = resource.MustParse(cfg.MaxCPU)
-	}
-	if cfg.MaxMemory != "" {
-		containerLimit.Max[corev1.ResourceMemory] = resource.MustParse(cfg.MaxMemory)
+	for _, q := range []struct {
+		list  corev1.ResourceList
+		key   corev1.ResourceName
+		field string
+		value string
+	}{
+		{containerLimit.Default, corev1.ResourceCPU, "default_cpu_limit", cfg.DefaultCPULimit},
+		{containerLimit.Default, corev1.ResourceMemory, "default_memory_limit", cfg.DefaultMemoryLimit},
+		{containerLimit.DefaultRequest, corev1.ResourceCPU, "default_cpu_request", cfg.DefaultCPURequest},
+		{containerLimit.DefaultRequest, corev1.ResourceMemory, "default_memory_request", cfg.DefaultMemoryRequest},
+		{containerLimit.Max, corev1.ResourceCPU, "max_cpu", cfg.MaxCPU},
+		{containerLimit.Max, corev1.ResourceMemory, "max_memory", cfg.MaxMemory},
+	} {
+		if err := setQuantity(q.list, q.key, q.field, q.value); err != nil {
+			return nil, err
+		}
 	}
 
 	return &corev1.LimitRange{
@@ -157,5 +177,5 @@ func buildLimitRange(namespace string, cfg *config.KubeLimitRange) *corev1.Limit
 		Spec: corev1.LimitRangeSpec{
 			Limits: []corev1.LimitRangeItem{containerLimit},
 		},
-	}
+	}, nil
 }

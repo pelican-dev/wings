@@ -348,12 +348,14 @@ func (e *Environment) Attach(ctx context.Context) error {
 
 // SendCommand writes a command string to the attached Pod's stdin.
 func (e *Environment) SendCommand(c string) error {
-	if !e.IsAttached() {
-		return errors.New("environment/kubernetes: not attached to pod")
-	}
-
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+
+	// Check the stream under the lock so it cannot be cleared between an
+	// attachment check and the write below.
+	if e.stream == nil {
+		return errors.New("environment/kubernetes: not attached to pod")
+	}
 
 	// If this is the stop command, mark the server as stopping.
 	if e.meta.Stop.Type == "command" && c == e.meta.Stop.Value {

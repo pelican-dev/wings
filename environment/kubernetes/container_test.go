@@ -9,6 +9,8 @@ import (
 	"github.com/pelican-dev/wings/config"
 )
 
+// TestResolveImagePullPolicy verifies pull-policy resolution for remote
+// images, ~-prefixed local images, and configured overrides.
 func TestResolveImagePullPolicy(t *testing.T) {
 	g := Goblin(t)
 
