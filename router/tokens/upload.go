@@ -10,6 +10,7 @@ type UploadPayload struct {
 	ServerUuid string `json:"server_uuid"`
 	UserUuid   string `json:"user_uuid"`
 	UniqueId   string `json:"unique_id"`
+	Scoped
 }
 
 // Returns the JWT payload.
