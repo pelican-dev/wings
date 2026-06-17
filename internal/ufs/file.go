@@ -169,12 +169,10 @@ const (
 	O_DIRECTORY = unix.O_DIRECTORY
 	// O_NOFOLLOW opens the exact path given without following symlinks.
 	O_NOFOLLOW  = unix.O_NOFOLLOW
-	O_CLOEXEC   = unix.O_CLOEXEC
-	O_LARGEFILE = unix.O_LARGEFILE
+	O_CLOEXEC = unix.O_CLOEXEC
 )
 
 const (
 	AT_SYMLINK_NOFOLLOW = unix.AT_SYMLINK_NOFOLLOW
 	AT_REMOVEDIR        = unix.AT_REMOVEDIR
-	AT_EMPTY_PATH       = unix.AT_EMPTY_PATH
 )

@@ -3,6 +3,7 @@ package environment
 import (
 	"fmt"
 	"math"
+	"runtime"
 	"strconv"
 
 	"github.com/apex/log"
@@ -112,9 +113,12 @@ func (l Limits) AsContainerResources() container.Resources {
 		Memory:            l.BoundedMemoryLimit(),
 		MemoryReservation: l.MemoryLimit * 1024 * 1024,
 		MemorySwap:        l.ConvertedSwap(),
-		BlkioWeight:       l.IoWeight,
 		OomKillDisable:    boolPtr(!l.OOMKiller),
 		PidsLimit:         &pids,
+	}
+
+	if runtime.GOOS == "linux" {
+		resources.BlkioWeight = l.IoWeight
 	}
 
 	// If the CPU Limit is not set, don't send any of these fields through. Providing
