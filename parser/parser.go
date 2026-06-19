@@ -35,6 +35,12 @@ const (
 	Toml       = "toml"
 )
 
+// maxTextScanTokenSize bounds how large a single line the "file" parser will buffer.
+const maxTextScanTokenSize = 64 * 1024 * 1024
+
+// maxConfigFileSize caps how large a configuration file we'll attempt to parse.
+const maxConfigFileSize = 64 * 1024 * 1024
+
 type ReplaceValue struct {
 	value     []byte
 	valueType jsonparser.ValueType
@@ -234,6 +240,16 @@ func newTemplatableConfig(c *config.Configuration) templatableConfig {
 func (f *ConfigurationFile) Parse(file ufs.File) error {
 	//log.WithField("path", path).WithField("parser", f.Parser.String()).Debug("parsing server configuration file")
 
+	// Refuse to parse files larger than the cap. Every parser below buffers the
+	// whole file in memory, and the contents are untrusted server-owned input, so
+	// this guards the daemon against being OOM'd by an oversized config. The
+	// server is still free to boot with the file as-is; we just don't rewrite it.
+	if info, err := file.Stat(); err != nil {
+		return err
+	} else if info.Size() > maxConfigFileSize {
+		return errors.Errorf("parser: refusing to parse configuration file %q: size %d exceeds limit of %d bytes", file.Name(), info.Size(), maxConfigFileSize)
+	}
+
 	// What the fuck is going on here?
 	if mb, err := json.Marshal(newTemplatableConfig(config.Get())); err != nil {
 		return err
@@ -265,7 +281,7 @@ func (f *ConfigurationFile) Parse(file ufs.File) error {
 // Parses an xml file.
 func (f *ConfigurationFile) parseXmlFile(file ufs.File) error {
 	doc := etree.NewDocument()
-	if _, err := doc.ReadFrom(file); err != nil {
+	if _, err := doc.ReadFrom(io.LimitReader(file, maxConfigFileSize)); err != nil {
 		return err
 	}
 
@@ -345,7 +361,7 @@ func (f *ConfigurationFile) parseXmlFile(file ufs.File) error {
 // Parses an ini file.
 func (f *ConfigurationFile) parseIniFile(file ufs.File) error {
 	// Wrap the file in a NopCloser so the ini package doesn't close the file.
-	cfg, err := ini.Load(io.NopCloser(file))
+	cfg, err := ini.Load(io.NopCloser(io.LimitReader(file, maxConfigFileSize)))
 	if err != nil {
 		return err
 	}
@@ -429,7 +445,7 @@ func (f *ConfigurationFile) parseIniFile(file ufs.File) error {
 // value is set regardless in the file. See the commentary in parseYamlFile for more details
 // about what is happening during this process.
 func (f *ConfigurationFile) parseJsonFile(file ufs.File) error {
-	b, err := io.ReadAll(file)
+	b, err := io.ReadAll(io.LimitReader(file, maxConfigFileSize))
 	if err != nil {
 		return err
 	}
@@ -462,7 +478,7 @@ func (f *ConfigurationFile) parseJsonFile(file ufs.File) error {
 // Parses a yaml file and updates any matching key/value pairs before persisting
 // it back to the disk.
 func (f *ConfigurationFile) parseYamlFile(file ufs.File) error {
-	b, err := io.ReadAll(file)
+	b, err := io.ReadAll(io.LimitReader(file, maxConfigFileSize))
 	if err != nil {
 		return err
 	}
@@ -517,7 +533,7 @@ func (f *ConfigurationFile) parseYamlFile(file ufs.File) error {
 // Parses a toml file and updates any matching key/value pairs before persisting
 // it back to the disk.
 func (f *ConfigurationFile) parseTomlFile(file ufs.File) error {
-	b, err := io.ReadAll(file)
+	b, err := io.ReadAll(io.LimitReader(file, maxConfigFileSize))
 	if err != nil {
 		return err
 	}
@@ -640,7 +656,8 @@ func normalizeTomlTypes(value interface{}) interface{} {
 // than this function where possible.
 func (f *ConfigurationFile) parseTextFile(file ufs.File) error {
 	b := bytes.NewBuffer(nil)
-	s := bufio.NewScanner(file)
+	s := bufio.NewScanner(io.LimitReader(file, maxConfigFileSize))
+	s.Buffer(make([]byte, 0, 64*1024), maxTextScanTokenSize)
 	var replaced bool
 	for s.Scan() {
 		line := s.Bytes()
@@ -651,14 +668,6 @@ func (f *ConfigurationFile) parseTextFile(file ufs.File) error {
 			if !bytes.HasPrefix(line, []byte(replace.Match)) {
 				continue
 			}
-			// If an if_value is set, only replace when the remainder of the line matches.
-			// Trim trailing \r\n so Windows line endings do not break the comparison.
-			if replace.IfValue != "" {
-				remainder := bytes.TrimRight(bytes.TrimPrefix(line, []byte(replace.Match)), "\r\n")
-				if string(remainder) != replace.IfValue {
-					continue
-				}
-			}
 			b.Write(replace.ReplaceWith.Bytes())
 			replaced = true
 		}
@@ -666,6 +675,9 @@ func (f *ConfigurationFile) parseTextFile(file ufs.File) error {
 			b.Write(line)
 		}
 		b.WriteByte('\n')
+	}
+	if err := s.Err(); err != nil {
+		return errors.Wrap(err, "parser: failed to scan text file for configuration update")
 	}
 
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
@@ -709,7 +721,7 @@ func (f *ConfigurationFile) parseTextFile(file ufs.File) error {
 // @see https://github.com/pterodactyl/panel/issues/2308 (original)
 // @see https://github.com/pterodactyl/panel/issues/3009 ("bug" introduced as result)
 func (f *ConfigurationFile) parsePropertiesFile(file ufs.File) error {
-	b, err := io.ReadAll(file)
+	b, err := io.ReadAll(io.LimitReader(file, maxConfigFileSize))
 	if err != nil {
 		return err
 	}
