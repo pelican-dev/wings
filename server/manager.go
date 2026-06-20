@@ -215,6 +215,9 @@ func (m *Manager) InitServer(data remote.ServerConfigurationResponse) (*Server, 
 		meta := kubernetes.Metadata{
 			Image: s.Config().Container.Image,
 		}
+		if pc := s.ProcessConfiguration(); pc != nil {
+			meta.Stop = pc.Stop
+		}
 		if env, err := kubernetes.New(s.ID(), &meta, envCfg); err != nil {
 			return nil, err
 		} else {

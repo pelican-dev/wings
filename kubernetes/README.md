@@ -33,12 +33,12 @@ Wings requires two levels of RBAC:
 
 | Resource                  | Verbs                          | Purpose                                  |
 |---------------------------|--------------------------------|------------------------------------------|
-| pods                      | get, create, delete, list      | Game server Pod lifecycle                |
+| pods                      | get, create, delete, list, watch | Game server Pod lifecycle              |
 | pods/log                  | get                            | Stream server console output             |
 | pods/attach               | create                         | Interactive console (SPDY attach)        |
-| services                  | get, create, update, delete    | NodePort Service management              |
+| services                  | get, create, update, delete, list | NodePort/LoadBalancer Service management |
 | jobs                      | get, create, delete            | Egg installation scripts                 |
-| configmaps                | get, create, delete            | Install script storage (multi-node)      |
+| configmaps                | get, create, update, delete    | Install script + identity files (multi-node) |
 | resourcequotas            | get, create, update            | Namespace resource limits (if enabled)   |
 | limitranges               | get, create, update            | Container default limits (if enabled)    |
 | persistentvolumeclaims    | get, create, update, delete, list | PVC storage lifecycle (if enabled)    |

@@ -12,13 +12,21 @@ networking support.
 
 ## Quick Start
 
+Put your node credentials from the Panel in a local values file (kept out of
+version control) rather than on the command line, where `--set` would leak them
+into shell history and process listings:
+
+```yaml
+# values.local.yaml (do not commit)
+wings:
+  panelUrl: https://panel.example.com
+  token: YOUR_TOKEN
+  tokenId: YOUR_TOKEN_ID
+  uuid: YOUR_NODE_UUID
+```
+
 ```bash
-# Add your node credentials from the Panel
-helm install wings ./chart/pelican-wings \
-  --set wings.panelUrl=https://panel.example.com \
-  --set wings.token=YOUR_TOKEN \
-  --set wings.tokenId=YOUR_TOKEN_ID \
-  --set wings.uuid=YOUR_NODE_UUID
+helm install wings ./chart/pelican-wings -f values.local.yaml
 ```
 
 ## Configuration

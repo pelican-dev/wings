@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -179,9 +180,9 @@ func TestInstaller(t *testing.T) {
 				// Verify backoff limit.
 				g.Assert(*job.Spec.BackoffLimit).Equal(int32(0))
 
-				// Cancel to stop waitForJob.
+				// Cancel to stop waitForJob and assert the cancellation propagates.
 				cancel()
-				<-errCh
+				g.Assert(errors.Is(<-errCh, context.Canceled)).IsTrue()
 			})
 
 			g.It("should succeed when Job completes successfully", func() {
