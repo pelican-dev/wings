@@ -1,4 +1,7 @@
 {{- if .Values.limitRange.enabled }}
+{{- if not (or .Values.limitRange.defaultCPULimit .Values.limitRange.defaultMemoryLimit .Values.limitRange.defaultCPURequest .Values.limitRange.defaultMemoryRequest .Values.limitRange.maxCPU .Values.limitRange.maxMemory) }}
+{{- fail "limitRange.enabled is true but no limits are set; configure at least one of defaultCPULimit, defaultMemoryLimit, defaultCPURequest, defaultMemoryRequest, maxCPU or maxMemory (an empty LimitRange has no effect)." }}
+{{- end }}
 apiVersion: v1
 kind: LimitRange
 metadata:

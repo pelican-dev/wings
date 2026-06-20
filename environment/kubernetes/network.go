@@ -139,15 +139,16 @@ func (e *Environment) EnsureService(ctx context.Context) error {
 	}
 
 	// Service exists; update it with the desired spec while preserving
-	// existing NodePort assignments where possible.
+	// existing NodePort assignments where possible. Type and annotations must
+	// also be reconciled so a networkMode switch (e.g. NodePort <-> LoadBalancer)
+	// is applied and stale LB annotations are cleared.
+	existing.Spec.Type = desired.Spec.Type
 	existing.Spec.Selector = desired.Spec.Selector
 	existing.Spec.Ports = mergeServicePorts(existing.Spec.Ports, desired.Spec.Ports)
 	existing.Labels = labels
+	existing.Annotations = annotations
 
 	e.log().WithField("service", svcName).Infof("updating %s service for server", svcType)
-	if isLB {
-		existing.Annotations = annotations
-	}
 	_, err = e.client.CoreV1().Services(ns).Update(ctx, existing, metav1.UpdateOptions{})
 	if err != nil {
 		return errors.Wrap(err, "environment/kubernetes: failed to update service")

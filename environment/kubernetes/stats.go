@@ -13,6 +13,10 @@ import (
 	"github.com/pelican-dev/wings/environment"
 )
 
+// statsRequestTimeout bounds each individual metrics/stats API call so a slow
+// or hung endpoint cannot stall the polling loop until the next tick.
+const statsRequestTimeout = 3 * time.Second
+
 // podStats holds parsed resource metrics for a pod's "server" container.
 type podStats struct {
 	cpuPercent  float64
@@ -37,6 +41,14 @@ func (e *Environment) Uptime(ctx context.Context) (int64, error) {
 	return time.Since(pod.Status.StartTime.Time).Milliseconds(), nil
 }
 
+// withStatsTimeout invokes fn with a child context bounded by
+// statsRequestTimeout so a single slow metrics/stats call cannot stall polling.
+func withStatsTimeout[T any](ctx context.Context, fn func(context.Context) (T, error)) (T, error) {
+	tctx, cancel := context.WithTimeout(ctx, statsRequestTimeout)
+	defer cancel()
+	return fn(tctx)
+}
+
 // pollResources periodically fetches resource usage and publishes resource
 // events. It tries the Kubernetes Metrics API first (requires metrics-server)
 // and falls back to the kubelet stats/summary API (always available).
@@ -57,7 +69,6 @@ func (e *Environment) pollResources(ctx context.Context) error {
 	defer ticker.Stop()
 
 	lastCheck := time.Now()
-	useKubelet := false
 	loggedSource := false
 
 	for {
@@ -79,30 +90,21 @@ func (e *Environment) pollResources(ctx context.Context) error {
 
 			var stats *podStats
 
-			if !useKubelet {
-				stats, err = e.getMetricsAPIStats(ctx)
-				if err != nil {
-					if !loggedSource {
-						e.log().WithField("error", err).Info("metrics API unavailable, falling back to kubelet stats")
-					}
-					useKubelet = true
-				}
-			}
-
-			if useKubelet {
-				stats, err = e.getKubeletPodStats(ctx)
-				if err != nil {
-					if !loggedSource {
-						e.log().WithField("error", err).Warn("kubelet stats also unavailable, resource metrics will not be reported")
-						loggedSource = true
-					}
-				}
+			// Prefer the metrics API and fall back to kubelet stats. The metrics
+			// API is retried on every tick (the fallback is not sticky) so a
+			// transiently-unavailable metrics-server is picked back up once it
+			// recovers. Each call is bounded by statsRequestTimeout.
+			usingKubelet := false
+			stats, err = withStatsTimeout(ctx, e.getMetricsAPIStats)
+			if err != nil {
+				usingKubelet = true
+				stats, err = withStatsTimeout(ctx, e.getKubeletPodStats)
 			}
 
 			if stats != nil {
 				if !loggedSource {
 					src := "metrics API (metrics-server)"
-					if useKubelet {
+					if usingKubelet {
 						src = "kubelet stats/summary"
 					}
 					e.log().WithField("source", src).Info("collecting pod resource metrics")
@@ -114,10 +116,13 @@ func (e *Environment) pollResources(ctx context.Context) error {
 					RxBytes: stats.rxBytes,
 					TxBytes: stats.txBytes,
 				}
+			} else if !loggedSource {
+				e.log().WithField("error", err).Warn("pod resource metrics unavailable from both metrics API and kubelet")
+				loggedSource = true
 			}
 
 			// Get memory limit from pod spec.
-			pod, err := e.getPod(ctx)
+			pod, err := withStatsTimeout(ctx, e.getPod)
 			if err == nil && pod != nil {
 				for _, c := range pod.Spec.Containers {
 					if c.Name == "server" {

@@ -20,12 +20,17 @@ import (
 func (e *Environment) OnBeforeStart(ctx context.Context) error {
 	// Delete any existing Pod to ensure fresh config is applied.
 	gracePeriod := int64(0)
-	_ = e.client.CoreV1().Pods(e.namespace()).Delete(ctx, e.Id, metav1.DeleteOptions{
+	if err := e.client.CoreV1().Pods(e.namespace()).Delete(ctx, e.Id, metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriod,
-	})
+	}); err != nil && !isNotFound(err) {
+		return errors.Wrap(err, "environment/kubernetes: failed to delete existing pod before start")
+	}
 
-	// Wait briefly for deletion to propagate.
-	e.waitForPodDeletion(ctx, 10*time.Second)
+	// Wait for the old Pod to be fully removed so the recreate below does not
+	// no-op against a stale Pod.
+	if err := e.waitForPodDeletion(ctx, 10*time.Second); err != nil {
+		return errors.Wrap(err, "environment/kubernetes: timed out waiting for old pod deletion")
+	}
 
 	// Create the Pod with current configuration.
 	if err := e.Create(); err != nil {
@@ -87,22 +92,23 @@ func (e *Environment) Stop(ctx context.Context) error {
 	s := e.meta.Stop
 	e.mu.RUnlock()
 
-	// If using a signal-based stop, terminate with that signal.
-	if s.Type == "" || s.Type == remote.ProcessStopSignal {
-		return e.Terminate(ctx, "SIGTERM")
-	}
-
 	if e.st.Load() != environment.ProcessOfflineState {
 		e.SetState(environment.ProcessStoppingState)
 	}
 
 	// If using a command-based stop and we're attached, send the command.
-	if e.IsAttached() && s.Type == remote.ProcessStopCommand {
+	if s.Type == remote.ProcessStopCommand && e.IsAttached() {
 		return e.SendCommand(s.Value)
 	}
 
-	// Default: delete the Pod with a 30-second grace period.
+	// Otherwise (including signal-based stops) delete the Pod gracefully so the
+	// kubelet sends SIGTERM to PID 1 and the process can shut down within the
+	// grace period before being force-killed. An explicit SIGKILL maps to an
+	// immediate force-delete.
 	gracePeriod := int64(30)
+	if strings.EqualFold(s.Value, "SIGKILL") {
+		gracePeriod = 0
+	}
 	err := e.client.CoreV1().Pods(e.namespace()).Delete(ctx, e.Id, metav1.DeleteOptions{
 		GracePeriodSeconds: &gracePeriod,
 	})
@@ -153,8 +159,10 @@ func (e *Environment) WaitForStop(ctx context.Context, duration time.Duration, t
 		return err
 	}
 
-	// Wait for the Pod to be gone.
-	if err := e.waitForPodDeletion(tctx, duration); err != nil {
+	// Wait for the Pod to be gone or to stop running. A command-based stop
+	// leaves the Pod in a terminal Succeeded/Failed phase without deleting it,
+	// so waiting only for deletion would block until the timeout.
+	if err := e.waitForPodStoppedOrDeleted(tctx, duration); err != nil {
 		if terminate {
 			e.log().Warn("pod did not terminate in time, forcing deletion")
 			return e.Terminate(ctx, "SIGKILL")
@@ -254,6 +262,36 @@ func (e *Environment) waitForPodRunning(ctx context.Context) error {
 						return errors.New("environment/kubernetes: image pull backoff")
 					}
 				}
+			}
+		}
+	}
+}
+
+// waitForPodStoppedOrDeleted blocks until the Pod is deleted or has stopped
+// running (a terminal Succeeded/Failed phase), whichever happens first, or the
+// timeout elapses.
+func (e *Environment) waitForPodStoppedOrDeleted(ctx context.Context, timeout time.Duration) error {
+	dctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-dctx.Done():
+			return dctx.Err()
+		case <-ticker.C:
+			pod, err := e.getPod(dctx)
+			if err != nil {
+				if isNotFound(err) {
+					return nil
+				}
+				continue
+			}
+			if !isPodRunning(pod) {
+				e.markOffline()
+				return nil
 			}
 		}
 	}

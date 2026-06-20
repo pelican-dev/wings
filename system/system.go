@@ -112,7 +112,13 @@ func GetSystemInformationWithOptions(kubernetesMode bool) (*Information, error) 
 
 	release, err := osrelease.Read()
 	if err != nil {
-		return nil, err
+		// In Kubernetes mode the daemon frequently runs on minimal images that
+		// lack /etc/os-release; treat it as best-effort and fall back to the
+		// runtime OS rather than failing the whole system info request.
+		if !kubernetesMode {
+			return nil, err
+		}
+		release = map[string]string{}
 	}
 
 	if kubernetesMode {

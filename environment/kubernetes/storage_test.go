@@ -281,6 +281,46 @@ func TestStorage(t *testing.T) {
 				err := env.ResizePVC(context.Background(), "invalid")
 				g.Assert(err).IsNotNil()
 			})
+
+			g.It("should be a no-op when a shared DataPVC is configured", func() {
+				existingPVC := &corev1.PersistentVolumeClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "gs-shared-resize-uuid",
+						Namespace: "pelican",
+					},
+					Spec: corev1.PersistentVolumeClaimSpec{
+						Resources: corev1.VolumeResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceStorage: resource.MustParse("10Gi"),
+							},
+						},
+					},
+				}
+				client := fake.NewSimpleClientset(existingPVC)
+				env := &Environment{
+					Id:     "shared-resize-uuid",
+					client: client,
+					st:     system.NewAtomicString(environment.ProcessOfflineState),
+				}
+
+				config.Update(func(c *config.Configuration) {
+					c.Kubernetes.StorageMode = config.KubeStoragePVC
+					c.Kubernetes.Namespace = "pelican"
+					c.Kubernetes.DataPVC = "shared-data"
+				})
+				defer config.Update(func(c *config.Configuration) {
+					c.Kubernetes.DataPVC = ""
+				})
+
+				err := env.ResizePVC(context.Background(), "50Gi")
+				g.Assert(err).IsNil()
+
+				// The per-server PVC must be left untouched at its original size.
+				pvc, _ := client.CoreV1().PersistentVolumeClaims("pelican").Get(context.Background(), "gs-shared-resize-uuid", metav1.GetOptions{})
+				storageReq := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+				original := resource.MustParse("10Gi")
+				g.Assert(storageReq.Equal(original)).IsTrue()
+			})
 		})
 
 		g.Describe("buildVolumes with PVC mode", func() {

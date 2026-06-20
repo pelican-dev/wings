@@ -62,10 +62,17 @@ func (ip *InstallerProcess) configMapName() string {
 // Run executes the full installation process: creates a Job, streams its logs,
 // waits for completion, and cleans up.
 func (ip *InstallerProcess) Run(ctx context.Context) error {
-	// Clean up any existing installer Job from a previous run.
-	_ = ip.client.BatchV1().Jobs(ip.namespace).Delete(ctx, ip.jobName(), metav1.DeleteOptions{
-		PropagationPolicy: propagationBackground(),
-	})
+	// Clean up any existing installer Job from a previous run. Use foreground
+	// propagation and wait for the Job to disappear so the Create below does not
+	// race a still-terminating Job and fail with AlreadyExists.
+	if err := ip.client.BatchV1().Jobs(ip.namespace).Delete(ctx, ip.jobName(), metav1.DeleteOptions{
+		PropagationPolicy: propagationForeground(),
+	}); err != nil && !isNotFound(err) {
+		return errors.Wrap(err, "environment/kubernetes: failed to delete existing installer job")
+	}
+	if err := ip.waitForJobDeletion(ctx, 30*time.Second); err != nil {
+		return errors.Wrap(err, "environment/kubernetes: timed out waiting for old installer job deletion")
+	}
 
 	// Build environment variables.
 	var envVars []corev1.EnvVar
@@ -283,7 +290,7 @@ func (ip *InstallerProcess) Cleanup(ctx context.Context) error {
 // WriteInstallScript creates a ConfigMap containing the installation script.
 // The ConfigMap is mounted into the Job Pod at /mnt/install, eliminating the
 // need for a shared filesystem between Wings and the Job Pod.
-func (ip *InstallerProcess) WriteInstallScript() error {
+func (ip *InstallerProcess) WriteInstallScript(ctx context.Context) error {
 	content := strings.ReplaceAll(ip.Script.Script, "\r\n", "\n")
 
 	cm := &corev1.ConfigMap{
@@ -300,8 +307,6 @@ func (ip *InstallerProcess) WriteInstallScript() error {
 			"install.sh": content,
 		},
 	}
-
-	ctx := context.Background()
 
 	// Delete any existing ConfigMap from a previous run.
 	_ = ip.client.CoreV1().ConfigMaps(ip.namespace).Delete(ctx, ip.configMapName(), metav1.DeleteOptions{})
@@ -373,13 +378,44 @@ func (ip *InstallerProcess) buildServerDataMount() corev1.VolumeMount {
 	if cfg.Kubernetes.DataPVC != "" {
 		serverPath := filepath.Join(cfg.System.Data, ip.ServerID)
 		rel, err := filepath.Rel(cfg.System.RootDirectory, serverPath)
-		if err != nil {
+		// filepath.Rel can yield a path escaping the volume root ("..") when
+		// System.Data is outside RootDirectory; such a SubPath is rejected by
+		// Kubernetes, so fall back to the default layout in that case.
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			vm.SubPath = filepath.Join("volumes", ip.ServerID)
 		} else {
 			vm.SubPath = rel
 		}
 	}
 	return vm
+}
+
+// waitForJobDeletion blocks until the installer Job is fully deleted or the
+// timeout elapses.
+func (ip *InstallerProcess) waitForJobDeletion(ctx context.Context, timeout time.Duration) error {
+	dctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		_, err := ip.client.BatchV1().Jobs(ip.namespace).Get(dctx, ip.jobName(), metav1.GetOptions{})
+		if err != nil && isNotFound(err) {
+			return nil
+		}
+		select {
+		case <-dctx.Done():
+			return dctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+// propagationForeground returns a pointer to the Foreground propagation policy.
+func propagationForeground() *metav1.DeletionPropagation {
+	p := metav1.DeletePropagationForeground
+	return &p
 }
 
 // propagationBackground returns a pointer to the Background propagation policy.

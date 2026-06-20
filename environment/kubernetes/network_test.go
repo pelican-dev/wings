@@ -129,6 +129,42 @@ func TestNetwork(t *testing.T) {
 			g.Assert(len(svc.Spec.Ports)).Equal(4)
 		})
 
+		g.It("should reconcile Service type and annotations when network mode changes", func() {
+			// Pre-create a LoadBalancer Service with stale LB annotations.
+			existingSvc := &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "gs-test-server-uuid",
+					Namespace:   "pelican",
+					Annotations: map[string]string{"lbipam.cilium.io/ips": "10.0.0.1"},
+				},
+				Spec: corev1.ServiceSpec{
+					Type:     corev1.ServiceTypeLoadBalancer,
+					Selector: map[string]string{"pelican.dev/server-id": "test-server-uuid"},
+				},
+			}
+			client := fake.NewSimpleClientset(existingSvc)
+			allocs := environment.Allocations{
+				Mappings: map[string][]int{"0.0.0.0": {25565}},
+			}
+			env := newTestEnv(client, allocs)
+
+			// Switch to NodePort mode.
+			config.Update(func(c *config.Configuration) {
+				c.Kubernetes.NetworkMode = config.KubeNetworkNodePort
+				c.Kubernetes.Namespace = "pelican"
+			})
+
+			err := env.EnsureService(context.Background())
+			g.Assert(err).IsNil()
+
+			svc, err := client.CoreV1().Services("pelican").Get(context.Background(), "gs-test-server-uuid", metav1.GetOptions{})
+			g.Assert(err).IsNil()
+			// Type must be updated to NodePort and the stale LB annotation cleared.
+			g.Assert(svc.Spec.Type).Equal(corev1.ServiceTypeNodePort)
+			_, hasStale := svc.Annotations["lbipam.cilium.io/ips"]
+			g.Assert(hasStale).IsFalse()
+		})
+
 		g.It("should be a no-op with empty allocations", func() {
 			client := fake.NewSimpleClientset()
 			allocs := environment.Allocations{

@@ -125,6 +125,14 @@ func getSystemIps(c *gin.Context) {
 				interfaces = append(interfaces, ip)
 			}
 		}
+
+		// If IP discovery failed across the board, surface an error instead of
+		// returning a misleading empty-but-successful response that the Panel
+		// would treat as "no assignable IPs".
+		if len(interfaces) == 0 {
+			middleware.CaptureAndAbort(c, errors.New("failed to discover any assignable IP addresses in kubernetes mode; check node/LoadBalancer RBAC or configure kubernetes.system_ips"))
+			return
+		}
 	} else {
 		ips, err := system.GetSystemIps()
 		if err != nil {

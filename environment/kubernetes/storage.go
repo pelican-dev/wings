@@ -144,6 +144,11 @@ func (e *Environment) ResizePVC(ctx context.Context, newSize string) error {
 	if cfg.Kubernetes.StorageMode != config.KubeStoragePVC {
 		return nil
 	}
+	// When a shared DataPVC is configured, per-server PVCs are not created, so
+	// there is nothing to resize (mirrors EnsurePVC/DeletePVC).
+	if cfg.Kubernetes.DataPVC != "" {
+		return nil
+	}
 
 	ns := e.namespace()
 	name := e.pvcName()

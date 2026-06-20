@@ -2,13 +2,16 @@ package kubernetes
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	. "github.com/franela/goblin"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
@@ -148,6 +151,26 @@ func TestQuota(t *testing.T) {
 				memLimit := rq.Spec.Hard[corev1.ResourceLimitsMemory]
 				g.Assert(memLimit.Cmp(resource.MustParse("64Gi"))).Equal(0)
 			})
+
+			g.It("should fail fast on a non-NotFound Get error instead of creating", func() {
+				client := fake.NewSimpleClientset()
+				client.PrependReactor("get", "resourcequotas", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					return true, nil, errors.New("boom: api server unavailable")
+				})
+				env := &Environment{
+					Id:     "quota-geterr-uuid",
+					client: client,
+					st:     system.NewAtomicString(environment.ProcessOfflineState),
+				}
+				config.Update(func(c *config.Configuration) {
+					c.Kubernetes.Namespace = "pelican"
+					c.Kubernetes.ResourceQuota.Enabled = true
+					c.Kubernetes.ResourceQuota.CPULimit = "16"
+				})
+
+				err := env.EnsureResourceQuota(context.Background())
+				g.Assert(err != nil).IsTrue()
+			})
 		})
 
 		g.Describe("EnsureLimitRange", func() {
@@ -255,6 +278,26 @@ func TestQuota(t *testing.T) {
 				lr, _ := client.CoreV1().LimitRanges("pelican").Get(context.Background(), "pelican-wings", metav1.GetOptions{})
 				defaultCPU := lr.Spec.Limits[0].Default[corev1.ResourceCPU]
 				g.Assert(defaultCPU.Cmp(resource.MustParse("4"))).Equal(0)
+			})
+
+			g.It("should fail fast on a non-NotFound Get error instead of creating", func() {
+				client := fake.NewSimpleClientset()
+				client.PrependReactor("get", "limitranges", func(action k8stesting.Action) (bool, runtime.Object, error) {
+					return true, nil, errors.New("boom: api server unavailable")
+				})
+				env := &Environment{
+					Id:     "lr-geterr-uuid",
+					client: client,
+					st:     system.NewAtomicString(environment.ProcessOfflineState),
+				}
+				config.Update(func(c *config.Configuration) {
+					c.Kubernetes.Namespace = "pelican"
+					c.Kubernetes.LimitRange.Enabled = true
+					c.Kubernetes.LimitRange.DefaultCPULimit = "2"
+				})
+
+				err := env.EnsureLimitRange(context.Background())
+				g.Assert(err != nil).IsTrue()
 			})
 		})
 

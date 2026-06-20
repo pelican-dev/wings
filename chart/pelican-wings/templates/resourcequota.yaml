@@ -1,4 +1,7 @@
 {{- if .Values.resourceQuota.enabled }}
+{{- if not (or .Values.resourceQuota.cpuLimit .Values.resourceQuota.memoryLimit .Values.resourceQuota.cpuRequest .Values.resourceQuota.memoryRequest .Values.resourceQuota.maxPods .Values.resourceQuota.maxPVCs .Values.resourceQuota.maxStorage) }}
+{{- fail "resourceQuota.enabled is true but no quota fields are set; configure at least one of cpuLimit, memoryLimit, cpuRequest, memoryRequest, maxPods, maxPVCs or maxStorage (an empty ResourceQuota would block all Pods from scheduling)." }}
+{{- end }}
 apiVersion: v1
 kind: ResourceQuota
 metadata:

@@ -54,7 +54,9 @@ Create the name of the service account to use.
 {{- define "pelican-wings.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
 {{- default (include "pelican-wings.fullname" .) .Values.serviceAccount.name }}
+{{- else if .Values.serviceAccount.name }}
+{{- .Values.serviceAccount.name }}
 {{- else }}
-{{- default "default" .Values.serviceAccount.name }}
+{{- fail "serviceAccount.name must be set when serviceAccount.create is false: binding RBAC to the namespace 'default' ServiceAccount would grant Wings' permissions to every workload using it." }}
 {{- end }}
 {{- end }}

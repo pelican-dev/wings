@@ -51,7 +51,7 @@ func TestInstaller(t *testing.T) {
 					},
 				}
 
-				err := ip.WriteInstallScript()
+				err := ip.WriteInstallScript(context.Background())
 				g.Assert(err).IsNil()
 
 				cm, err := client.CoreV1().ConfigMaps("pelican").Get(context.Background(), "write-cm-uuid-install-script", metav1.GetOptions{})
@@ -79,7 +79,7 @@ func TestInstaller(t *testing.T) {
 					},
 				}
 
-				err := ip.WriteInstallScript()
+				err := ip.WriteInstallScript(context.Background())
 				g.Assert(err).IsNil()
 
 				cm, err := client.CoreV1().ConfigMaps("pelican").Get(context.Background(), "rewrite-uuid-install-script", metav1.GetOptions{})

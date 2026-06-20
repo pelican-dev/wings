@@ -17,8 +17,7 @@ rules:
   - apiGroups: [""]
     resources: ["nodes"]
     verbs: ["get"]
-  # Proxy to kubelet stats/summary API for resource metrics when
-  # metrics-server is not installed.
-  - apiGroups: [""]
-    resources: ["nodes/proxy"]
-    verbs: ["get"]
+  # NOTE: The kubelet stats/summary fallback (nodes/proxy) is intentionally NOT
+  # granted here because it is a broad, cluster-wide permission. If you do not
+  # run metrics-server and need that fallback, additionally apply
+  # clusterrole-metrics-kubelet.yaml.

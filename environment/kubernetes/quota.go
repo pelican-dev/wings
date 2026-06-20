@@ -31,6 +31,9 @@ func (e *Environment) EnsureResourceQuota(ctx context.Context) error {
 	}
 
 	existing, err := e.client.CoreV1().ResourceQuotas(ns).Get(ctx, quotaName, metav1.GetOptions{})
+	if err != nil && !isNotFound(err) {
+		return errors.Wrap(err, "environment/kubernetes: failed to get ResourceQuota")
+	}
 	if err == nil {
 		// Update existing.
 		existing.Spec = quota.Spec
@@ -65,6 +68,9 @@ func (e *Environment) EnsureLimitRange(ctx context.Context) error {
 	}
 
 	existing, err := e.client.CoreV1().LimitRanges(ns).Get(ctx, limitRangeName, metav1.GetOptions{})
+	if err != nil && !isNotFound(err) {
+		return errors.Wrap(err, "environment/kubernetes: failed to get LimitRange")
+	}
 	if err == nil {
 		// Update existing.
 		existing.Spec = lr.Spec

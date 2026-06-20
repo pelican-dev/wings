@@ -39,7 +39,7 @@ func (s *Server) internalInstallKubernetes(script *remote.InstallationScript) er
 	s.Events().Publish(DaemonMessageEvent, "Starting installation process via Kubernetes Job, this could take a few minutes...")
 
 	// Write the install script to disk for mounting into the Job Pod.
-	if err := ip.WriteInstallScript(); err != nil {
+	if err := ip.WriteInstallScript(s.Context()); err != nil {
 		return errors.WithMessage(err, "install: failed to write installation script")
 	}
 

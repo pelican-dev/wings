@@ -563,5 +563,25 @@ func TestEnvironment(t *testing.T) {
 			// Only 8080 is valid, so 2 ports (TCP + UDP).
 			g.Assert(len(ports)).Equal(2)
 		})
+
+		g.It("should deduplicate ports shared across allocation IPs", func() {
+			allocs := environment.Allocations{
+				Mappings: map[string][]int{
+					"1.1.1.1": {25565},
+					"2.2.2.2": {25565},
+				},
+			}
+			settings := environment.Settings{Allocations: allocs}
+			cfg := environment.NewConfiguration(settings, nil)
+			env := &Environment{Configuration: cfg}
+
+			config.Update(func(c *config.Configuration) {
+				c.Kubernetes.NetworkMode = config.KubeNetworkNodePort
+			})
+
+			ports := env.buildContainerPorts()
+			// 25565 appears under two IPs but must yield a single TCP + UDP pair.
+			g.Assert(len(ports)).Equal(2)
+		})
 	})
 }

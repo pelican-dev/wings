@@ -1,11 +1,15 @@
+{{- if and .Values.wings.kubernetes.namespace (ne .Values.wings.kubernetes.namespace .Values.gameNamespace) }}
+{{- fail "wings.kubernetes.namespace must equal gameNamespace: the chart's namespaced RBAC is created in gameNamespace, so Wings must schedule game-server workloads there too. Leave wings.kubernetes.namespace empty or set it equal to gameNamespace." }}
+{{- end }}
 apiVersion: v1
-kind: ConfigMap
+kind: Secret
 metadata:
   name: {{ include "pelican-wings.fullname" . }}-config
   namespace: {{ .Values.gameNamespace }}
   labels:
     {{- include "pelican-wings.labels" . | nindent 4 }}
-data:
+type: Opaque
+stringData:
   config.yml: |
     debug: false
     app_name: pelican
@@ -26,7 +30,7 @@ data:
       tmp_directory: {{ .Values.wings.system.tmpDirectory | quote }}
     kubernetes:
       enabled: {{ .Values.wings.kubernetes.enabled }}
-      namespace: {{ .Values.wings.kubernetes.namespace | quote }}
+      namespace: {{ .Values.gameNamespace | quote }}
       network_mode: {{ .Values.wings.kubernetes.networkMode | quote }}
       {{- if .Values.wings.kubernetes.lbAnnotations }}
       lb_annotations:

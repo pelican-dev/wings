@@ -30,6 +30,11 @@ serviceAccount:
 rbac:
   # -- Whether to create RBAC resources (Role, RoleBinding, ClusterRole, ClusterRoleBinding)
   create: true
+  # -- Grant the cluster-wide nodes/proxy permission so Wings can read resource
+  # metrics directly from the kubelet stats/summary API when metrics-server is
+  # not installed. This is a broad, cluster-scoped permission; leave it off and
+  # install metrics-server unless you specifically need the kubelet fallback.
+  kubeletMetricsFallback: false
 
 # -- Namespace for game server resources (Pods, Services, Jobs, PVCs)
 gameNamespace: pelican
