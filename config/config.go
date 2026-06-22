@@ -339,6 +339,10 @@ type Configuration struct {
 	// if the debug flag is passed through the command line arguments.
 	Debug bool
 
+	// Determines if wings should run with minimal logging output. This value is
+	// ignored if debug mode is enabled.
+	Quiet bool
+
 	AppName string `default:"pelican" json:"app_name" yaml:"app_name"`
 
 	// A unique identifier for this node in the Panel.
