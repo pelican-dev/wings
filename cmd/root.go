@@ -111,7 +111,9 @@ func isDockerSnap() bool {
 }
 
 func rootCmdRun(cmd *cobra.Command, _ []string) {
-	printLogo()
+	if config.Get().Debug || !config.Get().Quiet {
+		printLogo()
+	}
 	log.Debug("running in debug mode")
 	log.WithField("config_file", configPath).Info("loading configuration from file")
 
@@ -463,6 +465,8 @@ func initLogging() {
 	log.SetLevel(log.InfoLevel)
 	if config.Get().Debug {
 		log.SetLevel(log.DebugLevel)
+	} else if config.Get().Quiet {
+		log.SetLevel(log.WarnLevel)
 	}
 	log.SetHandler(multi.New(cli.Default, cli.New(w.File, false)))
 	log.WithField("path", p).Info("writing log files to disk")

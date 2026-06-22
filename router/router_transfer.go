@@ -32,7 +32,7 @@ func postTransfers(c *gin.Context) {
 	if len(auth) != 2 || auth[0] != "Bearer" {
 		c.Header("WWW-Authenticate", "Bearer")
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-			"error": "The required authorization heads were not present in the request.",
+			"error": "The required authorization headers were not present in the request.",
 		})
 		return
 	}
@@ -40,6 +40,11 @@ func postTransfers(c *gin.Context) {
 	token := tokens.TransferPayload{}
 	if err := tokens.ParseToken([]byte(auth[1]), &token); err != nil {
 		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	if !token.HasScope(tokens.ServerTransfer) {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Forbidden."})
 		return
 	}
 
@@ -128,6 +133,20 @@ func postTransfers(c *gin.Context) {
 		trnsfr.Server.SetTransferring(false)
 		trnsfr.Server.Events().Publish(server.TransferStatusEvent, "success")
 	}(ctx, trnsfr)
+
+	{
+		remotePool := config.Get().System.Transfers.StoragePool
+		sourcePool := c.GetHeader("X-Storage-Pool")
+		if remotePool.Enabled && remotePool.PoolName != "" && sourcePool != "" && strings.EqualFold(remotePool.PoolName, sourcePool) {
+			if err := trnsfr.Server.CreateEnvironment(); err != nil {
+				middleware.CaptureAndAbort(c, err)
+				return
+			}
+			successful = true
+			c.Status(http.StatusOK)
+			return
+		}
+	}
 
 	mediaType, params, err := mime.ParseMediaType(c.GetHeader("Content-Type"))
 	if err != nil {

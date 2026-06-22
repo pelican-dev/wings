@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -401,7 +402,7 @@ func (e *Environment) ensureImageExists(image string) error {
 	}
 
 	// Get the ImagePullOptions.
-	imagePullOptions := dockerImage.PullOptions{All: false}
+	imagePullOptions := dockerImage.PullOptions{All: false, Platform: runtime.GOOS + "/" + runtime.GOARCH}
 	if registryAuth != nil {
 		b64, err := registryAuth.Base64()
 		if err != nil {
