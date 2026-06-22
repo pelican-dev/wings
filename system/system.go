@@ -101,17 +101,56 @@ type DockerDiskUsage struct {
 }
 
 func GetSystemInformation() (*Information, error) {
+	return GetSystemInformationWithOptions(false)
+}
+
+func GetSystemInformationWithOptions(kubernetesMode bool) (*Information, error) {
 	k, err := kernel.GetKernelVersion()
 	if err != nil {
 		return nil, err
 	}
 
-	version, info, err := GetDockerInfo(context.Background())
+	release, err := osrelease.Read()
 	if err != nil {
-		return nil, err
+		// In Kubernetes mode the daemon frequently runs on minimal images that
+		// lack /etc/os-release; treat it as best-effort and fall back to the
+		// runtime OS rather than failing the whole system info request.
+		if !kubernetesMode {
+			return nil, err
+		}
+		release = map[string]string{}
 	}
 
-	release, err := osrelease.Read()
+	if kubernetesMode {
+		v, err := mem.VirtualMemory()
+		if err != nil {
+			return nil, err
+		}
+
+		var osName string
+		if release["PRETTY_NAME"] != "" {
+			osName = release["PRETTY_NAME"]
+		} else if release["NAME"] != "" {
+			osName = release["NAME"]
+		} else {
+			osName = runtime.GOOS
+		}
+
+		return &Information{
+			Version: Version,
+			Docker:  DockerInformation{},
+			System: System{
+				Architecture:  runtime.GOARCH,
+				CPUThreads:    runtime.NumCPU(),
+				MemoryBytes:   int64(v.Total),
+				KernelVersion: k.String(),
+				OS:            osName,
+				OSType:        runtime.GOOS,
+			},
+		}, nil
+	}
+
+	version, info, err := GetDockerInfo(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -175,9 +214,13 @@ func GetSystemIps() ([]string, error) {
 	}
 	for _, addr := range iface_addrs {
 		ipNet, valid := addr.(*net.IPNet)
-		if valid && !ipNet.IP.IsLoopback() && (len(ipNet.IP) == net.IPv6len && !ipNet.IP.IsLinkLocalUnicast()) {
-			ip_addrs = append(ip_addrs, ipNet.IP.String())
+		if !valid || ipNet.IP.IsLoopback() {
+			continue
 		}
+		if ipNet.IP.IsLinkLocalUnicast() || ipNet.IP.IsLinkLocalMulticast() {
+			continue
+		}
+		ip_addrs = append(ip_addrs, ipNet.IP.String())
 	}
 	return ip_addrs, nil
 }
