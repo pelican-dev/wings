@@ -7,7 +7,6 @@ import (
 	"errors"
 	iofs "io/fs"
 	"os"
-	"syscall"
 
 	"golang.org/x/sys/unix"
 )
@@ -65,7 +64,7 @@ func convertErrorType(err error) error {
 
 	var pErr *PathError
 	if errors.As(err, &pErr) {
-		if errno, ok := pErr.Err.(syscall.Errno); ok {
+		if errno, ok := pErr.Err.(unix.Errno); ok {
 			return errnoToPathError(errno, pErr.Op, pErr.Path)
 		}
 		return pErr
@@ -74,7 +73,7 @@ func convertErrorType(err error) error {
 	// If the error wasn't already a path error and is a errno, wrap it with
 	// details that we can use to know there is something wrong with our
 	// error wrapping somewhere.
-	var errno syscall.Errno
+	var errno unix.Errno
 	if errors.As(err, &errno) {
 		return &PathError{
 			Op:   "!(UNKNOWN)",
@@ -100,7 +99,7 @@ func ensurePathError(err error, op, path string) error {
 		//
 		// DO NOT USE `errors.As` or whatever here, the error will either be
 		// an errno, or it will be wrapped already.
-		if errno, ok := pErr.Err.(syscall.Errno); ok {
+		if errno, ok := pErr.Err.(unix.Errno); ok {
 			return errnoToPathError(errno, pErr.Op, pErr.Path)
 		}
 		// Return the PathError as-is without modification.
@@ -108,7 +107,7 @@ func ensurePathError(err error, op, path string) error {
 	}
 
 	// If the error is directly an errno, convert it to a PathError.
-	var errno syscall.Errno
+	var errno unix.Errno
 	if errors.As(err, &errno) {
 		return errnoToPathError(errno, op, path)
 	}
@@ -122,7 +121,7 @@ func ensurePathError(err error, op, path string) error {
 }
 
 // errnoToPathError converts an errno into a proper path error.
-func errnoToPathError(err syscall.Errno, op, path string) error {
+func errnoToPathError(err unix.Errno, op, path string) error {
 	switch err {
 	// File exists
 	case unix.EEXIST:

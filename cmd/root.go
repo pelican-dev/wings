@@ -14,7 +14,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/NYTimes/logrotate"
@@ -23,9 +22,11 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/gammazero/workerpool"
 	"github.com/mitchellh/colorstring"
+	"github.com/pelican-dev/wings/server/filesystem/quotas"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
+	"golang.org/x/sys/unix"
 
 	"github.com/pelican-dev/wings/config"
 	"github.com/pelican-dev/wings/environment"
@@ -110,7 +111,9 @@ func isDockerSnap() bool {
 }
 
 func rootCmdRun(cmd *cobra.Command, _ []string) {
-	printLogo()
+	if config.Get().Debug || !config.Get().Quiet {
+		printLogo()
+	}
 	log.Debug("running in debug mode")
 	log.WithField("config_file", configPath).Info("loading configuration from file")
 
@@ -167,6 +170,17 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 		return
 	}
 
+	// if quotas are enabled ensure they are added and enabled.
+	if runtime.GOOS == "linux" && config.Get().System.Quotas.Enabled {
+		log.Info("validating system is configured for quotas")
+		// check if the fs is supported
+		if !quotas.IsSupportedFS() {
+			log.Fatal("failed to validate quota configuration")
+		}
+
+		log.Info("quotas are supported and enabled")
+	}
+
 	manager, err := server.NewManager(cmd.Context(), pclient)
 	if err != nil {
 		log.WithField("error", err).Fatal("failed to load server configurations")
@@ -179,7 +193,7 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 	}
 
 	if err := config.WriteToDisk(config.Get()); err != nil {
-		if !errors.Is(err, syscall.EROFS) {
+		if !errors.Is(err, unix.EROFS) {
 			log.WithField("error", err).Error("failed to write configuration to disk")
 		} else {
 			log.WithField("error", err).Debug("failed to write configuration to disk")
@@ -188,7 +202,7 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 
 	// Just for some nice log output.
 	for _, s := range manager.All() {
-		log.WithField("server", s.ID()).Info("finished loading configuration for server")
+		log.WithField("server", s.ID()).Info("finished loading configuration")
 	}
 
 	states, err := manager.ReadStates()
@@ -451,6 +465,8 @@ func initLogging() {
 	log.SetLevel(log.InfoLevel)
 	if config.Get().Debug {
 		log.SetLevel(log.DebugLevel)
+	} else if config.Get().Quiet {
+		log.SetLevel(log.WarnLevel)
 	}
 	log.SetHandler(multi.New(cli.Default, cli.New(w.File, false)))
 	log.WithField("path", p).Info("writing log files to disk")
