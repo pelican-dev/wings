@@ -149,9 +149,12 @@ func (c *SFTPServer) AcceptInbound(conn net.Conn, config *ssh.ServerConfig) erro
 		}(requests)
 
 		if srv, ok := c.manager.Get(sconn.Permissions.Extensions["uuid"]); ok {
-			if err := c.Handle(sconn, srv, channel); err != nil {
-				return err
-			}
+			// fix(sftp): handle channels concurrently to prevent 40s freeze with gvfs
+			go func() {
+				if err := c.Handle(sconn, srv, channel); err != nil {
+					log.WithField("error", err).Error("sftp: error handling channel")
+				}
+			}()
 		}
 	}
 	return nil
