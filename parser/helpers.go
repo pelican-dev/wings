@@ -35,6 +35,20 @@ var configMatchRegex = regexp.MustCompile(`{{\s?config\.([\w.-]+)\s?}}`)
 // noinspection RegExpRedundantEscape
 var xmlValueMatchRegex = regexp.MustCompile(`^\[([\w]+)='(.*)'\]$`)
 
+// jsonNumberRegex matches a canonical JSON number exactly as defined by the JSON
+// grammar. We deliberately use this instead of gjson.Parse/json.Valid, which
+// accept lax forms such as "007", "+5", "1.20.1" or "25565x". A value is only
+// written unquoted via sjson.SetRaw when it matches this pattern, guaranteeing
+// the result is valid JSON and the exact literal (including large integers) is
+// preserved.
+var jsonNumberRegex = regexp.MustCompile(`^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$`)
+
+// isJSONNumber reports whether s is a canonical JSON number that is safe to write
+// unquoted into a document.
+func isJSONNumber(s string) bool {
+	return jsonNumberRegex.MatchString(s)
+}
+
 // Iterate over an unstructured JSON/YAML/etc. interface and set all of the required
 // key/value pairs for the configuration file.
 //
@@ -156,7 +170,8 @@ func (cfr *ConfigurationFileReplacement) setValueWithSjson(jsonStr string, path 
 	}
 
 	var setValue interface{}
-	if cfr.ReplaceWith.Type() == jsonparser.Boolean {
+	switch {
+	case cfr.ReplaceWith.Type() == jsonparser.Boolean:
 		// Explicit boolean type declared in the egg definition.
 		v, err := strconv.ParseBool(value)
 		if err != nil {
@@ -164,26 +179,41 @@ func (cfr *ConfigurationFileReplacement) setValueWithSjson(jsonStr string, path 
 			return sjson.Set(jsonStr, path, value)
 		}
 		setValue = v
-	} else {
-		// Mirror the type already present in the document so booleans and numbers
-		// survive template expansion (panel always sends values as JSON strings).
+	case cfr.ReplaceWith.Type() == jsonparser.Number && isJSONNumber(value):
+		// Explicit numeric type declared in the egg definition. Write the literal
+		// as-is via SetRaw to avoid float64 precision loss for large integers (> 2^53).
+		return sjson.SetRaw(jsonStr, path, value)
+	default:
+		// The panel expands template variables and sends every value as a JSON
+		// string, so mirror the type already present in the document where possible
+		// to keep booleans and numbers unquoted.
 		existing := gjson.Get(jsonStr, path)
-		switch existing.Type {
-		case gjson.True, gjson.False:
+		switch {
+		case existing.Type == gjson.True || existing.Type == gjson.False:
 			v, err := strconv.ParseBool(value)
 			if err != nil {
 				log.WithFields(log.Fields{"value": value, "path": path, "match": cfr.Match}).Warn("cannot parse replacement as boolean, falling back to string value")
 				return sjson.Set(jsonStr, path, value)
 			}
 			setValue = v
-		case gjson.Number:
+		case existing.Type == gjson.Number && isJSONNumber(value):
 			// Write the numeric literal as-is via SetRaw to avoid float64 precision
-			// loss for large integers (> 2^53). Fall back to string if the incoming
-			// value is not a valid JSON number.
-			if gjson.Parse(value).Type == gjson.Number {
+			// loss for large integers (> 2^53).
+			return sjson.SetRaw(jsonStr, path, value)
+		case !existing.Exists():
+			// The key does not exist yet. This is the common case when a server is
+			// first created and its configuration file is generated from scratch:
+			// there is no existing type to mirror. Infer the natural type from the
+			// value itself so numeric values such as ports are written unquoted
+			// (e.g. `server-port: 25565` instead of `server-port: "25565"`).
+			switch {
+			case value == "true" || value == "false":
+				setValue = value == "true"
+			case isJSONNumber(value):
 				return sjson.SetRaw(jsonStr, path, value)
+			default:
+				setValue = value
 			}
-			setValue = value
 		default:
 			setValue = value
 		}
