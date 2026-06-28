@@ -174,10 +174,9 @@ func (cfr *ConfigurationFileReplacement) setValueWithSjson(jsonStr string, path 
 	case cfr.ReplaceWith.Type() == jsonparser.Boolean:
 		// Explicit boolean type declared in the egg definition.
 		return cfr.setBool(jsonStr, path, value)
-	case cfr.ReplaceWith.Type() == jsonparser.Number && isJSONNumber(value):
-		// Explicit numeric type declared in the egg definition. Write the literal
-		// as-is via SetRaw to avoid float64 precision loss for large integers (> 2^53).
-		return sjson.SetRaw(jsonStr, path, value)
+	case cfr.ReplaceWith.Type() == jsonparser.Number:
+		// Explicit numeric type declared in the egg definition.
+		return cfr.setNumber(jsonStr, path, value)
 	default:
 		// The panel expands template variables and sends every value as a JSON
 		// string, so mirror the type already present in the document where possible
@@ -222,6 +221,19 @@ func (cfr *ConfigurationFileReplacement) setBool(jsonStr, path, value string) (s
 		return sjson.Set(jsonStr, path, value)
 	}
 	return sjson.Set(jsonStr, path, v)
+}
+
+// setNumber writes a canonical JSON number to path unquoted via SetRaw to avoid
+// float64 precision loss for large integers (> 2^53). If value is not a canonical
+// JSON number it logs a warning and falls back to writing the raw string, so a
+// misconfigured egg that declares a numeric type for a non-numeric value is
+// diagnosable (mirroring setBool).
+func (cfr *ConfigurationFileReplacement) setNumber(jsonStr, path, value string) (string, error) {
+	if !isJSONNumber(value) {
+		log.WithFields(log.Fields{"value": value, "path": path, "match": cfr.Match}).Warn("cannot parse replacement as number, falling back to string value")
+		return sjson.Set(jsonStr, path, value)
+	}
+	return sjson.SetRaw(jsonStr, path, value)
 }
 
 // Looks up a configuration value on the Daemon given a dot-notated syntax.
