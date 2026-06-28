@@ -173,12 +173,7 @@ func (cfr *ConfigurationFileReplacement) setValueWithSjson(jsonStr string, path 
 	switch {
 	case cfr.ReplaceWith.Type() == jsonparser.Boolean:
 		// Explicit boolean type declared in the egg definition.
-		v, err := strconv.ParseBool(value)
-		if err != nil {
-			log.WithFields(log.Fields{"value": value, "path": path, "match": cfr.Match}).Warn("cannot parse replacement as boolean, falling back to string value")
-			return sjson.Set(jsonStr, path, value)
-		}
-		setValue = v
+		return cfr.setBool(jsonStr, path, value)
 	case cfr.ReplaceWith.Type() == jsonparser.Number && isJSONNumber(value):
 		// Explicit numeric type declared in the egg definition. Write the literal
 		// as-is via SetRaw to avoid float64 precision loss for large integers (> 2^53).
@@ -190,12 +185,7 @@ func (cfr *ConfigurationFileReplacement) setValueWithSjson(jsonStr string, path 
 		existing := gjson.Get(jsonStr, path)
 		switch {
 		case existing.Type == gjson.True || existing.Type == gjson.False:
-			v, err := strconv.ParseBool(value)
-			if err != nil {
-				log.WithFields(log.Fields{"value": value, "path": path, "match": cfr.Match}).Warn("cannot parse replacement as boolean, falling back to string value")
-				return sjson.Set(jsonStr, path, value)
-			}
-			setValue = v
+			return cfr.setBool(jsonStr, path, value)
 		case existing.Type == gjson.Number && isJSONNumber(value):
 			// Write the numeric literal as-is via SetRaw to avoid float64 precision
 			// loss for large integers (> 2^53).
@@ -220,6 +210,18 @@ func (cfr *ConfigurationFileReplacement) setValueWithSjson(jsonStr string, path 
 	}
 
 	return sjson.Set(jsonStr, path, setValue)
+}
+
+// setBool parses value as a boolean and writes it to path unquoted. If value is
+// not a valid boolean it logs a warning and falls back to writing the raw string,
+// keeping the explicit-type and mirror-existing-type boolean paths in sync.
+func (cfr *ConfigurationFileReplacement) setBool(jsonStr, path, value string) (string, error) {
+	v, err := strconv.ParseBool(value)
+	if err != nil {
+		log.WithFields(log.Fields{"value": value, "path": path, "match": cfr.Match}).Warn("cannot parse replacement as boolean, falling back to string value")
+		return sjson.Set(jsonStr, path, value)
+	}
+	return sjson.Set(jsonStr, path, v)
 }
 
 // Looks up a configuration value on the Daemon given a dot-notated syntax.
