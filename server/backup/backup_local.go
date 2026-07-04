@@ -21,25 +21,24 @@ type LocalBackup struct {
 
 var _ BackupInterface = (*LocalBackup)(nil)
 
-func NewLocal(client remote.Client, uuid string, suuid string, ignore string) *LocalBackup {
+func NewLocal(client remote.Client, uuid string, ignore string) *LocalBackup {
 	return &LocalBackup{
 		Backup{
-			client:     client,
-			Uuid:       uuid,
-			ServerUuid: suuid,
-			Ignore:     ignore,
-			adapter:    LocalBackupAdapter,
+			client:  client,
+			Uuid:    uuid,
+			Ignore:  ignore,
+			adapter: LocalBackupAdapter,
 		},
 	}
 }
 
 // LocateLocal finds the backup for a server and returns the local path. This
 // will obviously only work if the backup was created as a local backup.
-func LocateLocal(client remote.Client, uuid string, suuid string) (*LocalBackup, os.FileInfo, error) {
-	b := NewLocal(client, uuid, suuid, "")
+func LocateLocal(client remote.Client, uuid string) (*LocalBackup, os.FileInfo, error) {
+	b := NewLocal(client, uuid, "")
 	if err := b.validateIdentifier(); err != nil {
 		return nil, nil, err
-	}	
+	}
 	st, err := os.Stat(b.Path())
 	if err != nil {
 		return nil, nil, err
