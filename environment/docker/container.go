@@ -390,7 +390,7 @@ func (e *Environment) ensureImageExists(image string) error {
 	defer cancel()
 
 	// Get a registry auth configuration from the config.
-	registry, registryAuth := config.Get().Docker.RegistryCredentialsForImage(img)
+	registry, registryAuth := config.Get().Docker.RegistryCredentialsForImage(image)
 	if registryAuth != nil {
 		log.WithField("registry", registry).Debug("using authentication for registry")
 	}
