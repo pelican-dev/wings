@@ -83,6 +83,10 @@ func (c backupTestRemoteClient) SendActivityLogs(context.Context, []models.Activ
 	return nil
 }
 
+func (c backupTestRemoteClient) PushServerStateChange(context.Context, string, ServerStateChange) error {
+	return nil
+}
+
 type backupTestEnvironment struct{}
 
 func (backupTestEnvironment) Type() string { return "test" }
