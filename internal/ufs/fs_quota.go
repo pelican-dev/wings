@@ -98,14 +98,15 @@ func (fs *Quota) CanFit(size int64) bool {
 		return true
 	}
 
-	// If the current usage + the requested size are under the limit of the
-	// filesystem, allow it.
-	if usage+size <= limit {
+	if size <= 0 {
 		return true
 	}
 
-	// Welp, the size would exceed the limit of the filesystem, deny it.
-	return false
+	if usage >= limit {
+		return false
+	}
+
+	return size <= limit-usage
 }
 
 // Remove removes the named file or (empty) directory.

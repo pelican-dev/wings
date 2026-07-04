@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -113,7 +114,7 @@ func TestFilesystem_Openfile(t *testing.T) {
 
 func TestFilesystem_Writefile(t *testing.T) {
 	g := Goblin(t)
-	fs, _ := NewFs()
+	fs, rfs := NewFs()
 
 	g.Describe("Open and WriteFile", func() {
 		buf := &bytes.Buffer{}
@@ -181,6 +182,19 @@ func TestFilesystem_Writefile(t *testing.T) {
 			g.Assert(IsErrorCode(err, ErrCodeDiskSpace)).IsTrue()
 		})
 
+		g.It("cannot write a file whose claimed size overflows the quota check", func() {
+			fs.SetDiskLimit(1024)
+			fs.unixFS.SetUsage(1)
+
+			r := bytes.NewReader([]byte("small body"))
+			err := fs.Write("overflow.txt", r, math.MaxInt64, 0o644)
+			g.Assert(err).IsNotNil()
+			g.Assert(IsErrorCode(err, ErrCodeDiskSpace)).IsTrue()
+
+			_, err = rfs.StatServerFile("overflow.txt")
+			g.Assert(errors.Is(err, os.ErrNotExist)).IsTrue("err is not os.ErrNotExist")
+		})
+		
 		g.It("truncates the file when writing new contents", func() {
 			r := bytes.NewReader([]byte("original data"))
 			err := fs.Write("test.txt", r, r.Size(), 0o644)
