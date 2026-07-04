@@ -96,7 +96,19 @@ func (fs *Filesystem) UnixFS() *ufs.UnixFS {
 // already. If  it is present, the file is opened using the defaults which will truncate
 // the contents. The opened file is then returned to the caller.
 func (fs *Filesystem) Touch(p string, flag int) (ufs.File, error) {
-	return fs.unixFS.Touch(p, flag, 0o644)
+	var currentSize int64
+	st, err := fs.unixFS.Stat(p)
+	if err != nil && !errors.Is(err, ufs.ErrNotExist) {
+		return nil, err
+	} else if err == nil && !st.IsDir() {
+		currentSize = st.Size()
+	}
+
+	file, err := fs.unixFS.Touch(p, flag, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	return newQuotaFile(fs, file, currentSize), nil
 }
 
 // Writefile writes a file to the system. If the file does not already exist one

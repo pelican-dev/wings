@@ -2,7 +2,7 @@ package filesystem
 
 import (
 	"golang.org/x/sys/unix"
-	"slices"	
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -165,9 +165,9 @@ func (fs *Filesystem) DirectorySize(root string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	
+
 	var hardLinks []uint64
-	
+
 	var size atomic.Int64
 	err = fs.unixFS.WalkDirat(dirfd, name, func(dirfd int, name, _ string, d ufs.DirEntry, err error) error {
 		if err != nil {
@@ -194,7 +194,7 @@ func (fs *Filesystem) DirectorySize(root string) (int64, error) {
 				hardLinks = append(hardLinks, sysFileInfo.Ino)
 			}
 		}
-		
+
 		size.Add(info.Size())
 		return nil
 	})
@@ -206,6 +206,32 @@ func (fs *Filesystem) HasSpaceFor(size int64) error {
 		return newFilesystemError(ErrCodeDiskSpace, nil)
 	}
 	return nil
+}
+
+func (fs *Filesystem) reserveDisk(size int64) error {
+	if size <= 0 {
+		return nil
+	}
+
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	if err := fs.HasSpaceFor(size); err != nil {
+		return err
+	}
+	fs.unixFS.Add(size)
+	return nil
+}
+
+func (fs *Filesystem) adjustDisk(size int64) int64 {
+	if size == 0 {
+		return fs.CachedUsage()
+	}
+
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+
+	return fs.unixFS.Add(size)
 }
 
 // Updates the disk usage for the Filesystem instance.
