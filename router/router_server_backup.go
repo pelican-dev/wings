@@ -56,9 +56,9 @@ func postServerBackup(c *gin.Context) {
 	var adapter backup.BackupInterface
 	switch data.Adapter {
 	case backup.LocalBackupAdapter:
-		adapter = backup.NewLocal(client, backupUuid, s.ID(), data.Ignore)
+		adapter = backup.NewLocal(client, backupUuid, data.Ignore)
 	case backup.S3BackupAdapter:
-		adapter = backup.NewS3(client, backupUuid, s.ID(), data.Ignore)
+		adapter = backup.NewS3(client, backupUuid, data.Ignore)
 	default:
 		middleware.CaptureAndAbort(c, errors.New("router/backups: provided adapter is not valid: "+string(data.Adapter)))
 		return
@@ -202,7 +202,7 @@ func postServerRestoreBackup(c *gin.Context) {
 
 	go func(s *server.Server, uuid string, logger *log.Entry) {
 		logger.Info("starting restoration process for server backup using S3 driver")
-		if err := s.RestoreBackup(backup.NewS3(client, uuid, s.ID(), ""), res.Body); err != nil {
+		if err := s.RestoreBackup(backup.NewS3(client, uuid, ""), res.Body); err != nil {
 			logger.WithField("error", errors.WithStack(err)).Error("failed to restore remote S3 backup to server")
 		}
 		s.Events().Publish(server.DaemonMessageEvent, "Completed server restoration from S3 backup.")
