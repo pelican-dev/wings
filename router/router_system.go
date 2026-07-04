@@ -287,3 +287,10 @@ func postDeauthorizeUser(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
+
+// getHealthcheck returns a simple OK response to indicate the service is alive.
+func getHealthcheck(c *gin.Context) {
+	c.JSON(200, gin.H{
+		"status": "ok",
+	})
+}

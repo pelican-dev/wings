@@ -2,6 +2,7 @@ package router
 
 import (
 	"regexp"
+	"time"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
@@ -43,6 +44,9 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 
 		return ""
 	}))
+
+	// Healthcheck endpoint, rate limited to 5 requests per minute per client IP to prevent abuse.
+	router.GET("/health", middleware.RateLimit(5, time.Minute), getHealthcheck)
 
 	// These routes use signed URLs to validate access to the resource being requested.
 	router.GET("/download/backup", getDownloadBackup)
