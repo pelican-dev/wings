@@ -83,7 +83,8 @@ func (c backupTestRemoteClient) SendActivityLogs(context.Context, []models.Activ
 	return nil
 }
 
-func (c backupTestRemoteClient) PushServerStateChange(context.Context, string, ServerStateChange) error {
+
+func (c backupTestRemoteClient) PushServerStateChange(context.Context, string, remote.ServerStateChange) error {
 	return nil
 }
 
