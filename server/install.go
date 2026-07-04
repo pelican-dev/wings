@@ -170,6 +170,7 @@ func (s *Server) IsRestoring() bool {
 }
 
 func (s *Server) SetRestoring(state bool) {
+	s.restoring.Store(state)
 	if state {
 		s.Sftp().CancelAll()
 	}
@@ -177,7 +178,6 @@ func (s *Server) SetRestoring(state bool) {
 
 func (s *Server) IsInProtectedState() bool {
 	return s.IsInstalling() || s.IsTransferring() || s.IsRestoring()	
-	s.restoring.Store(state)
 }
 
 // RemoveContainer removes the installation container for the server.
