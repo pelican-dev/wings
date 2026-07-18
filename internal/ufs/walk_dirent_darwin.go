@@ -1,3 +1,5 @@
+//go:build darwin
+
 // SPDX-License-Identifier: BSD-2-Clause
 
 package ufs

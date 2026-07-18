@@ -1,3 +1,5 @@
+//go:build darwin
+
 package config
 
 // UseOpenat2 always returns false on Darwin as the openat2 syscall is

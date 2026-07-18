@@ -1,3 +1,5 @@
+//go:build linux
+
 package ufs
 
 import "golang.org/x/sys/unix"
