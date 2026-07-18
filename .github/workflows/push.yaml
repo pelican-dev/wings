@@ -28,6 +28,8 @@ jobs:
 
       - name: Code checkout
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: go mod download
         env:
@@ -90,6 +92,8 @@ jobs:
 
       - name: Code checkout
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: go mod download
         env:
