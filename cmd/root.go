@@ -138,6 +138,10 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 		log.WithField("error", err).Fatal("failed to configure system directories for pelican")
 		return
 	}
+	if err := config.ValidateWSLEnvironment(); err != nil {
+		log.WithField("error", err).Fatal("WSL environment validation failed")
+		return
+	}
 	if err := config.EnsurePelicanUser(); err != nil {
 		log.WithField("error", err).Fatal("failed to create pelican system user")
 		return

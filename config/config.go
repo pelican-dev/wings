@@ -252,6 +252,55 @@ type SystemConfiguration struct {
 	Transfers Transfers `yaml:"transfers"`
 
 	OpenatMode string `default:"auto" yaml:"openat_mode"`
+
+	// LimitsMode controls resource limit enforcement. "enforced" applies strict
+	// limits, "best_effort" applies limits where possible but does not guarantee
+	// enforcement (used automatically in WSL), "off" disables limits entirely.
+	LimitsMode string `default:"enforced" yaml:"limits_mode"`
+
+	// WSL holds Windows Subsystem for Linux node policy. These fields are only
+	// consulted when Wings detects it is running inside WSL2.
+	WSL WSLConfig `yaml:"wsl"`
+
+	// Storage holds data-root storage enforcement policy (primarily for WSL).
+	Storage StorageConfig `yaml:"storage"`
+
+	// Ports constrains the TCP/UDP port ranges Wings will allocate on WSL nodes.
+	Ports PortsConfig `yaml:"ports"`
+}
+
+// WSLConfig controls how Wings behaves when running inside WSL2. See windows.md.
+type WSLConfig struct {
+	// NetworkingMode is the expected WSL networking mode: auto, mirrored, or nat.
+	// "auto" resolves the mode from the live environment (.wslconfig).
+	NetworkingMode string `default:"auto" yaml:"networking_mode"`
+
+	// RequireMirrored refuses to start a WSL node that is not in mirrored mode.
+	RequireMirrored bool `default:"true" yaml:"require_mirrored"`
+
+	// AllowUnsupportedNAT permits a WSL node to start in NAT mode. The node is
+	// marked unsupported and UDP allocations are blocked.
+	AllowUnsupportedNAT bool `default:"false" yaml:"allow_unsupported_nat"`
+}
+
+// StorageConfig controls data-root storage enforcement.
+type StorageConfig struct {
+	// EnforceWSLExt4 refuses to start when the data root is on a Windows-mounted
+	// filesystem (drvfs/9p) instead of the WSL ext4 filesystem.
+	EnforceWSLExt4 bool `default:"true" yaml:"enforce_wsl_ext4"`
+
+	// AllowWindowsMountOverride bypasses the ext4 requirement above.
+	AllowWindowsMountOverride bool `default:"false" yaml:"allow_windows_mount_override"`
+}
+
+// PortsConfig constrains the port ranges Wings will allocate. Enforcement is
+// applied to WSL nodes so firewall rules stay predictable.
+type PortsConfig struct {
+	TCPRangeStart     int `default:"20000" yaml:"tcp_range_start"`
+	TCPRangeEnd       int `default:"25000" yaml:"tcp_range_end"`
+	UDPRangeStart     int `default:"20000" yaml:"udp_range_start"`
+	UDPRangeEnd       int `default:"25000" yaml:"udp_range_end"`
+	MaxPortsPerServer int `default:"32" yaml:"max_ports_per_server"`
 }
 
 type CrashDetection struct {

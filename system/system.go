@@ -7,7 +7,7 @@ import (
 	"net"
 	"runtime"
 	"strings"
-	
+
 	"golang.org/x/sys/unix"
 
 	"github.com/docker/docker/api/types/filters"
@@ -61,12 +61,24 @@ type DockerRunc struct {
 }
 
 type System struct {
-	Architecture  string `json:"architecture"`
-	CPUThreads    int    `json:"cpu_threads"`
-	MemoryBytes   int64  `json:"memory_bytes"`
-	KernelVersion string `json:"kernel_version"`
-	OS            string `json:"os"`
-	OSType        string `json:"os_type"`
+	Architecture  string   `json:"architecture"`
+	CPUThreads    int      `json:"cpu_threads"`
+	MemoryBytes   int64    `json:"memory_bytes"`
+	KernelVersion string   `json:"kernel_version"`
+	OS            string   `json:"os"`
+	OSType        string   `json:"os_type"`
+	Platform      string   `json:"platform"`
+	WSL           *WSLInfo `json:"wsl,omitempty"`
+}
+
+// WSLInfo contains metadata about the WSL environment when Wings is running
+// inside Windows Subsystem for Linux.
+type WSLInfo struct {
+	Networking   string `json:"networking"`
+	UDPInbound   bool   `json:"udp_inbound"`
+	LimitsMode   string `json:"limits_mode"`
+	Storage      string `json:"storage"`
+	SupportLevel string `json:"support_level"`
 }
 
 type IpAddresses struct {
@@ -140,6 +152,13 @@ func GetSystemInformation() (*Information, error) {
 		break
 	}
 
+	platform := runtime.GOOS
+	var wslInfo *WSLInfo
+	if IsWSL() {
+		platform = "windows_wsl"
+		wslInfo = wslFeatureInfo()
+	}
+
 	return &Information{
 		Version: Version,
 		Docker: DockerInformation{
@@ -169,6 +188,8 @@ func GetSystemInformation() (*Information, error) {
 			KernelVersion: k.String(),
 			OS:            os,
 			OSType:        runtime.GOOS,
+			Platform:      platform,
+			WSL:           wslInfo,
 		},
 	}, nil
 }

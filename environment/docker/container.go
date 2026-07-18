@@ -155,6 +155,12 @@ func (e *Environment) Create() error {
 
 	cfg := config.Get()
 	a := e.Configuration.Allocations()
+
+	// Enforce WSL node policy (UDP-in-NAT block, port ranges). No-op off WSL.
+	if err := a.ValidateWSL(); err != nil {
+		return err
+	}
+
 	evs := e.Configuration.EnvironmentVariables()
 
 	// If port is 0 then we have a server with no allocation and this should stay 127.0.0.1 and not the docker network interface ip.

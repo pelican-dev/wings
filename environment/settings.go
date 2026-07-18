@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"sync"
 
 	"github.com/apex/log"
 	"github.com/docker/docker/api/types/container"
@@ -106,16 +107,43 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
+var limitsModeWarnOnce sync.Once
+
+// warnLimitsMode logs, at most once per process, that resource limits are not
+// being strictly enforced on this node.
+func warnLimitsMode(mode string) {
+	limitsModeWarnOnce.Do(func() {
+		log.WithField("limits_mode", mode).Warn("resource limits are not strictly enforced on this node")
+	})
+}
+
 // AsContainerResources returns the available resources for a container in a format
-// that Docker understands.
+// that Docker understands. The System.LimitsMode setting governs how strictly the
+// limits are applied: "enforced" (default) applies everything, "best_effort" omits
+// knobs that some hosts reject (notably OOM-kill-disable on cgroup v2 / WSL2), and
+// "off" applies no host resource limits at all. See windows.md §6.
 func (l Limits) AsContainerResources() container.Resources {
+	mode := config.Get().System.LimitsMode
+
+	if mode == "off" {
+		warnLimitsMode(mode)
+		return container.Resources{}
+	}
+
 	pids := l.ProcessLimit()
 	resources := container.Resources{
 		Memory:            l.BoundedMemoryLimit(),
 		MemoryReservation: l.MemoryLimit * 1024 * 1024,
 		MemorySwap:        l.ConvertedSwap(),
-		OomKillDisable:    boolPtr(!l.OOMKiller),
 		PidsLimit:         &pids,
+	}
+
+	// OOM-kill-disable is rejected by Docker on cgroup v2 hosts (notably WSL2),
+	// so only request it under strict enforcement.
+	if mode == "best_effort" {
+		warnLimitsMode(mode)
+	} else {
+		resources.OomKillDisable = boolPtr(!l.OOMKiller)
 	}
 
 	// Only set the block IO weight when the host's cgroup hierarchy can honor it.
