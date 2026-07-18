@@ -681,11 +681,11 @@ func (fs *UnixFS) openat(dirfd int, name string, flag int, mode FileMode) (int, 
 	// If we are not using openat2, do additional path checking. This assumes
 	// that openat2 is using `RESOLVE_BENEATH` to avoid the same security
 	// issue.
-	var finalPath string
 	finalPath, err := fdPath(fd)
 	if err != nil {
 		if !errors.Is(err, ErrNotExist) {
-			return fd, fmt.Errorf("failed to evaluate symlink: %w", convertErrorType(err))
+			_ = unix.Close(fd)
+			return 0, fmt.Errorf("failed to evaluate symlink: %w", convertErrorType(err))
 		}
 
 		// The target of one of the symlinks (EvalSymlinks is recursive)
@@ -693,7 +693,8 @@ func (fs *UnixFS) openat(dirfd int, name string, flag int, mode FileMode) (int, 
 		// that for further validation instead.
 		var pErr *PathError
 		if !errors.As(err, &pErr) {
-			return fd, fmt.Errorf("failed to evaluate symlink: %w", convertErrorType(err))
+			_ = unix.Close(fd)
+			return 0, fmt.Errorf("failed to evaluate symlink: %w", convertErrorType(err))
 		}
 
 		// Update the final path to whatever directory or path didn't exist while
@@ -703,21 +704,27 @@ func (fs *UnixFS) openat(dirfd int, name string, flag int, mode FileMode) (int, 
 		err = convertErrorType(err)
 	}
 
-	// Check if the path is within our root.
+	// Check if the path is within our root. We always reach this point using
+	// openat (the openat2 path returns early above), so the op is always
+	// "openat".
 	if !fs.unsafeIsPathInsideOfBase(finalPath) {
-		op := "openat"
-		if fs.useOpenat2.Load() {
-			op = "openat2"
-		}
-		return fd, &PathError{
-			Op:   op,
+		_ = unix.Close(fd)
+		return 0, &PathError{
+			Op:   "openat",
 			Path: name,
 			Err:  ErrBadPathResolution,
 		}
 	}
 
-	// Return the file descriptor and any potential error.
-	return fd, err
+	// If path validation surfaced an error (e.g. a non-existent symlink
+	// target), close the descriptor so callers don't leak it.
+	if err != nil {
+		_ = unix.Close(fd)
+		return 0, err
+	}
+
+	// Return the validated file descriptor.
+	return fd, nil
 }
 
 // _openat is a wrapper around unix.Openat. This method should never be directly
