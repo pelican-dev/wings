@@ -4,14 +4,23 @@ import (
 	"context"
 	"io"
 	"math"
+	"strings"
+	"sync"
 	"time"
 
 	"emperror.dev/errors"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/goccy/go-json"
 
 	"github.com/pelican-dev/wings/environment"
 )
+
+var runtimeDetection struct {
+	sync.Mutex
+	detected bool
+	isPodman bool
+}
 
 // Uptime returns the current uptime of the container in milliseconds. If the
 // container is not currently running this will return 0.
@@ -51,6 +60,12 @@ func (e *Environment) pollResources(ctx context.Context) error {
 		e.log().WithField("error", err).Warn("failed to calculate container uptime")
 	}
 
+	isPodman, err := e.isPodman(ctx)
+	if err != nil {
+		e.log().WithField("error", err).Warn("failed to detect container runtime, using wall time for CPU calculation")
+		isPodman = true
+	}
+
 	dec := json.NewDecoder(stats.Body)
 	for {
 		select {
@@ -81,7 +96,7 @@ func (e *Environment) pollResources(ctx context.Context) error {
 				Uptime:      uptime,
 				Memory:      calculateDockerMemory(v.MemoryStats),
 				MemoryLimit: v.MemoryStats.Limit,
-				CpuAbsolute: calculateDockerAbsoluteCpu(v.PreCPUStats, v.CPUStats),
+				CpuAbsolute: calculateDockerAbsoluteCpu(v, isPodman),
 				Network:     environment.NetworkStats{},
 			}
 
@@ -118,28 +133,66 @@ func calculateDockerMemory(stats container.MemoryStats) uint64 {
 // Calculates the absolute CPU usage used by the server process on the system, not constrained
 // by the defined CPU limits on the container.
 //
-// @see https://github.com/docker/cli/blob/aa097cf1aa19099da70930460250797c8920b709/cli/command/container/stats_helpers.go#L166
-func calculateDockerAbsoluteCpu(pStats container.CPUStats, stats container.CPUStats) float64 {
-	// Calculate the change in CPU usage between the current and previous reading.
-	cpuDelta := float64(stats.CPUUsage.TotalUsage) - float64(pStats.CPUUsage.TotalUsage)
-
-	// Calculate the change for the entire system's CPU usage between current and previous reading.
-	systemDelta := float64(stats.SystemUsage) - float64(pStats.SystemUsage)
-
-	// Calculate the total number of CPU cores being used.
-	cpus := float64(stats.OnlineCPUs)
-	if cpus == 0.0 {
-		cpus = float64(len(stats.CPUUsage.PercpuUsage))
+// Podman's Docker-compatible API does not provide Docker-equivalent values for SystemUsage, so
+// its CPU usage must instead be compared to the elapsed time between samples.
+func calculateDockerAbsoluteCpu(stats container.StatsResponse, useWallTime bool) float64 {
+	current := stats.CPUStats.CPUUsage.TotalUsage
+	previous := stats.PreCPUStats.CPUUsage.TotalUsage
+	if current <= previous {
+		return 0
 	}
 
-	percent := 0.0
-	if systemDelta > 0.0 && cpuDelta > 0.0 {
-		percent = (cpuDelta / systemDelta) * 100.0
-
-		if cpus > 0 {
-			percent *= cpus
+	cpuDelta := float64(current - previous)
+	if useWallTime {
+		if stats.PreRead.IsZero() || !stats.Read.After(stats.PreRead) {
+			return 0
 		}
+
+		timeDelta := float64(stats.Read.Sub(stats.PreRead).Nanoseconds())
+		return math.Round((cpuDelta/timeDelta)*100*1000) / 1000
+	}
+
+	currentSystem := stats.CPUStats.SystemUsage
+	previousSystem := stats.PreCPUStats.SystemUsage
+	if currentSystem <= previousSystem {
+		return 0
+	}
+
+	cpus := float64(stats.CPUStats.OnlineCPUs)
+	if cpus == 0 {
+		cpus = float64(len(stats.CPUStats.CPUUsage.PercpuUsage))
+	}
+
+	percent := (cpuDelta / float64(currentSystem-previousSystem)) * 100
+	if cpus > 0 {
+		percent *= cpus
 	}
 
 	return math.Round(percent*1000) / 1000
+}
+
+func (e *Environment) isPodman(ctx context.Context) (bool, error) {
+	runtimeDetection.Lock()
+	defer runtimeDetection.Unlock()
+	if runtimeDetection.detected {
+		return runtimeDetection.isPodman, nil
+	}
+
+	version, err := e.client.ServerVersion(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	runtimeDetection.detected = true
+	runtimeDetection.isPodman = isPodmanVersion(version)
+	return runtimeDetection.isPodman, nil
+}
+
+func isPodmanVersion(version types.Version) bool {
+	for _, component := range version.Components {
+		if strings.EqualFold(component.Name, "Podman Engine") {
+			return true
+		}
+	}
+	return false
 }
