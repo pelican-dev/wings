@@ -216,10 +216,8 @@ func fetchLatestGitHubRelease() (string, error) {
 
 func determineBinaryName() string {
 	switch runtime.GOARCH {
-	case "amd64":
-		return "wings_linux_amd64"
-	case "arm64":
-		return "wings_linux_arm64"
+	case "amd64", "arm64":
+		return fmt.Sprintf("wings_%s_%s", runtime.GOOS, runtime.GOARCH)
 	default:
 		return ""
 	}

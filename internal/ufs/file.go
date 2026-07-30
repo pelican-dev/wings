@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText: Copyright (c) 2024 Matthew Penner
 
+//go:build unix
+
 package ufs
 
 import (
