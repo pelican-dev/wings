@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"runtime"
 	"strconv"
 
 	"github.com/apex/log"
@@ -145,6 +146,11 @@ func (l Limits) AsContainerResources() container.Resources {
 // container block IO weight. On cgroup v2 the io.weight knob must be present or
 // runc fails container creation; cgroup v1/hybrid always supports it.
 func blkioWeightSupported() bool {
+	// Only Linux has a cgroup hierarchy; on other platforms (e.g. macOS with
+	// Docker Desktop) setting the weight is rejected by the daemon.
+	if runtime.GOOS != "linux" {
+		return false
+	}
 	// cgroup v1/hybrid honors the weight via blkio.weight; only v2 needs probing.
 	if _, err := os.Stat("/sys/fs/cgroup/cgroup.controllers"); err != nil {
 		return true

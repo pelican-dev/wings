@@ -28,6 +28,8 @@ jobs:
 
       - name: Code checkout
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: go mod download
         env:
@@ -73,3 +75,41 @@ jobs:
         with:
           name: wings_linux_${{ matrix.goarch }}_debug
           path: dist/wings_debug
+
+  test-macos:
+    name: Test macOS
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ["1.25.11", "1.26.4"]
+
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Code checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: go mod download
+        env:
+          CGO_ENABLED: 0
+        run: |
+          go mod download
+
+      - name: Build
+        env:
+          CGO_ENABLED: 0
+          SRC_PATH: github.com/pelican-dev/wings
+        run: |
+          go build -v -trimpath -ldflags="-s -w -X ${SRC_PATH}/system.Version=dev-${GITHUB_SHA:0:7}" -o dist/wings ${SRC_PATH}
+
+      - name: go test -race
+        env:
+          CGO_ENABLED: 1
+        run: |
+          go test -race $(go list ./...)

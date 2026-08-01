@@ -1,4 +1,4 @@
-//go:build linux
+//go:build darwin
 
 package filesystem
 
@@ -14,16 +14,11 @@ import (
 // TODO: remove. Ctim is not actually ever been correct and doesn't actually
 // return the creation time.
 func (s *Stat) CTime() time.Time {
-	// FileInfos produced by ufs stat calls carry a *unix.Stat_t, while those
-	// produced by (*os.File).Stat (e.g. Filesystem.Stat) carry a
-	// *syscall.Stat_t; handle both.
 	if st, ok := s.Sys().(*unix.Stat_t); ok {
-		// Do not remove these "redundant" type-casts, they are required for 32-bit builds to work.
 		return time.Unix(int64(st.Ctim.Sec), int64(st.Ctim.Nsec))
 	}
 	if st, ok := s.Sys().(*syscall.Stat_t); ok {
-		// Do not remove these "redundant" type-casts, they are required for 32-bit builds to work.
-		return time.Unix(int64(st.Ctim.Sec), int64(st.Ctim.Nsec))
+		return time.Unix(int64(st.Ctimespec.Sec), int64(st.Ctimespec.Nsec))
 	}
 	return time.Time{}
 }
