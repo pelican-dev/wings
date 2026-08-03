@@ -263,7 +263,9 @@ out:
 				trnsfr.Log().WithField("path", installLogPath).Debug("install logs saved successfully")
 
 			case strings.HasPrefix(name, "backup_"):
-				backupName := strings.TrimPrefix(name, "backup_")
+				backupNameUnsafe := strings.TrimPrefix(name, "backup_")
+				// Strip all directory components
+				backupName := filepath.Base(backupNameUnsafe)
 				trnsfr.Log().WithField("backup", backupName).Debug("received backup file")
 
 				// Create backup directory if it doesn't exist

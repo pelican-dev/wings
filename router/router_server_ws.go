@@ -75,7 +75,7 @@ func getServerWebsocket(c *gin.Context) {
 		case <-ctx.Done():
 			handler.Logger().Debug("closing connection to server websocket")
 			if err := handler.Connection.Close(); err != nil {
-				handler.Logger().WithError(err).Error("failed to close websocket connection")
+				handler.Logger().WithError(err).Info("failed to close websocket connection")
 			}
 			break
 		}
