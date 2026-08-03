@@ -8,6 +8,7 @@ type BackupPayload struct {
 	jwt.Payload
 
 	ServerUuid string `json:"server_uuid"`
+	UserUuid   string `json:"user_uuid"`
 	BackupUuid string `json:"backup_uuid"`
 	UniqueId   string `json:"unique_id"`
 	Scoped
@@ -24,4 +25,10 @@ func (p *BackupPayload) GetPayload() *jwt.Payload {
 // validates all of the request.
 func (p *BackupPayload) IsUniqueRequest() bool {
 	return getTokenStore().IsValidToken(p.UniqueId)
+}
+
+// Denylisted returns true if this token was issued before the user's access to
+// the server was revoked.
+func (p *BackupPayload) Denylisted() bool {
+	return isDenylisted(&p.Payload, p.ServerUuid, p.UserUuid)
 }
