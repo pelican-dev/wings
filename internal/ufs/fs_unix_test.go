@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/pelican-dev/wings/internal/ufs"
 )
@@ -283,15 +284,56 @@ func TestUnixFS_Lchown(t *testing.T) {
 }
 
 func TestUnixFS_Chtimes(t *testing.T) {
-	t.Parallel()
-	fs, err := newTestUnixFS()
+	tmpDir := t.TempDir()
+	root := filepath.Join(tmpDir, "root")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fs, err := ufs.NewUnixFS(root, false)
 	if err != nil {
 		t.Fatal(err)
-		return
 	}
-	defer fs.Cleanup()
 
-	// TODO: implement
+	regular := filepath.Join(root, "regular")
+	if err := os.WriteFile(regular, []byte("regular"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	regularTime := time.Unix(1_700_100_000, 0)
+	if err := fs.Chtimes("regular", regularTime, regularTime); err != nil {
+		t.Fatal(err)
+	}
+	regularStat, err := os.Lstat(regular)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !regularStat.ModTime().Equal(regularTime) {
+		t.Fatalf("expected regular file mtime to be %s, got %s", regularTime, regularStat.ModTime())
+	}
+
+	target := filepath.Join(tmpDir, "target")
+	if err := os.WriteFile(target, []byte("target"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	original := time.Unix(1_700_000_000, 0)
+	if err := os.Chtimes(target, original, original); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(root, "link")); err != nil {
+		t.Fatal(err)
+	}
+
+	changed := original.Add(-24 * time.Hour)
+	if err := fs.Chtimes("link", changed, changed); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := os.Lstat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.ModTime().Equal(original) {
+		t.Fatalf("expected target mtime to remain %s, got %s", original, st.ModTime())
+	}
 }
 
 func TestUnixFS_Create(t *testing.T) {

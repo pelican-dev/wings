@@ -25,3 +25,9 @@ func (p *UploadPayload) GetPayload() *jwt.Payload {
 func (p *UploadPayload) IsUniqueRequest() bool {
 	return getTokenStore().IsValidToken(p.UniqueId)
 }
+
+// Denylisted returns true if this token was issued before the user's access to
+// the server was revoked.
+func (p *UploadPayload) Denylisted() bool {
+	return isDenylisted(&p.Payload, p.ServerUuid, p.UserUuid)
+}

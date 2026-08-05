@@ -21,22 +21,24 @@ type LocalBackup struct {
 
 var _ BackupInterface = (*LocalBackup)(nil)
 
-func NewLocal(client remote.Client, uuid string, suuid string, ignore string) *LocalBackup {
+func NewLocal(client remote.Client, uuid string, ignore string) *LocalBackup {
 	return &LocalBackup{
 		Backup{
-			client:     client,
-			Uuid:       uuid,
-			ServerUuid: suuid,
-			Ignore:     ignore,
-			adapter:    LocalBackupAdapter,
+			client:  client,
+			Uuid:    uuid,
+			Ignore:  ignore,
+			adapter: LocalBackupAdapter,
 		},
 	}
 }
 
 // LocateLocal finds the backup for a server and returns the local path. This
 // will obviously only work if the backup was created as a local backup.
-func LocateLocal(client remote.Client, uuid string, suuid string) (*LocalBackup, os.FileInfo, error) {
-	b := NewLocal(client, uuid, suuid, "")
+func LocateLocal(client remote.Client, uuid string) (*LocalBackup, os.FileInfo, error) {
+	b := NewLocal(client, uuid, "")
+	if err := b.validateIdentifier(); err != nil {
+		return nil, nil, err
+	}
 	st, err := os.Stat(b.Path())
 	if err != nil {
 		return nil, nil, err
@@ -51,6 +53,9 @@ func LocateLocal(client remote.Client, uuid string, suuid string) (*LocalBackup,
 
 // Remove removes a backup from the system.
 func (b *LocalBackup) Remove() error {
+	if err := b.validateIdentifier(); err != nil {
+		return err
+	}	
 	err := os.Remove(b.Path())
 	if err != nil {
 		return err
@@ -76,6 +81,9 @@ func (b *LocalBackup) WithLogContext(c map[string]interface{}) {
 // Generate generates a backup of the selected files and pushes it to the
 // defined location for this instance.
 func (b *LocalBackup) Generate(ctx context.Context, fsys *filesystem.Filesystem, ignore string) (*ArchiveDetails, error) {
+	if err := b.validateIdentifier(); err != nil {
+		return nil, err
+	}	
 	a := &filesystem.Archive{
 		Filesystem: fsys,
 		Ignore:     ignore,
@@ -103,6 +111,9 @@ func (b *LocalBackup) Generate(ctx context.Context, fsys *filesystem.Filesystem,
 // Restore will walk over the archive and call the callback function for each
 // file encountered.
 func (b *LocalBackup) Restore(ctx context.Context, _ io.Reader, callback RestoreCallback) error {
+	if err := b.validateIdentifier(); err != nil {
+		return err
+	}	
 	f, err := os.Open(b.Path())
 	if err != nil {
 		return err

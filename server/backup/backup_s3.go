@@ -26,20 +26,22 @@ type S3Backup struct {
 
 var _ BackupInterface = (*S3Backup)(nil)
 
-func NewS3(client remote.Client, uuid string, suuid string, ignore string) *S3Backup {
+func NewS3(client remote.Client, uuid string, ignore string) *S3Backup {
 	return &S3Backup{
 		Backup{
-			client:     client,
-			Uuid:       uuid,
-			ServerUuid: suuid,
-			Ignore:     ignore,
-			adapter:    S3BackupAdapter,
+			client:  client,
+			Uuid:    uuid,
+			Ignore:  ignore,
+			adapter: S3BackupAdapter,
 		},
 	}
 }
 
 // Remove removes a backup from the system.
 func (s *S3Backup) Remove() error {
+	if err := s.validateIdentifier(); err != nil {
+		return err
+	}	
 	return os.Remove(s.Path())
 }
 
@@ -51,6 +53,9 @@ func (s *S3Backup) WithLogContext(c map[string]interface{}) {
 // Generate creates a new backup on the disk, moves it into the S3 bucket via
 // the provided presigned URL, and then deletes the backup from the disk.
 func (s *S3Backup) Generate(ctx context.Context, fsys *filesystem.Filesystem, ignore string) (*ArchiveDetails, error) {
+	if err := s.validateIdentifier(); err != nil {
+		return nil, err
+	}
 	defer s.Remove()
 
 	a := &filesystem.Archive{
@@ -64,7 +69,7 @@ func (s *S3Backup) Generate(ctx context.Context, fsys *filesystem.Filesystem, ig
 		if err != nil {
 			return nil, err
 		}
-	}
+	}	
 	if err := a.Create(ctx, s.Path()); err != nil {
 		return nil, err
 	}
