@@ -290,6 +290,17 @@ func (a *Archive) addToArchive(dirfd int, name, relative string, entry ufs.DirEn
 		}
 	}
 
+	var target string
+	if s.Mode()&fs.ModeSymlink != 0 {
+		target, err = a.Filesystem.unixFS.Readlinkat(dirfd, name)
+		if err != nil {
+			if !errors.Is(err, ufs.ErrNotExist) {
+				log.WithField("name", name).WithField("readlink_err", err.Error()).Warn("failed reading symlink for target path; skipping...")
+			}
+			return nil
+		}
+	}
+
 	// Get the tar FileInfoHeader in order to add the file to the archive.
 	header, err := tar.FileInfoHeader(s, filepath.ToSlash(target))
 	if err != nil {
