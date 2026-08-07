@@ -123,14 +123,14 @@ func (b *Backup) Path() string {
 	if err != nil {
 		identifier = path.Base(b.Identifier())
 	}
-	return path.Join(config.Get().System.BackupDirectory, identifier+".tar.gz")
+	return path.Join(config.Get().System.BackupDirectory, b.ServerId(), identifier+".tar.gz")
 }
 
 // Size returns the size of the generated backup.
 func (b *Backup) Size() (int64, error) {
 	if err := b.validateIdentifier(); err != nil {
 		return 0, err
-	}	
+	}
 	st, err := os.Stat(b.Path())
 	if err != nil {
 		return 0, err
@@ -143,7 +143,7 @@ func (b *Backup) Size() (int64, error) {
 func (b *Backup) Checksum() ([]byte, error) {
 	if err := b.validateIdentifier(); err != nil {
 		return nil, err
-	}	
+	}
 	h := sha1.New()
 
 	f, err := os.Open(b.Path())
