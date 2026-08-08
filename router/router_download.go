@@ -43,7 +43,7 @@ func getDownloadBackup(c *gin.Context) {
 	}
 
 	// Locate the backup on the local disk.
-	b, st, err := backup.LocateLocal(client, token.BackupUuid)
+	b, st, err := backup.LocateLocal(client, token.BackupUuid, token.ServerUuid)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
