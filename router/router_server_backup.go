@@ -56,9 +56,9 @@ func postServerBackup(c *gin.Context) {
 	var adapter backup.BackupInterface
 	switch data.Adapter {
 	case backup.LocalBackupAdapter:
-		adapter = backup.NewLocal(client, backupUuid, data.Ignore)
+		adapter = backup.NewLocal(client, backupUuid, s.ID(), data.Ignore)
 	case backup.S3BackupAdapter:
-		adapter = backup.NewS3(client, backupUuid, data.Ignore)
+		adapter = backup.NewS3(client, backupUuid, s.ID(), data.Ignore)
 	default:
 		middleware.CaptureAndAbort(c, errors.New("router/backups: provided adapter is not valid: "+string(data.Adapter)))
 		return
@@ -137,11 +137,10 @@ func postServerRestoreBackup(c *gin.Context) {
 		}
 	}
 
-
 	// Now that we've cleaned up the data directory if necessary, grab the backup file
 	// and attempt to restore it into the server directory.
 	if data.Adapter == backup.LocalBackupAdapter {
-		b, _, err := backup.LocateLocal(client, backupUuid)
+		b, _, err := backup.LocateLocal(client, backupUuid, s.ID())
 		if err != nil {
 			middleware.CaptureAndAbort(c, err)
 			return
@@ -182,7 +181,7 @@ func postServerRestoreBackup(c *gin.Context) {
 		if stderrors.As(err, &downloadErr) {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": downloadErr.Error()})
 			return
-		}		
+		}
 		middleware.CaptureAndAbort(c, err)
 		return
 	}
@@ -190,7 +189,7 @@ func postServerRestoreBackup(c *gin.Context) {
 		_ = res.Body.Close()
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "The provided backup link returned an invalid response status: " + res.Status})
 		return
-	}	
+	}
 	// Don't allow content types that we know are going to give us problems.
 	if !isSupportedBackupRestoreContentType(res.Header.Get("Content-Type")) {
 		_ = res.Body.Close()
@@ -202,7 +201,7 @@ func postServerRestoreBackup(c *gin.Context) {
 
 	go func(s *server.Server, uuid string, logger *log.Entry) {
 		logger.Info("starting restoration process for server backup using S3 driver")
-		if err := s.RestoreBackup(backup.NewS3(client, uuid, ""), res.Body); err != nil {
+		if err := s.RestoreBackup(backup.NewS3(client, uuid, s.ID(), ""), res.Body); err != nil {
 			logger.WithField("error", errors.WithStack(err)).Error("failed to restore remote S3 backup to server")
 		}
 		s.Events().Publish(server.DaemonMessageEvent, "Completed server restoration from S3 backup.")
@@ -224,7 +223,7 @@ func deleteServerBackup(c *gin.Context) {
 	if !ok {
 		return
 	}
-	b, _, err := backup.LocateLocal(middleware.ExtractApiClient(c), backupUuid)
+	b, _, err := backup.LocateLocal(middleware.ExtractApiClient(c), backupUuid, middleware.ExtractServer(c).ID())
 	if err != nil {
 		// Just return from the function at this point if the backup was not located.
 		if errors.Is(err, os.ErrNotExist) {
