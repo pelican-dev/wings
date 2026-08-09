@@ -73,7 +73,7 @@ func TestBackupRestoreDoesNotSkipSymlinks(t *testing.T) {
 	)
 
 	t.Run("local", func(t *testing.T) {
-		b := NewLocal(nil, "11111111-1111-1111-1111-111111111111", "")
+		b := NewLocal(nil, "11111111-1111-1111-1111-111111111111", "ce6ee345-6729-4aed-8fed-c866c535a69d", "")
 		if err := os.MkdirAll(filepath.Dir(b.Path()), 0o700); err != nil {
 			t.Fatal(err)
 		}
@@ -84,7 +84,7 @@ func TestBackupRestoreDoesNotSkipSymlinks(t *testing.T) {
 	})
 
 	t.Run("s3", func(t *testing.T) {
-		b := NewS3(nil, "22222222-2222-2222-2222-222222222222", "")
+		b := NewS3(nil, "22222222-2222-2222-2222-222222222222", "ce6ee345-6729-4aed-8fed-c866c535a69d", "")
 		assertRestoreHandlesSymlinks(t, b.Restore, bytes.NewReader(archiveData))
 	})
 }
