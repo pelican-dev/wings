@@ -147,6 +147,9 @@ func (s *S3Backup) generateRemoteRequest(ctx context.Context, rc *os.File) ([]re
 	}
 	
 	uploader := newS3FileUploader(concurrency)
+	// Close all connections when the function completes
+	defer uploader.client.CloseIdleConnections()
+
 	parts := make([]remote.BackupPart, len(urls.Parts))
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -219,8 +222,8 @@ func newS3FileUploader(concurrency int) *s3FileUploader {
 //
 // The elapsed time tracked by the backoff includes the time spent inside the
 // operation itself, and a single part upload easily runs for several minutes.
-// Bounding on elapsed time would therefore stop the retries before the first
-// one ever happened, so the number of attempts is bounded instead and the
+// Bounding on elapsed time would therefore stop the retries before the second
+// attempt ever happened, so the number of attempts is bounded instead and the
 // context carries the actual deadline.
 func (fu *s3FileUploader) backoff(ctx context.Context) backoff.BackOffContext {
 	b := backoff.NewExponentialBackOff()
