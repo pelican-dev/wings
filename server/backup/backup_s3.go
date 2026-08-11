@@ -235,7 +235,7 @@ func (fu *s3FileUploader) uploadPart(ctx context.Context, part string, section *
 
 		// Build the request inside the retry: a request body can only be
 		// consumed once, so it cannot be reused across attempts.
-		r, err := http.NewRequestWithContext(ctx, http.MethodPut, part, Reader{Reader: section})
+		r, err := http.NewRequestWithContext(ctx, http.MethodPut, part, section)
 		if err != nil {
 			return backoff.Permanent(errors.Wrap(err, "backup: could not create request for S3"))
 		}
@@ -279,14 +279,4 @@ func (fu *s3FileUploader) uploadPart(ctx context.Context, part string, section *
 		return "", err
 	}
 	return etag, nil
-}
-
-// Reader provides a wrapper around an existing io.Reader
-// but implements io.Closer in order to satisfy an io.ReadCloser.
-type Reader struct {
-	io.Reader
-}
-
-func (Reader) Close() error {
-	return nil
 }
