@@ -192,9 +192,7 @@ func (s *S3Backup) generateRemoteRequest(ctx context.Context, rc *os.File) ([]re
 }
 
 type s3FileUploader struct {
-	io.ReadCloser
-	client        *http.Client
-	uploadedParts []remote.BackupPart
+	client *http.Client
 }
 
 // newS3FileUploader returns a new file uploader instance.
