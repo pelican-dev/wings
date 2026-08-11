@@ -208,10 +208,16 @@ func newS3FileUploader() *s3FileUploader {
 
 // backoff returns a new exponential backoff implementation using a context that
 // will also stop the backoff if it is canceled.
+//
+// The elapsed time tracked by the backoff includes the time spent inside the
+// operation itself, and a single part upload easily runs for several minutes.
+// Bounding on elapsed time would therefore stop the retries before the first
+// one ever happened, so the number of attempts is bounded instead and the
+// context carries the actual deadline.
 func (fu *s3FileUploader) backoff(ctx context.Context) backoff.BackOffContext {
 	b := backoff.NewExponentialBackOff()
 	b.Multiplier = 2
-	b.MaxElapsedTime = time.Minute
+	b.MaxElapsedTime = 0
 
 	return backoff.WithContext(backoff.WithMaxRetries(b, 5), ctx)
 }
@@ -258,7 +264,11 @@ func (fu *s3FileUploader) uploadPart(ctx context.Context, part string, section *
 			// Only attempt a backoff retry if this error is because of a 5xx error from
 			// the S3 endpoint. Any 4xx error should be treated as an error that a retry
 			// would not fix.
-			if res.StatusCode >= http.StatusInternalServerError {
+			//
+			// 429 is the exception: it signals rate limiting rather than a client
+			// error, and S3-compatible endpoints emit it when parts are uploaded
+			// concurrently. Backing off and retrying is the correct response.
+			if res.StatusCode >= http.StatusInternalServerError || res.StatusCode == http.StatusTooManyRequests {
 				return err
 			}
 			return backoff.Permanent(err)
