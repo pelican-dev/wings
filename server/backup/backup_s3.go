@@ -139,17 +139,17 @@ func (s *S3Backup) generateRemoteRequest(ctx context.Context, rc *os.File) ([]re
 	s.log().Debug("got S3 upload urls from the Panel")
 	s.log().WithField("parts", len(urls.Parts)).Info("attempting to upload backup to s3 endpoint...")
 
-	uploader := newS3FileUploader()
-	parts := make([]remote.BackupPart, len(urls.Parts))
-
-	g, ctx := errgroup.WithContext(ctx)
-
 	concurrency := urls.MaxConcurrentUploads
 
 	// Always allow at least 1 upload at time
 	if concurrency <= 0 {
 		concurrency = 1
 	}
+	
+	uploader := newS3FileUploader(concurrency)
+	parts := make([]remote.BackupPart, len(urls.Parts))
+
+	g, ctx := errgroup.WithContext(ctx)
 	g.SetLimit(concurrency)
 
 	for i, part := range urls.Parts {
@@ -196,13 +196,21 @@ type s3FileUploader struct {
 }
 
 // newS3FileUploader returns a new file uploader instance.
-func newS3FileUploader() *s3FileUploader {
+func newS3FileUploader(concurrency int) *s3FileUploader {
+    t := http.DefaultTransport.(*http.Transport).Clone()
+	// DefaultTransport keeps only 2 idle connections per host, so most of the
+	// concurrent parts would pay for a fresh TCP + TLS handshake.
+	t.MaxIdleConnsPerHost = concurrency
+	
 	return &s3FileUploader{
 		// We purposefully use a super high timeout on this request since we need to upload
 		// a 5GB file. This assumes at worst a 10Mbps connection for uploading. While technically
 		// you could go slower we're targeting mostly hosted servers that should have 100Mbps
 		// connections anyways.
-		client: &http.Client{Timeout: time.Hour * 2},
+		client: &http.Client{
+			Timeout: time.Hour * 2,
+			Transport: t,
+		},
 	}
 }
 
