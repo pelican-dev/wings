@@ -144,7 +144,13 @@ func (s *S3Backup) generateRemoteRequest(ctx context.Context, rc *os.File) ([]re
 
 	g, ctx := errgroup.WithContext(ctx)
 
-	g.SetLimit(urls.MaxConcurrentUploads)
+	concurrency := urls.MaxConcurrentUploads
+
+	// Always allow at least 1 upload at time
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+	g.SetLimit(concurrency)
 
 	for i, part := range urls.Parts {
 		// Get the size for the current part.
