@@ -257,6 +257,9 @@ func (fu *s3FileUploader) uploadPart(ctx context.Context, part string, section *
 			// the URL due to DNS issues we want to keep re-trying.
 			return errors.Wrap(err, "backup: S3 HTTP request failed")
 		}
+		// Drain the body so the connection can go back to the idle pool. On an
+        // error S3 returns XML that would otherwise leave the connection unusable.
+        _, _ = io.Copy(io.Discard, res.Body)
 		_ = res.Body.Close()
 
 		if res.StatusCode != http.StatusOK {
