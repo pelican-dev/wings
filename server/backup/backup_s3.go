@@ -170,7 +170,7 @@ func (s *S3Backup) generateRemoteRequest(ctx context.Context, rc *os.File) ([]re
 			etag, err := uploader.uploadPart(ctx, part, section, partSize)
 			if err != nil {
 				s.log().WithField("part_id", i+1).WithError(err).Warn("failed to upload part")
-				return fmt.Errorf("part %d: %w", i+1, err)
+				return errors.WrapIff(err, "backup: failed to upload part %d", i+1)
 			}
 
 			parts[i] = remote.BackupPart{
@@ -215,7 +215,7 @@ func (fu *s3FileUploader) backoff(ctx context.Context) backoff.BackOffContext {
 	b.Multiplier = 2
 	b.MaxElapsedTime = time.Minute
 
-	return backoff.WithContext(b, ctx)
+	return backoff.WithContext(backoff.WithMaxRetries(b, 5), ctx)
 }
 
 // uploadPart attempts to upload a given S3 file part to the S3 system. If a
