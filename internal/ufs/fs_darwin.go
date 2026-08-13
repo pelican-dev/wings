@@ -59,5 +59,5 @@ func (fs *UnixFS) Chtimesat(dirfd int, name string, atime, mtime time.Time) erro
 		unix.NsecToTimespec(atime.UnixNano()),
 		unix.NsecToTimespec(mtime.UnixNano()),
 	}
-	return ensurePathError(unix.UtimesNanoAt(dirfd, name, utimes[0:], 0), "chtimes", name)
+	return ensurePathError(unix.UtimesNanoAt(dirfd, name, utimes[0:], AT_SYMLINK_NOFOLLOW), "chtimes", name)
 }
