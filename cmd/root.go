@@ -115,6 +115,7 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 		printLogo()
 	}
 	log.Debug("running in debug mode")
+	log.WithField("path", filepath.Join(config.Get().System.LogDirectory, "wings.log")).Info("writing log files to disk")
 	log.WithField("config_file", configPath).Info("loading configuration from file")
 
 	if isDockerSnap() {
@@ -468,29 +469,145 @@ func initLogging() {
 	} else if config.Get().Quiet {
 		log.SetLevel(log.WarnLevel)
 	}
-	log.SetHandler(multi.New(cli.Default, cli.New(w.File, false)))
+	log.SetHandler(multi.New(cli.Default, cli.New(w, false)))
 	log.WithField("path", p).Info("writing log files to disk")
 }
 
-// Prints the wings logo, nothing special here!
+// bannerColor is how much color stdout can render for the startup banner.
+type bannerColor int
+
+const (
+	bannerPlain bannerColor = iota // not a TTY: emit no escape codes at all
+	banner256                      // TTY without truecolor: 256-color codes
+	bannerTrue                     // TTY with truecolor: 24-bit color
+)
+
+// detectBannerColor picks the richest color mode stdout supports: plain when
+// output is not a terminal, truecolor when COLORTERM advertises it, otherwise
+// 256-color.
+func detectBannerColor() bannerColor {
+	fi, err := os.Stdout.Stat()
+	if err != nil || fi.Mode()&os.ModeCharDevice == 0 {
+		return bannerPlain
+	}
+	switch os.Getenv("COLORTERM") {
+	case "truecolor", "24bit":
+		return bannerTrue
+	}
+	return banner256
+}
+
+// hue is a single semantic banner color: a 24-bit value plus a 256-color
+// fallback, resolved to an SGR foreground escape for the active color mode.
+type hue struct {
+	r, g, b, c256 int
+}
+
+func (h hue) fg(m bannerColor) string {
+	switch m {
+	case bannerTrue:
+		return fmt.Sprintf("\x1b[38;2;%d;%d;%dm", h.r, h.g, h.b)
+	case banner256:
+		return fmt.Sprintf("\x1b[38;5;%dm", h.c256)
+	default:
+		return ""
+	}
+}
+
+// ANSI Shadow "PELICAN" wordmark, six rows painted top→bottom cyan→blue.
+var pelicanRows = [6]string{
+	`██████╗ ███████╗██╗     ██╗ ██████╗ █████╗ ███╗   ██╗`,
+	`██╔══██╗██╔════╝██║     ██║██╔════╝██╔══██╗████╗  ██║`,
+	`██████╔╝█████╗  ██║     ██║██║     ███████║██╔██╗ ██║`,
+	`██╔═══╝ ██╔══╝  ██║     ██║██║     ██╔══██║██║╚██╗██║`,
+	`██║     ███████╗███████╗██║╚██████╗██║  ██║██║ ╚████║`,
+	`╚═╝     ╚══════╝╚══════╝╚═╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝`,
+}
+
+var pelicanRowHues = [6]hue{
+	{103, 232, 249, 123}, // #67E8F9
+	{56, 189, 248, 117},  // #38BDF8
+	{14, 165, 233, 39},   // #0EA5E9
+	{59, 130, 246, 33},   // #3B82F6
+	{37, 99, 235, 27},    // #2563EB
+	{30, 64, 175, 25},    // #1E40AF
+}
+
+var (
+	hueLightCyan = hue{103, 232, 249, 123} // #67E8F9 — W I N G S letters
+	hueTeal      = hue{22, 78, 99, 23}      // #164E63 — rule end caps
+	hueCyan      = hue{34, 211, 238, 51}    // #22D3EE — ▸ accents / URLs
+	hueDim       = hue{107, 114, 128, 243}  // #6B7280 — version / descriptions
+	hueGray      = hue{156, 163, 175, 247}  // #9CA3AF — tagline
+	hueWhite     = hue{244, 244, 245, 255}  // #F4F4F5 — link labels
+	hueYellow    = hue{250, 204, 21, 226}   // #FACC15 — star CTA
+)
+
+// printLogo renders the wings startup banner once, before log output begins:
+// an ANSI Shadow "PELICAN" wordmark with a vertical cyan→blue gradient, the
+// WINGS rule + version, a tagline, link rows, and a star call-to-action. Color
+// depth adapts to the terminal (truecolor / 256-color / none).
 func printLogo() {
-	fmt.Printf(colorstring.Color(`
-                     ____
-__ [blue][bold]Pelican[reset] _____/___/_______ _______ ______
-\_____\    \/\/    /   /       /  __   /   ___/
-   \___\          /   /   /   /  /_/  /___   /
-        \___/\___/___/___/___/___    /______/
-                            /_______/ [bold]%s[reset]
+	m := detectBannerColor()
+	bold, underline, reset := "", "", ""
+	if m != bannerPlain {
+		bold, underline, reset = "\x1b[1m", "\x1b[4m", "\x1b[0m"
+	}
 
-Copyright © 2018 - %d Dane Everitt & Contributors
+	var b strings.Builder
+	line := func(parts ...string) {
+		for _, p := range parts {
+			b.WriteString(p)
+		}
+		b.WriteString(reset + "\n")
+	}
 
-Website:  https://pelican.dev
- Source:  https://github.com/pelican-dev/wings
-License:  https://github.com/pelican-dev/wings/blob/main/LICENSE
+	b.WriteByte('\n')
 
-This software is made available under the terms of the MIT license.
-The above copyright notice and this permission notice shall be included
-in all copies or substantial portions of the Software.%s`), system.Version, time.Now().Year(), "\n\n")
+	// 1. Wordmark — one color per row.
+	for i, row := range pelicanRows {
+		line(pelicanRowHues[i].fg(m), row)
+	}
+
+	// 2. WINGS rule (indent 6) with the version centered beneath "W I N G S",
+	//    which begins at column 14 and is 9 columns wide.
+	b.WriteByte('\n')
+	line(
+		"      ",
+		hueTeal.fg(m), "▰▰▰▰▰▰", reset,
+		"  ", hueLightCyan.fg(m), bold, "W I N G S", reset,
+		"  ", hueTeal.fg(m), "▰▰▰▰▰▰",
+	)
+	vIndent := 14 + (9-len(system.Version))/2
+	if vIndent < 0 {
+		vIndent = 0
+	}
+	line(strings.Repeat(" ", vIndent), hueDim.fg(m), system.Version)
+
+	// 3. Tagline.
+	b.WriteByte('\n')
+	line(hueGray.fg(m), "Where your servers take flight.")
+
+	// 4. Link rows — "▸ <label:8> ─ <desc:19> →  <url>".
+	b.WriteByte('\n')
+	linkRow := func(label, desc, url string) {
+		line(
+			hueCyan.fg(m), "▸ ", reset,
+			hueWhite.fg(m), bold, fmt.Sprintf("%-8s", label), reset,
+			hueDim.fg(m), fmt.Sprintf("─ %-19s→  ", desc), reset,
+			hueCyan.fg(m), url,
+		)
+	}
+	linkRow("Source", "Star us on GitHub", "github.com/pelican/wings")
+	linkRow("Docs", "Get started", "pelican.dev/docs")
+
+	// 5. Star call-to-action.
+	b.WriteByte('\n')
+	line(hueYellow.fg(m), bold, "★ Help Pelican soar: Star the project on GitHub")
+	line(hueCyan.fg(m), underline, "https://github.com/pelican/panel")
+
+	b.WriteByte('\n')
+	fmt.Print(b.String())
 }
 
 func exitWithConfigurationNotice() {

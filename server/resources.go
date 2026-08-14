@@ -68,4 +68,6 @@ func (ru *ResourceUsage) Reset() {
 	ru.Uptime = 0
 	ru.Network.TxBytes = 0
 	ru.Network.RxBytes = 0
+	ru.DiskIo.ReadBytes = 0
+	ru.DiskIo.WriteBytes = 0
 }
