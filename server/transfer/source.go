@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pelican-dev/wings/config"
+	"github.com/pelican/wings/config"
 )
 
 // PushArchiveToTarget POSTs the archive to the target node and returns the

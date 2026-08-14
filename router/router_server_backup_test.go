@@ -13,12 +13,12 @@ import (
 	"github.com/apex/log"
 	"github.com/gin-gonic/gin"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/events"
-	"github.com/pelican-dev/wings/internal/models"
-	"github.com/pelican-dev/wings/remote"
-	wserver "github.com/pelican-dev/wings/server"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/environment"
+	"github.com/pelican/wings/events"
+	"github.com/pelican/wings/internal/models"
+	"github.com/pelican/wings/remote"
+	wserver "github.com/pelican/wings/server"
 )
 
 func init() {
