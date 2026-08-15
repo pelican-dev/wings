@@ -26,7 +26,7 @@ func init() {
 }
 
 type backupTestRemoteClient struct {
-	restoreStatus chan string
+	credentials   chan [2]string
 }
 
 func (c backupTestRemoteClient) GetBackupRemoteUploadURLs(context.Context, string, int64) (remote.BackupRemoteUploadResponse, error) {
@@ -88,7 +88,11 @@ func (c backupTestRemoteClient) PushServerStateChange(context.Context, string, r
 	return nil
 }
 
-func (c backupTestRemoteClient) SetCredentials(_, _ string) {}
+func (c backupTestRemoteClient) SetCredentials(id, token string) {
+	if c.credentials != nil {
+		c.credentials <- [2]string{id, token}
+	}
+}
 
 type backupTestEnvironment struct{}
 

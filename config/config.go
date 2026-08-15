@@ -450,11 +450,22 @@ func Set(c *Configuration) {
 // Set remote when the values came from the Panel. Local values may use
 // "file://" or "$VAR" indirection; expanding one sent over the network would
 // leak files and environment variables back out through the token we attach to
-// every request.
+// every request. Environment overrides must already match remote values so a
+// configuration update cannot leave Wings and the Panel using different keys.
 func (c *Configuration) ResolveToken(remote bool) error {
-	resolve := func(env, local string) (string, error) {
+	resolve := func(name, env, local string) (string, error) {
+		if remote && (strings.Contains(local, "$") || strings.HasPrefix(local, "file://")) {
+			return "", fmt.Errorf("config: remote %s cannot use token indirection", name)
+		}
 		if env != "" {
-			return Expand(env)
+			value, err := Expand(env)
+			if err != nil {
+				return "", err
+			}
+			if remote && value != local {
+				return "", fmt.Errorf("config: remote %s does not match environment override", name)
+			}
+			return value, nil
 		}
 		if remote {
 			return local, nil
@@ -463,10 +474,10 @@ func (c *Configuration) ResolveToken(remote bool) error {
 	}
 
 	var err error
-	if c.Token.ID, err = resolve(os.Getenv("WINGS_TOKEN_ID"), c.AuthenticationTokenId); err != nil {
+	if c.Token.ID, err = resolve("token ID", os.Getenv("WINGS_TOKEN_ID"), c.AuthenticationTokenId); err != nil {
 		return err
 	}
-	if c.Token.Token, err = resolve(os.Getenv("WINGS_TOKEN"), c.AuthenticationToken); err != nil {
+	if c.Token.Token, err = resolve("token", os.Getenv("WINGS_TOKEN"), c.AuthenticationToken); err != nil {
 		return err
 	}
 	return nil
