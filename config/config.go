@@ -444,6 +444,34 @@ func Set(c *Configuration) {
 	_config = c
 }
 
+// ResolveToken populates the derived Token field, preferring values pinned
+// through the environment over those in the configuration itself.
+//
+// Set remote when the values came from the Panel. Local values may use
+// "file://" or "$VAR" indirection; expanding one sent over the network would
+// leak files and environment variables back out through the token we attach to
+// every request.
+func (c *Configuration) ResolveToken(remote bool) error {
+	resolve := func(env, local string) (string, error) {
+		if env != "" {
+			return Expand(env)
+		}
+		if remote {
+			return local, nil
+		}
+		return Expand(local)
+	}
+
+	var err error
+	if c.Token.ID, err = resolve(os.Getenv("WINGS_TOKEN_ID"), c.AuthenticationTokenId); err != nil {
+		return err
+	}
+	if c.Token.Token, err = resolve(os.Getenv("WINGS_TOKEN"), c.AuthenticationToken); err != nil {
+		return err
+	}
+	return nil
+}
+
 // SetDebugViaFlag tracks if the application is running in debug mode because of
 // a command line flag argument. If so we do not want to store that configuration
 // change to the disk.
@@ -614,23 +642,7 @@ func FromFile(path string) error {
 		return err
 	}
 
-	c.Token = Token{
-		ID:    os.Getenv("WINGS_TOKEN_ID"),
-		Token: os.Getenv("WINGS_TOKEN"),
-	}
-	if c.Token.ID == "" {
-		c.Token.ID = c.AuthenticationTokenId
-	}
-	if c.Token.Token == "" {
-		c.Token.Token = c.AuthenticationToken
-	}
-
-	c.Token.ID, err = Expand(c.Token.ID)
-	if err != nil {
-		return err
-	}
-	c.Token.Token, err = Expand(c.Token.Token)
-	if err != nil {
+	if err := c.ResolveToken(false); err != nil {
 		return err
 	}
 
@@ -638,7 +650,6 @@ func FromFile(path string) error {
 	Set(c)
 	return nil
 }
-
 // ConfigureDirectories ensures that all the system directories exist on the
 // system. These directories are created so that only the owner can read the data,
 // and no other users.
@@ -863,7 +874,7 @@ func Expand(v string) (string, error) {
 
 		b, err := os.ReadFile(p)
 		if err != nil {
-			return "", nil
+			return "", err
 		}
 		v = string(bytes.TrimRight(bytes.TrimRight(b, "\r"), "\n"))
 	}

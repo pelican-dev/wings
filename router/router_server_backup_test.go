@@ -88,6 +88,8 @@ func (c backupTestRemoteClient) PushServerStateChange(context.Context, string, r
 	return nil
 }
 
+func (c backupTestRemoteClient) SetCredentials(_, _ string) {}
+
 type backupTestEnvironment struct{}
 
 func (backupTestEnvironment) Type() string { return "test" }
