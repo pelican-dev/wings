@@ -26,6 +26,7 @@ func init() {
 }
 
 type backupTestRemoteClient struct {
+	restoreStatus chan string
 	credentials   chan [2]string
 }
 
@@ -82,7 +83,6 @@ func (c backupTestRemoteClient) ValidateSftpCredentials(context.Context, remote.
 func (c backupTestRemoteClient) SendActivityLogs(context.Context, []models.Activity) error {
 	return nil
 }
-
 
 func (c backupTestRemoteClient) PushServerStateChange(context.Context, string, remote.ServerStateChange) error {
 	return nil

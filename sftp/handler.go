@@ -106,7 +106,7 @@ func (h *Handler) Fileread(request *sftp.Request) (io.ReaderAt, error) {
 	defer h.mu.Unlock()
 	if err := h.fs.IsIgnored(request.Filepath); err != nil {
 		return nil, err
-	}	
+	}
 	f, _, err := h.fs.File(request.Filepath)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
@@ -135,7 +135,7 @@ func (h *Handler) Filewrite(request *sftp.Request) (io.WriterAt, error) {
 
 	if err := h.fs.IsIgnored(request.Filepath); err != nil {
 		return nil, err
-	}	
+	}
 	// The specific permission required to perform this action. If the file exists on the
 	// system already it only needs to be an update, otherwise we'll check for a create.
 	permission := PermissionFileUpdate
@@ -202,10 +202,6 @@ func (h *Handler) Filecmd(request *sftp.Request) error {
 	if request.Target != "" {
 		l = l.WithField("target", request.Target)
 	}
-	
-	if err := h.fs.IsIgnored(request.Filepath); err != nil {
-		return err
-	}	
 
 	switch request.Method {
 	// Allows a user to make changes to the permissions of a given file or directory
