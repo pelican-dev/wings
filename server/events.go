@@ -1,8 +1,8 @@
 package server
 
 import (
-	"github.com/pelican-dev/wings/events"
-	"github.com/pelican-dev/wings/system"
+	"github.com/pelican/wings/events"
+	"github.com/pelican/wings/system"
 )
 
 // Defines all the possible output events for a server.

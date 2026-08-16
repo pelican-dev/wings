@@ -7,7 +7,7 @@ import (
 
 	pkgsftp "github.com/pkg/sftp"
 
-	"github.com/pelican-dev/wings/server"
+	"github.com/pelican/wings/server"
 )
 
 type writeAtFunc func([]byte, int64) (int, error)

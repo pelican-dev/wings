@@ -6,8 +6,8 @@ import (
 
 	"emperror.dev/errors"
 
-	"github.com/pelican-dev/wings/internal/database"
-	"github.com/pelican-dev/wings/internal/models"
+	"github.com/pelican/wings/internal/database"
+	"github.com/pelican/wings/internal/models"
 )
 
 const ActivityPowerPrefix = "server:power."

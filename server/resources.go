@@ -5,10 +5,10 @@ import (
 	"sync/atomic"
 
 	"github.com/apex/log"
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/server/filesystem/quotas"
-	"github.com/pelican-dev/wings/system"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/environment"
+	"github.com/pelican/wings/server/filesystem/quotas"
+	"github.com/pelican/wings/system"
 )
 
 // ResourceUsage defines the current resource usage for a given server instance. If a server is offline you

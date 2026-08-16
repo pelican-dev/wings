@@ -14,9 +14,9 @@ import (
 	dockerSystem "github.com/docker/docker/api/types/system" // Alias the correct system package
 	"github.com/docker/docker/pkg/parsers/kernel"
 	"github.com/docker/docker/pkg/parsers/operatingsystem"
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/system"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/environment"
+	"github.com/pelican/wings/system"
 )
 
 // GenerateDiagnosticsReport collects diagnostic data and returns it as a string.

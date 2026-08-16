@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/server/filesystem"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/server/filesystem"
 )
 
 func TestBackupGenerateRequiresUuidIdentifier(t *testing.T) {

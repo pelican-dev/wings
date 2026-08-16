@@ -16,14 +16,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
-	"github.com/pelican-dev/wings/system"
+	"github.com/pelican/wings/system"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/environment/docker"
-	"github.com/pelican-dev/wings/internal/models"
-	"github.com/pelican-dev/wings/router/tokens"
-	"github.com/pelican-dev/wings/server"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/environment"
+	"github.com/pelican/wings/environment/docker"
+	"github.com/pelican/wings/internal/models"
+	"github.com/pelican/wings/router/tokens"
+	"github.com/pelican/wings/server"
 )
 
 const (
