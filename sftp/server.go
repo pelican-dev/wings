@@ -19,9 +19,9 @@ import (
 	"golang.org/x/crypto/ed25519"
 	"golang.org/x/crypto/ssh"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/remote"
-	"github.com/pelican-dev/wings/server"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/remote"
+	"github.com/pelican/wings/server"
 )
 
 // Usernames all follow the same format, so don't even bother hitting the API if the username is not

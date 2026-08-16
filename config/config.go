@@ -24,7 +24,7 @@ import (
 	"github.com/gbrlsnchs/jwt/v3"
 	"gopkg.in/yaml.v2"
 
-	"github.com/pelican-dev/wings/system"
+	"github.com/pelican/wings/system"
 )
 
 const DefaultLocation = "/etc/pelican/config.yml"

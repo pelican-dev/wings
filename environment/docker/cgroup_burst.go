@@ -12,7 +12,7 @@ import (
 	"github.com/apex/log"
 	"github.com/docker/docker/client"
 
-	"github.com/pelican-dev/wings/config"
+	"github.com/pelican/wings/config"
 )
 
 // cgroupV2 reports whether the host uses the unified cgroup v2 hierarchy.

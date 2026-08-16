@@ -11,7 +11,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/goccy/go-json"
 
-	"github.com/pelican-dev/wings/environment"
+	"github.com/pelican/wings/environment"
 )
 
 // Uptime returns the current uptime of the container in milliseconds. If the

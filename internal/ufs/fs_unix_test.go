@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pelican-dev/wings/internal/ufs"
+	"github.com/pelican/wings/internal/ufs"
 )
 
 type testUnixFS struct {
