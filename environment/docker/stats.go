@@ -13,7 +13,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/goccy/go-json"
 
-	"github.com/pelican-dev/wings/environment"
+	"github.com/pelican/wings/environment"
 )
 
 var runtimeDetection struct {
@@ -103,6 +103,17 @@ func (e *Environment) pollResources(ctx context.Context) error {
 			for _, nw := range v.Networks {
 				st.Network.RxBytes += nw.RxBytes
 				st.Network.TxBytes += nw.TxBytes
+			}
+
+			// Docker surfaces cgroup block I/O counters through the blkio
+			// recursive list on both cgroup v1 ("Read"/"Write") and v2
+			// ("read"/"write" from io.stat), so match the op case-insensitively.
+			for _, bio := range v.BlkioStats.IoServiceBytesRecursive {
+				if strings.EqualFold(bio.Op, "read") {
+					st.DiskIo.ReadBytes += bio.Value
+				} else if strings.EqualFold(bio.Op, "write") {
+					st.DiskIo.WriteBytes += bio.Value
+				}
 			}
 
 			e.Events().Publish(environment.ResourceEvent, st)

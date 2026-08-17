@@ -9,9 +9,9 @@ import (
 	"emperror.dev/errors"
 	"github.com/gin-gonic/gin"
 	ws "github.com/gorilla/websocket"
-	"github.com/pelican-dev/wings/router/middleware"
-	"github.com/pelican-dev/wings/router/websocket"
-	"github.com/pelican-dev/wings/server"
+	"github.com/pelican/wings/router/middleware"
+	"github.com/pelican/wings/router/websocket"
+	"github.com/pelican/wings/server"
 	"golang.org/x/time/rate"
 )
 
@@ -75,7 +75,7 @@ func getServerWebsocket(c *gin.Context) {
 		case <-ctx.Done():
 			handler.Logger().Debug("closing connection to server websocket")
 			if err := handler.Connection.Close(); err != nil {
-				handler.Logger().WithError(err).Error("failed to close websocket connection")
+				handler.Logger().WithError(err).Info("failed to close websocket connection")
 			}
 			break
 		}
