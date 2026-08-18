@@ -10,7 +10,7 @@ import (
 	"emperror.dev/errors"
 	"github.com/apex/log"
 	"github.com/parkervcp/fsquota"
-	"github.com/pelican-dev/wings/config"
+	"github.com/pelican/wings/config"
 )
 
 const (

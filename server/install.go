@@ -22,10 +22,10 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/parsers/kernel"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/remote"
-	"github.com/pelican-dev/wings/system"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/environment"
+	"github.com/pelican/wings/remote"
+	"github.com/pelican/wings/system"
 )
 
 // Install executes the installation stack for a server process. Bubbles any

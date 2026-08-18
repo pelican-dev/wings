@@ -9,9 +9,9 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/internal/models"
-	"github.com/pelican-dev/wings/system"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/internal/models"
+	"github.com/pelican/wings/system"
 )
 
 var (

@@ -14,12 +14,12 @@ import (
 	"github.com/apex/log"
 	"github.com/gammazero/workerpool"
 	"github.com/goccy/go-json"
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/environment/docker"
-	"github.com/pelican-dev/wings/remote"
-	"github.com/pelican-dev/wings/server/filesystem"
-	"github.com/pelican-dev/wings/server/filesystem/quotas"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/environment"
+	"github.com/pelican/wings/environment/docker"
+	"github.com/pelican/wings/remote"
+	"github.com/pelican/wings/server/filesystem"
+	"github.com/pelican/wings/server/filesystem/quotas"
 )
 
 type Manager struct {

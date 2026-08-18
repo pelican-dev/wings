@@ -10,7 +10,7 @@ import (
 	"github.com/apex/log"
 	"github.com/docker/docker/api/types/container"
 
-	"github.com/pelican-dev/wings/config"
+	"github.com/pelican/wings/config"
 )
 
 type Mount struct {

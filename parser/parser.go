@@ -20,8 +20,8 @@ import (
 	"gopkg.in/ini.v1"
 	"gopkg.in/yaml.v3"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/internal/ufs"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/internal/ufs"
 )
 
 // The file parsing options that are available for a server configuration file.
