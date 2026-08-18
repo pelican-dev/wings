@@ -529,18 +529,27 @@ func (ip *InstallationProcess) Execute() (string, error) {
 	}(r.ID)
 
 	sChan, eChan := ip.client.ContainerWait(ctx, r.ID, container.WaitConditionNotRunning)
+	if err := ip.waitForInstallationContainer(sChan, eChan); err != nil {
+		return r.ID, err
+	}
+
+	return r.ID, nil
+}
+
+func (ip *InstallationProcess) waitForInstallationContainer(sChan <-chan container.WaitResponse, eChan <-chan error) error {
 	select {
 	case err := <-eChan:
-		return r.ID, err
+		ip.Server.Events().Publish(DaemonMessageEvent, "Installation process failed: "+err.Error())
+		return err
 	case response := <-sChan:
 		if err := installationWaitError(response); err != nil {
 			ip.Server.Events().Publish(DaemonMessageEvent, "Installation process failed: "+err.Error())
-			return r.ID, err
+			return err
 		}
 	}
 
 	ip.Server.Events().Publish(DaemonMessageEvent, "Installation process completed.")
-	return r.ID, nil
+	return nil
 }
 
 func installationWaitError(response container.WaitResponse) error {

@@ -1,9 +1,12 @@
 package server
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/docker/docker/api/types/container"
+
+	"github.com/pelican/wings/events"
 )
 
 func TestInstallationWaitError(t *testing.T) {
@@ -59,5 +62,39 @@ func TestInstallationWaitError(t *testing.T) {
 				t.Fatalf("installationWaitError() error = %q, expected %q", err.Error(), tt.wantError)
 			}
 		})
+	}
+}
+
+func TestWaitForInstallationContainerPublishesWaitFailure(t *testing.T) {
+	s, err := New(nil)
+	if err != nil {
+		t.Fatalf("New() returned unexpected error: %v", err)
+	}
+
+	listener := make(chan []byte, 1)
+	s.Events().On(listener)
+	defer s.Events().Off(listener)
+
+	waitErr := errors.New("daemon disconnected")
+	sChan := make(chan container.WaitResponse)
+	eChan := make(chan error, 1)
+	eChan <- waitErr
+
+	ip := &InstallationProcess{Server: s}
+	if err := ip.waitForInstallationContainer(sChan, eChan); !errors.Is(err, waitErr) {
+		t.Fatalf("waitForInstallationContainer() error = %v, expected %v", err, waitErr)
+	}
+
+	select {
+	case raw := <-listener:
+		event := events.MustDecode(raw)
+		if event.Topic != DaemonMessageEvent {
+			t.Fatalf("event topic = %q, expected %q", event.Topic, DaemonMessageEvent)
+		}
+		if event.Data != "Installation process failed: daemon disconnected" {
+			t.Fatalf("event data = %q, expected failure message", event.Data)
+		}
+	default:
+		t.Fatal("waitForInstallationContainer() did not publish a failure event")
 	}
 }
