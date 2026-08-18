@@ -12,6 +12,8 @@ jobs:
   test-auto-tls-compose:
     name: Test automatic TLS Compose preflight
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
 
     steps:
       - name: Code checkout

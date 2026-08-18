@@ -4,13 +4,15 @@ set -eu
 
 script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 compose_file="$script_dir/docker-compose.auto-tls.example.yml"
-env_file="${PWD}/.env"
+env_file=''
+env_file_count=0
 check_only=false
 expect_env_file=false
 
 for argument do
     if [ "$expect_env_file" = true ]; then
         env_file=$argument
+        env_file_count=$((env_file_count + 1))
         expect_env_file=false
         continue
     fi
@@ -21,6 +23,7 @@ for argument do
             ;;
         --env-file=*)
             env_file=${argument#--env-file=}
+            env_file_count=$((env_file_count + 1))
             ;;
         --check)
             check_only=true
@@ -33,76 +36,57 @@ if [ "$expect_env_file" = true ]; then
     exit 1
 fi
 
-read_env_value() {
+if [ "$env_file_count" -gt 1 ]; then
+    printf '%s\n' 'Automatic TLS preflight failed: only one --env-file is supported.' >&2
+    exit 1
+fi
+
+if [ "$env_file_count" -eq 1 ] && [ -z "$env_file" ]; then
+    printf '%s\n' 'Automatic TLS preflight failed: --env-file requires a path.' >&2
+    exit 1
+fi
+
+# Compose, rather than this shell, must expand the interpolation expressions.
+# shellcheck disable=SC2016
+compose_probe='services:
+  preflight:
+    image: scratch
+    environment:
+      WINGS_API_PORT: "${WINGS_API_PORT-}"
+      WINGS_SFTP_PORT: "${WINGS_SFTP_PORT-}"'
+
+if [ "$env_file_count" -eq 1 ]; then
+    if ! compose_environment=$(printf '%s\n' "$compose_probe" | docker compose \
+        --project-directory "$script_dir" \
+        --env-file "$env_file" \
+        -f - \
+        config --environment); then
+        printf '%s\n' 'Automatic TLS preflight failed: Docker Compose could not resolve the environment.' >&2
+        exit 1
+    fi
+else
+    if ! compose_environment=$(printf '%s\n' "$compose_probe" | docker compose \
+        --project-directory "$script_dir" \
+        -f - \
+        config --environment); then
+        printf '%s\n' 'Automatic TLS preflight failed: Docker Compose could not resolve the environment.' >&2
+        exit 1
+    fi
+fi
+
+read_resolved_value() {
     variable_name=$1
 
-    if [ ! -f "$env_file" ]; then
-        return
-    fi
-
-    awk -v wanted="$variable_name" '
-        function trim(value) {
-            sub(/^[[:space:]]+/, "", value)
-            sub(/[[:space:]]+$/, "", value)
-            return value
+    printf '%s\n' "$compose_environment" | awk -v wanted="$variable_name" '
+        index($0, wanted "=") == 1 {
+            print substr($0, length(wanted) + 2)
+            exit
         }
-
-        {
-            line = $0
-            sub(/\r$/, "", line)
-            line = trim(line)
-
-            if (line == "" || substr(line, 1, 1) == "#") {
-                next
-            }
-
-            sub(/^export[[:space:]]+/, "", line)
-            separator = index(line, "=")
-
-            if (separator == 0) {
-                next
-            }
-
-            key = trim(substr(line, 1, separator - 1))
-
-            if (key != wanted) {
-                next
-            }
-
-            value = trim(substr(line, separator + 1))
-
-            if (length(value) >= 2 &&
-                ((substr(value, 1, 1) == "\"" && substr(value, length(value), 1) == "\"") ||
-                 (substr(value, 1, 1) == "\047" && substr(value, length(value), 1) == "\047"))) {
-                value = substr(value, 2, length(value) - 2)
-            } else {
-                sub(/[[:space:]]+#.*/, "", value)
-                value = trim(value)
-            }
-
-            result = value
-            found = 1
-        }
-
-        END {
-            if (found) {
-                print result
-            }
-        }
-    ' "$env_file"
+    '
 }
 
-if [ "${WINGS_API_PORT+x}" = x ]; then
-    api_port=$WINGS_API_PORT
-else
-    api_port=$(read_env_value WINGS_API_PORT)
-fi
-
-if [ "${WINGS_SFTP_PORT+x}" = x ]; then
-    sftp_port=$WINGS_SFTP_PORT
-else
-    sftp_port=$(read_env_value WINGS_SFTP_PORT)
-fi
+api_port=$(read_resolved_value WINGS_API_PORT)
+sftp_port=$(read_resolved_value WINGS_SFTP_PORT)
 
 validate_port() {
     variable_name=$1
@@ -145,4 +129,4 @@ if [ "$check_only" = true ]; then
     exit 0
 fi
 
-exec docker compose -f "$compose_file" "$@"
+exec docker compose --project-directory "$script_dir" -f "$compose_file" "$@"
