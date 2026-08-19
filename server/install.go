@@ -22,10 +22,10 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/parsers/kernel"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/remote"
-	"github.com/pelican-dev/wings/system"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/environment"
+	"github.com/pelican/wings/remote"
+	"github.com/pelican/wings/system"
 )
 
 // Install executes the installation stack for a server process. Bubbles any
@@ -153,12 +153,22 @@ func (s *Server) IsInstalling() bool {
 	return s.installing.Load()
 }
 
+func (s *Server) SetInstalling(state bool) {
+	s.installing.Store(state)
+	if state {
+		s.Sftp().CancelAll()
+	}
+}
+
 func (s *Server) IsTransferring() bool {
 	return s.transferring.Load()
 }
 
 func (s *Server) SetTransferring(state bool) {
 	s.transferring.Store(state)
+	if state {
+		s.Sftp().CancelAll()
+	}
 }
 
 func (s *Server) IsRestoring() bool {
@@ -167,6 +177,13 @@ func (s *Server) IsRestoring() bool {
 
 func (s *Server) SetRestoring(state bool) {
 	s.restoring.Store(state)
+	if state {
+		s.Sftp().CancelAll()
+	}
+}
+
+func (s *Server) IsInProtectedState() bool {
+	return s.IsInstalling() || s.IsTransferring() || s.IsRestoring()	
 }
 
 // RemoveContainer removes the installation container for the server.
@@ -190,7 +207,7 @@ func (ip *InstallationProcess) Run() error {
 	if !ip.Server.installing.SwapIf(true) {
 		return errors.New("install: cannot obtain installation lock")
 	}
-
+	ip.Server.Sftp().CancelAll()
 	// We now have an exclusive lock on this installation process. Ensure that whenever this
 	// process is finished that the semaphore is released so that other processes and be executed
 	// without encountering a wait timeout.
@@ -245,15 +262,9 @@ func (ip *InstallationProcess) writeScriptToDisk() error {
 // Pulls the docker image to be used for the installation container.
 func (ip *InstallationProcess) pullInstallationImage() error {
 	// Get a registry auth configuration from the config.
-	var registryAuth *config.RegistryConfiguration
-	for registry, c := range config.Get().Docker.Registries {
-		if !strings.HasPrefix(ip.Script.ContainerImage, registry) {
-			continue
-		}
-
+	registry, registryAuth := config.Get().Docker.RegistryCredentialsForImage(ip.Script.ContainerImage)
+	if registryAuth != nil {
 		log.WithField("registry", registry).Debug("using authentication for registry")
-		registryAuth = &c
-		break
 	}
 
 	// Get the ImagePullOptions.

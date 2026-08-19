@@ -11,9 +11,9 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"text/template"
 	"time"
 
@@ -22,10 +22,9 @@ import (
 	"github.com/apex/log"
 	"github.com/creasty/defaults"
 	"github.com/gbrlsnchs/jwt/v3"
-	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v2"
 
-	"github.com/pelican-dev/wings/system"
+	"github.com/pelican/wings/system"
 )
 
 const DefaultLocation = "/etc/pelican/config.yml"
@@ -214,6 +213,11 @@ type SystemConfiguration struct {
 	// disk usage is not a concern.
 	DiskCheckInterval int64 `default:"150" yaml:"disk_check_interval"`
 
+	// Quotas define is quota management is enabled on the Data directory
+	Quotas struct {
+		Enabled bool `json:"enabled" yaml:"enabled" default:"false"`
+	} `json:"quotas" yaml:"quotas"`
+
 	// ActivitySendInterval is the amount of time that should ellapse between aggregated server activity
 	// being sent to the Panel. By default this will send activity collected over the last minute. Keep
 	// in mind that only a fixed number of activity log entries, defined by ActivitySendCount, will be sent
@@ -285,6 +289,11 @@ type Backups struct {
 	// Defaults to "best_speed" (level 1)
 	CompressionLevel string `default:"best_speed" yaml:"compression_level"`
 
+
+	// RestoreHostAllowlist allows backup restore downloads to connect to otherwise blocked
+	// private/internal destinations. Entries may be hostnames, IP addresses, or CIDR ranges.
+	RestoreHostAllowlist []string `yaml:"restore_host_allowlist"`
+
 	// RemoveBackupsOnServerDelete deletes backups associated with a server when the server is deleted
 	RemoveBackupsOnServerDelete bool `default:"true" yaml:"remove_backups_on_server_delete"`
 }
@@ -297,6 +306,17 @@ type Transfers struct {
 	//
 	// Defaults to 0 (unlimited)
 	DownloadLimit int `default:"0" yaml:"download_limit"`
+
+	// StoragePool configures whether this node participates in a shared storage pool.
+	StoragePool StoragePoolConfiguration `yaml:"storage_pool"`
+}
+
+type StoragePoolConfiguration struct {
+	// Enabled signals that this node shares a common data volume with other nodes.
+	Enabled bool `default:"false" yaml:"enabled"`
+
+	// PoolName is a per-node identifier used to compare shared storage pool membership across nodes.
+	PoolName string `yaml:"pool_name"`
 }
 
 type ConsoleThrottles struct {
@@ -327,6 +347,10 @@ type Configuration struct {
 	// Determines if wings should be running in debug mode. This value is ignored
 	// if the debug flag is passed through the command line arguments.
 	Debug bool
+
+	// Determines if wings should run with minimal logging output. This value is
+	// ignored if debug mode is enabled.
+	Quiet bool
 
 	AppName string `default:"pelican" json:"app_name" yaml:"app_name"`
 
@@ -506,6 +530,18 @@ func EnsurePelicanUser() error {
 	sysName, err := getSystemName()
 	if err != nil {
 		return err
+	}
+
+	// macOS doesn't have useradd, use the current user like rootless mode.
+	if sysName == "darwin" {
+		u, err := user.Current()
+		if err != nil {
+			return err
+		}
+		_config.System.Username = u.Username
+		_config.System.User.Uid = system.MustInt(u.Uid)
+		_config.System.User.Gid = system.MustInt(u.Gid)
+		return nil
 	}
 
 	// Our way of detecting if wings is running inside of Docker.
@@ -796,45 +832,15 @@ func ConfigureTimezone() error {
 
 // Gets the system release name.
 func getSystemName() (string, error) {
+	if runtime.GOOS == "darwin" {
+		return "darwin", nil
+	}
 	// use osrelease to get release version and ID
 	release, err := osrelease.Read()
 	if err != nil {
 		return "", err
 	}
 	return release["ID"], nil
-}
-
-var (
-	openat2    atomic.Bool
-	openat2Set atomic.Bool
-)
-
-func UseOpenat2() bool {
-	if openat2Set.Load() {
-		return openat2.Load()
-	}
-	defer openat2Set.Store(true)
-
-	c := Get()
-	openatMode := c.System.OpenatMode
-	switch openatMode {
-	case "openat2":
-		openat2.Store(true)
-		return true
-	case "openat":
-		openat2.Store(false)
-		return false
-	default:
-		fd, err := unix.Openat2(unix.AT_FDCWD, "/", &unix.OpenHow{})
-		if err != nil {
-			log.WithError(err).Warn("error occurred while checking for openat2 support, falling back to openat")
-			openat2.Store(false)
-			return false
-		}
-		_ = unix.Close(fd)
-		openat2.Store(true)
-		return true
-	}
 }
 
 // Expand expands an input string by calling [os.ExpandEnv] to expand all

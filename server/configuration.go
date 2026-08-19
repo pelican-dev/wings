@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/pelican-dev/wings/environment"
+	"github.com/pelican/wings/environment"
 )
 
 type EggConfiguration struct {
@@ -45,6 +45,10 @@ type ConfigurationMeta struct {
 
 type Configuration struct {
 	mu sync.RWMutex
+
+	// P_ID is the database id from the panel that is guaranteed to be unique
+	// this is being used for quotas
+	Pid int `json:"id"`
 
 	// The unique identifier for the server that should be used when referencing
 	// it against the Panel API (and internally). This will be used when naming
@@ -106,6 +110,12 @@ func (c *Configuration) GetUuid() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.Uuid
+}
+
+func (c *Configuration) GetPID() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Pid
 }
 
 func (c *Configuration) SetSuspended(s bool) {

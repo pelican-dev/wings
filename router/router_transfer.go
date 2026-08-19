@@ -18,12 +18,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/router/middleware"
-	"github.com/pelican-dev/wings/router/tokens"
-	"github.com/pelican-dev/wings/server"
-	"github.com/pelican-dev/wings/server/installer"
-	"github.com/pelican-dev/wings/server/transfer"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/router/middleware"
+	"github.com/pelican/wings/router/tokens"
+	"github.com/pelican/wings/server"
+	"github.com/pelican/wings/server/installer"
+	"github.com/pelican/wings/server/transfer"
 )
 
 // postTransfers .
@@ -32,7 +32,7 @@ func postTransfers(c *gin.Context) {
 	if len(auth) != 2 || auth[0] != "Bearer" {
 		c.Header("WWW-Authenticate", "Bearer")
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-			"error": "The required authorization heads were not present in the request.",
+			"error": "The required authorization headers were not present in the request.",
 		})
 		return
 	}
@@ -40,6 +40,11 @@ func postTransfers(c *gin.Context) {
 	token := tokens.TransferPayload{}
 	if err := tokens.ParseToken([]byte(auth[1]), &token); err != nil {
 		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	if !token.HasScope(tokens.ServerTransfer) {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Forbidden."})
 		return
 	}
 
@@ -129,6 +134,20 @@ func postTransfers(c *gin.Context) {
 		trnsfr.Server.Events().Publish(server.TransferStatusEvent, "success")
 	}(ctx, trnsfr)
 
+	{
+		remotePool := config.Get().System.Transfers.StoragePool
+		sourcePool := c.GetHeader("X-Storage-Pool")
+		if remotePool.Enabled && remotePool.PoolName != "" && sourcePool != "" && strings.EqualFold(remotePool.PoolName, sourcePool) {
+			if err := trnsfr.Server.CreateEnvironment(); err != nil {
+				middleware.CaptureAndAbort(c, err)
+				return
+			}
+			successful = true
+			c.Status(http.StatusOK)
+			return
+		}
+	}
+
 	mediaType, params, err := mime.ParseMediaType(c.GetHeader("Content-Type"))
 	if err != nil {
 		trnsfr.Log().Debug("failed to parse content type header")
@@ -142,14 +161,13 @@ func postTransfers(c *gin.Context) {
 		return
 	}
 
-
 	// Used to read the file and checksum from the request body.
 	mr := multipart.NewReader(c.Request.Body, params["boundary"])
 
 	var (
-		hasArchive              bool
-		archiveChecksum         string
-		archiveChecksumReceived string
+		hasArchive                bool
+		archiveChecksum           string
+		archiveChecksumReceived   string
 		backupChecksumsCalculated = make(map[string]string)
 		backupChecksumsReceived   = make(map[string]string)
 	)
@@ -208,7 +226,7 @@ out:
 
 			case name == "install_logs":
 				trnsfr.Log().Debug("received install logs")
-				
+
 				// Create install log directory if it doesn't exist
 				cfg := config.Get()
 				installLogDir := filepath.Join(cfg.System.LogDirectory, "install")
@@ -217,10 +235,10 @@ out:
 					trnsfr.Log().WithError(err).Warn("failed to create install log directory, skipping")
 					break
 				}
-				
+
 				// Use the correct install log path with server UUID
 				installLogPath := filepath.Join(installLogDir, trnsfr.Server.ID()+".log")
-				
+
 				// Create the install log file
 				installLogFile, err := os.Create(installLogPath)
 				if err != nil {
@@ -228,7 +246,7 @@ out:
 					trnsfr.Log().WithError(err).Warn("failed to create install log file, skipping")
 					break
 				}
-				
+
 				// Stream the install logs to file
 				if _, err := io.Copy(installLogFile, p); err != nil {
 					installLogFile.Close()
@@ -236,16 +254,18 @@ out:
 					trnsfr.Log().WithError(err).Warn("failed to stream install logs to file, skipping")
 					break
 				}
-				
+
 				if err := installLogFile.Close(); err != nil {
 					// Don't fail transfer for install logs, just log and continue
 					trnsfr.Log().WithError(err).Warn("failed to close install log file")
 				}
-				
+
 				trnsfr.Log().WithField("path", installLogPath).Debug("install logs saved successfully")
-				
+
 			case strings.HasPrefix(name, "backup_"):
-				backupName := strings.TrimPrefix(name, "backup_")
+				backupNameUnsafe := strings.TrimPrefix(name, "backup_")
+				// Strip all directory components
+				backupName := filepath.Base(backupNameUnsafe)
 				trnsfr.Log().WithField("backup", backupName).Debug("received backup file")
 
 				// Create backup directory if it doesn't exist

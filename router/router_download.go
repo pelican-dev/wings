@@ -10,9 +10,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/pelican-dev/wings/router/middleware"
-	"github.com/pelican-dev/wings/router/tokens"
-	"github.com/pelican-dev/wings/server/backup"
+	"github.com/pelican/wings/router/middleware"
+	"github.com/pelican/wings/router/tokens"
+	"github.com/pelican/wings/server/backup"
 )
 
 // Handle a download request for a server backup.
@@ -28,7 +28,7 @@ func getDownloadBackup(c *gin.Context) {
 	}
 
 	// Get the server using the UUID from the token.
-	if _, ok := manager.Get(token.ServerUuid); !ok || !token.IsUniqueRequest() {
+	if _, ok := manager.Get(token.ServerUuid); !ok || token.Denylisted() || !token.IsUniqueRequest() || !token.HasScope(tokens.BackupDownload) {
 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 			"error": "The requested resource was not found on this server.",
 		})
@@ -82,7 +82,7 @@ func getDownloadFile(c *gin.Context) {
 	}
 
 	s, ok := manager.Get(token.ServerUuid)
-	if !ok || !token.IsUniqueRequest() {
+	if !ok || token.Denylisted() || !token.IsUniqueRequest() || !token.HasScope(tokens.FileDownload) {
 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 			"error": "The requested resource was not found on this server.",
 		})

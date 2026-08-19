@@ -15,12 +15,13 @@ import (
 	"github.com/gammazero/workerpool"
 	"github.com/goccy/go-json"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/environment/docker"
-	"github.com/pelican-dev/wings/environment/kubernetes"
-	"github.com/pelican-dev/wings/remote"
-	"github.com/pelican-dev/wings/server/filesystem"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/environment"
+	"github.com/pelican/wings/environment/docker"
+	"github.com/pelican/wings/environment/kubernetes"
+	"github.com/pelican/wings/remote"
+	"github.com/pelican/wings/server/filesystem"
+	"github.com/pelican/wings/server/filesystem/quotas"
 )
 
 type Manager struct {
@@ -193,13 +194,20 @@ func (m *Manager) InitServer(data remote.ServerConfigurationResponse) (*Server, 
 
 	// Setup the base server configuration data which will be used for all of the
 	// remaining functionality in this call.
-	if err := s.SyncWithConfiguration(data); err != nil {
+	if err = s.SyncWithConfiguration(data); err != nil {
 		return nil, errors.WithStackIf(err)
 	}
 
 	s.fs, err = filesystem.New(filepath.Join(config.Get().System.Data, s.ID()), s.DiskSpace(), s.Config().Egg.FileDenylist)
 	if err != nil {
 		return nil, errors.WithStackIf(err)
+	}
+
+	// if quotas are enabled ensure quotas are configured
+	if config.Get().System.Quotas.Enabled {
+		if err = quotas.AddQuota(s.Config().Pid, s.Config().Uuid); err != nil {
+			return nil, errors.WithStackIf(err)
+		}
 	}
 
 	settings := environment.Settings{
@@ -262,7 +270,6 @@ func (m *Manager) init(ctx context.Context) error {
 	pool := workerpool.New(runtime.NumCPU())
 	log.Debugf("using %d workerpools to instantiate server instances", runtime.NumCPU())
 	for _, data := range servers {
-		data := data
 		pool.Submit(func() {
 			// Parse the json.RawMessage into an expected struct value. We do this here so that a single broken
 			// server does not cause the entire boot process to hang, and allows us to show more useful error

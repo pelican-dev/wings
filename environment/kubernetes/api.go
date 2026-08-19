@@ -8,7 +8,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/pelican-dev/wings/config"
+	"github.com/pelican/wings/config"
 )
 
 var (

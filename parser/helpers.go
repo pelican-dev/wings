@@ -193,7 +193,7 @@ func (cfr *ConfigurationFileReplacement) setValueWithSjson(jsonStr string, path 
 }
 
 // Looks up a configuration value on the Daemon given a dot-notated syntax.
-func (f *ConfigurationFile) LookupConfigurationValue(cfr ConfigurationFileReplacement) (string, error) {
+func (f *ConfigurationFile) LookupConfigurationValue(cfr ConfigurationFileReplacement) (result string, err error) {
 	// If this is not something that we can do a regex lookup on then just continue
 	// on our merry way. If the value isn't a string, we're not going to be doing anything
 	// with it anyways.
@@ -204,9 +204,8 @@ func (f *ConfigurationFile) LookupConfigurationValue(cfr ConfigurationFileReplac
 	// If there is a match, lookup the value in the configuration for the Daemon. If no key
 	// is found, just return the string representation, otherwise use the value from the
 	// daemon configuration here.
-	var lookupErr error
-	result := configMatchRegex.ReplaceAllStringFunc(cfr.ReplaceWith.String(), func(placeholder string) string {
-		if lookupErr != nil {
+	result = configMatchRegex.ReplaceAllStringFunc(cfr.ReplaceWith.String(), func(placeholder string) string {
+		if err != nil {
 			return placeholder
 		}
 		keyPath := configMatchRegex.ReplaceAllString(placeholder, "$1")
@@ -217,17 +216,23 @@ func (f *ConfigurationFile) LookupConfigurationValue(cfr ConfigurationFileReplac
 		}
 
 		// Look for the key in the Wings configuration and substitute the placeholder.
-		match, _, _, err := jsonparser.Get(f.configuration, path...)
+		match, dataType, _, err := jsonparser.Get(f.configuration, path...)
 		if err != nil {
 			if err != jsonparser.KeyPathNotFoundError {
-				lookupErr = err
 				return placeholder
 			}
 			log.WithFields(log.Fields{"path": path, "filename": f.FileName}).Debug("attempted to load a configuration value that does not exist")
 			// Leave placeholder intact so the misconfiguration is visible.
 			return placeholder
 		}
+
+		// Only substitute scalar values, not whole objects or arrays.
+		if dataType == jsonparser.Object || dataType == jsonparser.Array {
+			return placeholder
+		}
+
 		return string(match)
 	})
-	return result, lookupErr
+
+	return result, err
 }

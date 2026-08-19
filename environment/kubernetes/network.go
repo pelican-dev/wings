@@ -11,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/pelican-dev/wings/config"
+	"github.com/pelican/wings/config"
 )
 
 // serviceName returns the Kubernetes Service name for this server.

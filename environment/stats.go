@@ -20,6 +20,11 @@ type Stats struct {
 	// Current network transmit in & out for a container.
 	Network NetworkStats `json:"network"`
 
+	// Cumulative disk I/O for the container (blkio / cgroup io.stat). Values
+	// are counters since container start; clients derive throughput from
+	// deltas between readings, the same as the network counters.
+	DiskIo DiskIoStats `json:"disk_io"`
+
 	// The current uptime of the container, in milliseconds.
 	Uptime int64 `json:"uptime"`
 }
@@ -27,4 +32,9 @@ type Stats struct {
 type NetworkStats struct {
 	RxBytes uint64 `json:"rx_bytes"`
 	TxBytes uint64 `json:"tx_bytes"`
+}
+
+type DiskIoStats struct {
+	ReadBytes  uint64 `json:"read_bytes"`
+	WriteBytes uint64 `json:"write_bytes"`
 }

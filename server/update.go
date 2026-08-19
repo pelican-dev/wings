@@ -3,10 +3,10 @@ package server
 import (
 	"time"
 
-	"github.com/pelican-dev/wings/environment/docker"
-	"github.com/pelican-dev/wings/environment/kubernetes"
+	"github.com/pelican/wings/environment/docker"
+	"github.com/pelican/wings/environment/kubernetes"
 
-	"github.com/pelican-dev/wings/environment"
+	"github.com/pelican/wings/environment"
 )
 
 // SyncWithEnvironment updates the environment for the server to match any of

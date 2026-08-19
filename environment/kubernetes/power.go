@@ -10,8 +10,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/remote"
+	"github.com/pelican/wings/environment"
+	"github.com/pelican/wings/remote"
 )
 
 // OnBeforeStart is called before the server starts. It ensures the Pod is in a

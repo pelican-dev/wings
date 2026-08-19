@@ -6,7 +6,7 @@ import (
 	. "github.com/franela/goblin"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/pelican-dev/wings/config"
+	"github.com/pelican/wings/config"
 )
 
 // TestResolveImagePullPolicy verifies pull-policy resolution for remote

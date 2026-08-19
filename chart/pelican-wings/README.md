@@ -1,6 +1,6 @@
 # Pelican Wings Helm Chart
 
-Deploys [Pelican Wings](https://github.com/pelican-dev/wings) — the game server
+Deploys [Pelican Wings](https://github.com/pelican/wings) — the game server
 management daemon — into a Kubernetes cluster with full RBAC, storage, and
 networking support.
 
@@ -8,7 +8,7 @@ networking support.
 
 - Kubernetes 1.34+
 - Helm 3.x
-- A running [Pelican Panel](https://github.com/pelican-dev/panel) instance
+- A running [Pelican Panel](https://github.com/pelican/panel) instance
 
 ## Quick Start
 

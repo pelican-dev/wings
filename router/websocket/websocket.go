@@ -16,14 +16,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
-	"github.com/pelican-dev/wings/system"
+	"github.com/pelican/wings/system"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/environment/docker"
-	"github.com/pelican-dev/wings/internal/models"
-	"github.com/pelican-dev/wings/router/tokens"
-	"github.com/pelican-dev/wings/server"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/environment"
+	"github.com/pelican/wings/environment/docker"
+	"github.com/pelican/wings/internal/models"
+	"github.com/pelican/wings/router/tokens"
+	"github.com/pelican/wings/server"
 )
 
 const (
@@ -74,7 +74,7 @@ func NewTokenPayload(token []byte) (*tokens.WebsocketPayload, error) {
 		return nil, ErrJwtOnDenylist
 	}
 
-	if !payload.HasPermission(PermissionConnect) {
+	if !payload.HasPermission(PermissionConnect) || !payload.HasScope(tokens.Websocket) {
 		return nil, ErrJwtNoConnectPerm
 	}
 
@@ -213,7 +213,7 @@ func (h *Handler) TokenValid() error {
 		return ErrJwtOnDenylist
 	}
 
-	if !j.HasPermission(PermissionConnect) {
+	if !j.HasPermission(PermissionConnect) || !j.HasScope(tokens.Websocket) {
 		return ErrJwtNoConnectPerm
 	}
 

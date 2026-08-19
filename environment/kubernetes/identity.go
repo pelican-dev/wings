@@ -9,8 +9,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/environment"
 )
 
 // identityConfigMapName returns the name for the identity ConfigMap.

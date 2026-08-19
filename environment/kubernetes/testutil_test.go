@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/pelican-dev/wings/config"
+	"github.com/pelican/wings/config"
 )
 
 func TestMain(m *testing.M) {

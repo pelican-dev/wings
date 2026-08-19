@@ -5,7 +5,7 @@ replicaCount: 1
 
 image:
   # -- Wings container image repository
-  repository: ghcr.io/pelican-dev/wings
+  repository: ghcr.io/pelican/wings
   # -- Image pull policy
   pullPolicy: IfNotPresent
   # -- Overrides the image tag (defaults to chart appVersion)

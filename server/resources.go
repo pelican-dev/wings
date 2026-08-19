@@ -4,8 +4,11 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/system"
+	"github.com/apex/log"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/environment"
+	"github.com/pelican/wings/server/filesystem/quotas"
+	"github.com/pelican/wings/system"
 )
 
 // ResourceUsage defines the current resource usage for a given server instance. If a server is offline you
@@ -32,8 +35,17 @@ type ResourceUsage struct {
 func (s *Server) Proc() ResourceUsage {
 	s.resources.mu.Lock()
 	defer s.resources.mu.Unlock()
-	// Store the updated disk usage when requesting process usage.
-	atomic.StoreInt64(&s.resources.Disk, s.Filesystem().CachedUsage())
+	if config.Get().System.Quotas.Enabled {
+		used, err := quotas.GetQuota(s.ID())
+		if err != nil {
+			log.WithFields(log.Fields{"server-uuid": s.ID(), "error": err.Error()}).Error("there was an issue getting the used disk space")
+		}
+		atomic.StoreInt64(&s.resources.Disk, used)
+	} else {
+		// Store the updated disk usage when requesting process usage.
+		atomic.StoreInt64(&s.resources.Disk, s.Filesystem().CachedUsage())
+	}
+
 	//goland:noinspection GoVetCopyLock
 	return s.resources
 }
@@ -56,4 +68,6 @@ func (ru *ResourceUsage) Reset() {
 	ru.Uptime = 0
 	ru.Network.TxBytes = 0
 	ru.Network.RxBytes = 0
+	ru.DiskIo.ReadBytes = 0
+	ru.DiskIo.WriteBytes = 0
 }

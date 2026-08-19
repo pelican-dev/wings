@@ -5,10 +5,10 @@ import (
 
 	"emperror.dev/errors"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment/kubernetes"
-	"github.com/pelican-dev/wings/remote"
-	"github.com/pelican-dev/wings/system"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/environment/kubernetes"
+	"github.com/pelican/wings/remote"
+	"github.com/pelican/wings/system"
 )
 
 // internalInstallKubernetes runs the installation process using a Kubernetes

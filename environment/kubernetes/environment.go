@@ -10,11 +10,11 @@ import (
 	"github.com/apex/log"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/events"
-	"github.com/pelican-dev/wings/remote"
-	"github.com/pelican-dev/wings/system"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/environment"
+	"github.com/pelican/wings/events"
+	"github.com/pelican/wings/remote"
+	"github.com/pelican/wings/system"
 )
 
 // Metadata holds runtime metadata for the Kubernetes environment that can be

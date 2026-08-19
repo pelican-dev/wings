@@ -1,3 +1,5 @@
+//go:build unix
+
 package system
 
 import (
@@ -5,7 +7,8 @@ import (
 	"net"
 	"runtime"
 	"strings"
-	"syscall"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
@@ -110,18 +113,15 @@ func GetSystemInformationWithOptions(kubernetesMode bool) (*Information, error) 
 		return nil, err
 	}
 
-	release, err := osrelease.Read()
-	if err != nil {
+	if kubernetesMode {
 		// In Kubernetes mode the daemon frequently runs on minimal images that
 		// lack /etc/os-release; treat it as best-effort and fall back to the
 		// runtime OS rather than failing the whole system info request.
-		if !kubernetesMode {
-			return nil, err
+		release, err := osrelease.Read()
+		if err != nil {
+			release = map[string]string{}
 		}
-		release = map[string]string{}
-	}
 
-	if kubernetesMode {
 		v, err := mem.VirtualMemory()
 		if err != nil {
 			return nil, err
@@ -156,12 +156,20 @@ func GetSystemInformationWithOptions(kubernetesMode bool) (*Information, error) 
 	}
 
 	var os string
-	if release["PRETTY_NAME"] != "" {
-		os = release["PRETTY_NAME"]
-	} else if release["NAME"] != "" {
-		os = release["NAME"]
+	if runtime.GOOS == "darwin" {
+		os = "macOS"
 	} else {
-		os = info.OperatingSystem
+		release, err := osrelease.Read()
+		if err != nil {
+			return nil, err
+		}
+		if release["PRETTY_NAME"] != "" {
+			os = release["PRETTY_NAME"]
+		} else if release["NAME"] != "" {
+			os = release["NAME"]
+		} else {
+			os = info.OperatingSystem
+		}
 	}
 
 	var filesystem string
@@ -227,14 +235,14 @@ func GetSystemIps() ([]string, error) {
 
 // getDiskForPath finds the mountpoint where the given path is stored
 func getDiskForPath(path string, partitions []disk.PartitionStat) (string, string, error) {
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(path, &stat); err != nil {
+	var stat unix.Statfs_t
+	if err := unix.Statfs(path, &stat); err != nil {
 		return "", "", err
 	}
 
 	for _, part := range partitions {
-		var pStat syscall.Statfs_t
-		if err := syscall.Statfs(part.Mountpoint, &pStat); err != nil {
+		var pStat unix.Statfs_t
+		if err := unix.Statfs(part.Mountpoint, &pStat); err != nil {
 			continue
 		}
 		if stat.Fsid == pStat.Fsid {
@@ -247,6 +255,9 @@ func getDiskForPath(path string, partitions []disk.PartitionStat) (string, strin
 
 // Gets the system release name.
 func getSystemName() (string, error) {
+	if runtime.GOOS == "darwin" {
+		return "darwin", nil
+	}
 	// use osrelease to get release version and ID
 	release, err := osrelease.Read()
 	if err != nil {

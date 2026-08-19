@@ -16,18 +16,20 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04]
-        go: ["1.25.7", "1.26.0"]
+        go: ["1.25.12", "1.26.5"]
         goos: [linux]
         goarch: [amd64, arm64]
 
     steps:
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
 
       - name: Code checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: go mod download
         env:
@@ -40,7 +42,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
-          SRC_PATH: github.com/pelican-dev/wings
+          SRC_PATH: github.com/pelican/wings
         run: |
           go build -v -trimpath -ldflags="-s -w -X ${SRC_PATH}/system.Version=dev-${GITHUB_SHA:0:7}" -o dist/wings ${SRC_PATH}
           go build -v -trimpath -ldflags="-X ${SRC_PATH}/system.Version=dev-${GITHUB_SHA:0:7}" -o dist/wings_debug ${SRC_PATH}
@@ -61,15 +63,53 @@ jobs:
           go test -race $(go list ./...)
 
       - name: Upload Release Artifact
-        uses: actions/upload-artifact@v4
-        if: ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && matrix.go == '1.25.7' }}
+        uses: actions/upload-artifact@v7
+        if: ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && matrix.go == '1.25.12' }}
         with:
           name: wings_linux_${{ matrix.goarch }}
           path: dist/wings
 
       - name: Upload Debug Artifact
-        uses: actions/upload-artifact@v4
-        if: ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && matrix.go == '1.25.7' }}
+        uses: actions/upload-artifact@v7
+        if: ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && matrix.go == '1.25.12' }}
         with:
           name: wings_linux_${{ matrix.goarch }}_debug
           path: dist/wings_debug
+
+  test-macos:
+    name: Test macOS
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ["1.25.12", "1.26.5"]
+
+    steps:
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Code checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: go mod download
+        env:
+          CGO_ENABLED: 0
+        run: |
+          go mod download
+
+      - name: Build
+        env:
+          CGO_ENABLED: 0
+          SRC_PATH: github.com/pelican/wings
+        run: |
+          go build -v -trimpath -ldflags="-s -w -X ${SRC_PATH}/system.Version=dev-${GITHUB_SHA:0:7}" -o dist/wings ${SRC_PATH}
+
+      - name: go test -race
+        env:
+          CGO_ENABLED: 1
+        run: |
+          go test -race $(go list ./...)

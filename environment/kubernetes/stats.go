@@ -10,7 +10,7 @@ import (
 
 	"emperror.dev/errors"
 
-	"github.com/pelican-dev/wings/environment"
+	"github.com/pelican/wings/environment"
 )
 
 // statsRequestTimeout bounds each individual metrics/stats API call so a slow
