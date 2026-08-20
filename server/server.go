@@ -17,14 +17,14 @@ import (
 	"github.com/apex/log"
 	"github.com/creasty/defaults"
 	"github.com/goccy/go-json"
-	"github.com/pelican-dev/wings/server/filesystem/quotas"
+	"github.com/pelican/wings/server/filesystem/quotas"
 
-	"github.com/pelican-dev/wings/config"
-	"github.com/pelican-dev/wings/environment"
-	"github.com/pelican-dev/wings/events"
-	"github.com/pelican-dev/wings/remote"
-	"github.com/pelican-dev/wings/server/filesystem"
-	"github.com/pelican-dev/wings/system"
+	"github.com/pelican/wings/config"
+	"github.com/pelican/wings/environment"
+	"github.com/pelican/wings/events"
+	"github.com/pelican/wings/remote"
+	"github.com/pelican/wings/server/filesystem"
+	"github.com/pelican/wings/system"
 )
 
 // Server is the high level definition for a server instance being controlled

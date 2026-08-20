@@ -1,4 +1,4 @@
-module github.com/pelican-dev/wings
+module github.com/pelican/wings
 
 go 1.25.0
 

@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04]
-        go: ["1.25.11", "1.26.4"]
+        go: ["1.25.12", "1.26.5"]
         goos: [linux]
         goarch: [amd64, arm64]
 
@@ -42,7 +42,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
-          SRC_PATH: github.com/pelican-dev/wings
+          SRC_PATH: github.com/pelican/wings
         run: |
           go build -v -trimpath -ldflags="-s -w -X ${SRC_PATH}/system.Version=dev-${GITHUB_SHA:0:7}" -o dist/wings ${SRC_PATH}
           go build -v -trimpath -ldflags="-X ${SRC_PATH}/system.Version=dev-${GITHUB_SHA:0:7}" -o dist/wings_debug ${SRC_PATH}
@@ -64,14 +64,14 @@ jobs:
 
       - name: Upload Release Artifact
         uses: actions/upload-artifact@v7
-        if: ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && matrix.go == '1.25.11' }}
+        if: ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && matrix.go == '1.25.12' }}
         with:
           name: wings_linux_${{ matrix.goarch }}
           path: dist/wings
 
       - name: Upload Debug Artifact
         uses: actions/upload-artifact@v7
-        if: ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && matrix.go == '1.25.11' }}
+        if: ${{ (github.ref == 'refs/heads/main' || github.event_name == 'pull_request') && matrix.go == '1.25.12' }}
         with:
           name: wings_linux_${{ matrix.goarch }}_debug
           path: dist/wings_debug
@@ -82,7 +82,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ["1.25.11", "1.26.4"]
+        go: ["1.25.12", "1.26.5"]
 
     steps:
       - name: Setup Go
@@ -104,7 +104,7 @@ jobs:
       - name: Build
         env:
           CGO_ENABLED: 0
-          SRC_PATH: github.com/pelican-dev/wings
+          SRC_PATH: github.com/pelican/wings
         run: |
           go build -v -trimpath -ldflags="-s -w -X ${SRC_PATH}/system.Version=dev-${GITHUB_SHA:0:7}" -o dist/wings ${SRC_PATH}
 
