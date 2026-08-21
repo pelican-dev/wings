@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
@@ -125,6 +126,12 @@ func (c *SFTPServer) AcceptInbound(conn net.Conn, config *ssh.ServerConfig) erro
 	defer sconn.Close()
 	go ssh.DiscardRequests(reqs)
 
+	// Tracks every "Handle" goroutine spawned for this connection so that we can
+	// wait for them to finish before this function returns. Without this, channels
+	// could still be in use after "sconn" is closed by the caller's deferred call.
+	var wg sync.WaitGroup
+	defer wg.Wait()
+
 	for ch := range chans {
 		// If not a session channel we just move on because it's not something we
 		// know how to handle at this point.
@@ -148,11 +155,26 @@ func (c *SFTPServer) AcceptInbound(conn net.Conn, config *ssh.ServerConfig) erro
 			}
 		}(requests)
 
-		if srv, ok := c.manager.Get(sconn.Permissions.Extensions["uuid"]); ok {
-			if err := c.Handle(sconn, srv, channel); err != nil {
-				return err
-			}
+		srv, ok := c.manager.Get(sconn.Permissions.Extensions["uuid"])
+		if !ok {
+			// No matching server instance for this connection's UUID: nothing will
+			// ever consume this channel, so close it immediately to avoid leaking it.
+			_ = channel.Close()
+			continue
 		}
+
+		// Handle each channel concurrently so a slow or stuck client on one channel
+		// (e.g. gvfs holding a session open) can't block the rest of the connection.
+		wg.Add(1)
+		go func(channel ssh.Channel) {
+			defer wg.Done()
+			if err := c.Handle(sconn, srv, channel); err != nil {
+				_ = channel.Close()
+				log.WithField("error", err).
+					WithField("ip", conn.RemoteAddr().String()).
+					Error("sftp: error handling channel")
+			}
+		}(channel)
 	}
 	return nil
 }
@@ -168,18 +190,26 @@ func (c *SFTPServer) Handle(conn *ssh.ServerConn, srv *server.Server, channel ss
 	ctx := srv.Sftp().Context(handler.User())
 	rs := sftp.NewRequestServer(channel, handler.Handlers())
 
+	// Signals the supervisor goroutine below to stop watching "ctx" once this
+	// function returns, so it doesn't linger until the server's protected-state
+	// context is eventually cancelled (which may be much later, or never).
+	done := make(chan struct{})
+	defer close(done)
+
 	go func() {
 		select {
 		case <-ctx.Done():
 			srv.Log().WithField("user", conn.User()).Warn("sftp: terminating active session")
 			_ = rs.Close()
+		case <-done:
 		}
 	}()
 
-	if err := rs.Serve(); err == io.EOF {
-		_ = rs.Close()
+	err = rs.Serve()
+	_ = rs.Close()
+	if err != nil && !errors.Is(err, io.EOF) {
+		return err
 	}
-
 	return nil
 }
 
